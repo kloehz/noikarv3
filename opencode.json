@@ -1,0 +1,33 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-qwencode-oauth"],
+  "provider": {
+    "qwen": {
+      "npm": "@ai-sdk/openai",
+      "options": {
+        "baseURL": "https://portal.qwen.ai/v1",
+        "compatibility": "strict"
+      },
+      "models": {
+        "coder-model": {
+          "id": "coder-model",
+          "name": "Qwen Coder",
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          },
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "attachment": true
+        }
+      }
+    }
+  }
+}

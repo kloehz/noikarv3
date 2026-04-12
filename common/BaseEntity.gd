@@ -1,0 +1,114 @@
+# res://common/BaseEntity.gd
+class_name BaseEntity
+extends CharacterBody3D
+
+## Base entity class for all game entities.
+## Extends CharacterBody3D for physics integration.
+## Uses Netfox for rollback and state synchronization.
+
+#region Signals
+signal health_changed(current: int, maximum: int)
+signal died
+#endregion
+
+#region Exports
+@export var max_health: int = 100
+@export var entity_name: String = "Entity"
+@export var player_name: String = "Player":
+	set(value):
+		player_name = value
+		_update_visuals()
+#endregion
+
+#region Public Variables
+@export var current_health: int:
+	set(value):
+		var old := current_health
+		current_health = clampi(value, 0, max_health)
+		if current_health != old:
+			health_changed.emit(current_health, max_health)
+			if current_health <= 0:
+				died.emit()
+
+var is_alive: bool:
+	get: return current_health > 0
+#endregion
+
+#region Private Variables
+var _health_component: Node
+var _rollback_synchronizer: RollbackSynchronizer
+var _state_synchronizer: StateSynchronizer
+#endregion
+
+func _ready() -> void:
+	_setup_visuals()
+	_setup_netfox()
+	_setup_health_component()
+	
+	if _is_server_authority():
+		current_health = max_health
+
+func _setup_visuals() -> void:
+	# Add a simple box mesh if not set
+	var mesh_instance: MeshInstance3D = $MeshInstance3D
+	if mesh_instance and mesh_instance.mesh == null:
+		var box_mesh = BoxMesh.new()
+		box_mesh.size = Vector3(1, 2, 1)
+		mesh_instance.mesh = box_mesh
+	
+	# Setup collision shape if not set
+	var collision_shape: CollisionShape3D = $CollisionShape3D
+	if collision_shape and collision_shape.shape == null:
+		var box_shape = BoxShape3D.new()
+		box_shape.size = Vector3(1, 2, 1)
+		collision_shape.shape = box_shape
+
+	# Only enable camera for local player
+	var camera: Camera3D = $Camera3D
+	if camera:
+		camera.current = is_multiplayer_authority()
+
+func _setup_netfox() -> void:
+	_rollback_synchronizer = $RollbackSynchronizer
+	_state_synchronizer = $StateSynchronizer
+	
+	# Netfox handles synchronization of properties automatically based on configuration in the inspector
+	pass
+
+## Set up health component integration.
+func _setup_health_component() -> void:
+	_health_component = $HealthComponent
+	if _health_component and _health_component.has_signal("health_changed"):
+		_health_component.health_changed.connect(_on_health_component_changed)
+		_health_component.died.connect(_on_health_component_died)
+
+func _on_health_component_changed(current: int, _maximum: int) -> void:
+	current_health = current
+
+func _on_health_component_died() -> void:
+	died.emit()
+
+func take_damage(amount: int, source: Node = null) -> void:
+	if not is_alive or not _is_server_authority():
+		return
+	
+	if _health_component and _health_component.has_method("take_damage"):
+		_health_component.take_damage(amount, source)
+	else:
+		current_health -= amount
+
+func heal(amount: int) -> void:
+	if not is_alive or not _is_server_authority():
+		return
+	
+	if _health_component and _health_component.has_method("heal"):
+		_health_component.heal(amount)
+	else:
+		current_health = mini(current_health + amount, max_health)
+
+func _update_visuals() -> void:
+	if has_node("VisualComponent"):
+		$VisualComponent.update_name(player_name)
+
+func _is_server_authority() -> bool:
+	return multiplayer == null or multiplayer.is_server()

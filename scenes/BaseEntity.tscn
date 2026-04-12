@@ -1,0 +1,52 @@
+[gd_scene format=3 uid="uid://c1ient1t1t1t1"]
+
+[ext_resource type="Script" uid="uid://bdfmixdkvrx7a" path="res://common/BaseEntity.gd" id="1_base_entity"]
+[ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
+[ext_resource type="Script" path="res://client/VisualComponent.gd" id="3_visual_comp"]
+[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
+[ext_resource type="Script" uid="uid://dhsunkxq0v3wy" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
+[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
+[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
+
+[node name="BaseEntity" type="CharacterBody3D" unique_id=2131335616]
+script = ExtResource("1_base_entity")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=668274148]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 3, 5)
+
+[node name="RollbackSynchronizer" type="Node" parent="." unique_id=1820880030 node_paths=PackedStringArray("root")]
+script = ExtResource("6_rb_sync")
+root = NodePath("..")
+state_properties = Array[String]([":global_position", ":global_rotation", "LogicComponent:current_velocity"])
+input_properties = Array[String](["LogicComponent:input_vector"])
+
+[node name="StateSynchronizer" type="Node" parent="." unique_id=1767023023 node_paths=PackedStringArray("root")]
+script = ExtResource("7_state_sync")
+root = NodePath("..")
+properties = Array[String]([":current_health", ":player_name"])
+
+[node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
+script = ExtResource("8_interpolator")
+root = NodePath("..")
+properties = Array[String]([":global_position", ":global_rotation"])
+
+[node name="LogicComponent" type="Node" parent="." unique_id=942950674 node_paths=PackedStringArray("entity")]
+script = ExtResource("2_logic_comp")
+entity = NodePath("..")
+
+[node name="VisualComponent" type="Node" parent="." unique_id=1343345633 node_paths=PackedStringArray("entity")]
+script = ExtResource("3_visual_comp")
+entity = NodePath("..")
+
+[node name="HealthComponent" type="Node" parent="." unique_id=2012485610]
+script = ExtResource("4_health_comp")
+
+[node name="HitboxComponent" type="Area3D" parent="." unique_id=150433228]
+script = ExtResource("5_hitbox_comp")
+
+[node name="HurtboxComponent" type="Area3D" parent="." unique_id=304618529]

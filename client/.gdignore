@@ -1,0 +1,8 @@
+# .gdignore
+# This file tells Godot to exclude all scripts in this folder from exports.
+# res://client/ contains CLIENT-ONLY visuals (VisualComponent, meshes, VFX, HUD).
+# This should not be included in dedicated server builds.
+*.gd
+*.cs
+*.tscn
+*.tres

@@ -1,0 +1,8 @@
+# .gdignore
+# This file tells Godot to exclude all scripts in this folder from exports.
+# res://core/ contains SERVER-ONLY logic (LogicComponent, AI, match validation).
+# This must NEVER reach client builds for security.
+*.gd
+*.cs
+*.tscn
+*.tres
