@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://c1ient1t1t1t1"]
+[gd_scene load_steps=14 format=3 uid="uid://c1ient1t1t1t1"]
 
 [ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
 [ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
+[ext_resource type="Script" path="res://common/components/ServerState.gd" id="11_server_state"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -31,6 +32,15 @@ shape = SubResource("BoxShape3D_1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_1")
 
+[node name="ServerState" type="Node" parent="."]
+script = ExtResource("11_server_state")
+
+[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+script = ExtResource("7_state_sync")
+root = NodePath("..")
+properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name"])
+full_state_interval = 8
+
 [node name="CameraPivot" type="Node3D" parent="." unique_id=987654321]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
@@ -51,12 +61,6 @@ enable_prediction = true
 state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
-[node name="StateSynchronizer" type="Node" parent="." unique_id=1767023023 node_paths=PackedStringArray("root")]
-script = ExtResource("7_state_sync")
-root = NodePath("..")
-properties = Array[String]([":is_dead", ":player_name"])
-full_state_interval = 1
-
 [node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
 script = ExtResource("8_interpolator")
 root = NodePath("..")
@@ -75,12 +79,6 @@ entity = NodePath("..")
 
 [node name="HealthComponent" type="Node3D" parent="." unique_id=2012485610]
 script = ExtResource("4_health_comp")
-
-[node name="HealthSynchronizer" type="Node" parent="HealthComponent" node_paths=PackedStringArray("root")]
-script = ExtResource("7_state_sync")
-root = NodePath("..")
-properties = Array[String]([":current_health"])
-full_state_interval = 1
 
 [node name="NameLabel" type="Label3D" parent="." unique_id=12121212]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)

@@ -33,7 +33,7 @@ func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
 
 func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
-	if not entity or entity.get("is_dead"): 
+	if not entity or entity.get("sync_is_dead"): 
 		input_axis = Vector2.ZERO
 		return
 		
