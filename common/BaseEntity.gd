@@ -41,32 +41,16 @@ var _state_synchronizer: StateSynchronizer
 #endregion
 
 func _ready() -> void:
-	_setup_visuals()
+	# Only enable camera for local player
+	var camera: Camera3D = $Camera3D
+	if camera:
+		camera.current = is_multiplayer_authority()
+		
 	_setup_netfox()
 	_setup_health_component()
 	
 	if _is_server_authority():
 		current_health = max_health
-
-func _setup_visuals() -> void:
-	# Add a simple box mesh if not set
-	var mesh_instance: MeshInstance3D = $MeshInstance3D
-	if mesh_instance and mesh_instance.mesh == null:
-		var box_mesh = BoxMesh.new()
-		box_mesh.size = Vector3(1, 2, 1)
-		mesh_instance.mesh = box_mesh
-	
-	# Setup collision shape if not set
-	var collision_shape: CollisionShape3D = $CollisionShape3D
-	if collision_shape and collision_shape.shape == null:
-		var box_shape = BoxShape3D.new()
-		box_shape.size = Vector3(1, 2, 1)
-		collision_shape.shape = box_shape
-
-	# Only enable camera for local player
-	var camera: Camera3D = $Camera3D
-	if camera:
-		camera.current = is_multiplayer_authority()
 
 func _setup_netfox() -> void:
 	_rollback_synchronizer = $RollbackSynchronizer

@@ -1,0 +1,35 @@
+[gd_scene load_steps=7 format=3 uid="uid://b8y8u6k8j8k8j"]
+
+[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="1_health"]
+[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="2_hurtbox"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
+albedo_color = Color(1, 0.2, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_1"]
+material = SubResource("StandardMaterial3D_1")
+size = Vector3(1, 2, 1)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(1, 2, 1)
+
+[node name="TrainingDummy" type="StaticBody3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("BoxMesh_1")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_1")
+
+[node name="HealthComponent" type="Node3D" parent="."]
+script = ExtResource("1_health")
+
+[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+script = ExtResource("2_hurtbox")
+health_component = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_1")

@@ -93,9 +93,25 @@ func _on_entity_spawned(p_entity: Node3D) -> void:
 
 ## Update visual name (e.g., label above player).
 func update_name(new_name: String) -> void:
-	# For now, just print it or update a label if exists
 	print("[VisualComponent] Name updated to: ", new_name)
-	# if has_node("NameLabel"): $NameLabel.text = new_name
+
+## Play attack visual effect (melee hit).
+func play_shoot_effect() -> void:
+	# Basic visual feedback: a quick flash or print
+	print("[Combat] SWING! (Area Attack)")
+	
+	if _mesh:
+		# Quick punch forward animation using Tweens
+		var tween = get_tree().create_tween()
+		var original_pos = _mesh.position
+		
+		# Move forward and grow slightly
+		tween.tween_property(_mesh, "position", original_pos + Vector3(0, 0, -0.5), 0.05)
+		tween.parallel().tween_property(_mesh, "scale", Vector3(1.1, 1.1, 1.1), 0.05)
+		
+		# Return to original
+		tween.tween_property(_mesh, "position", original_pos, 0.1)
+		tween.parallel().tween_property(_mesh, "scale", Vector3(1.0, 1.0, 1.0), 0.1)
 
 
 ## Called when entity dies - play death VFX/effects.

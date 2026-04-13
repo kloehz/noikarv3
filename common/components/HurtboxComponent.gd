@@ -20,3 +20,8 @@ func receive_hit(hitbox: HitboxComponent) -> void:
 	
 	if health_component:
 		health_component.take_damage(hitbox.damage, hitbox.owner_node)
+
+## Receive direct damage data (useful for Raycasts).
+func receive_hit_data(damage_amount: int, source: Node) -> void:
+	if health_component:
+		health_component.take_damage(damage_amount, source)

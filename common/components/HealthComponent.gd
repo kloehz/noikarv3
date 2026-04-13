@@ -1,6 +1,6 @@
 # res://common/components/HealthComponent.gd
 class_name HealthComponent
-extends Node
+extends Node3D
 
 ## Health management component for entities.
 ## Provides signal-based health changes for UI and networking.
@@ -30,9 +30,10 @@ func _ready() -> void:
 func _setup_debug_label() -> void:
 	# Create a debug label for visual health representation in editor
 	_health_label = Label3D.new()
-	_health_label.visible = false
+	_health_label.visible = true
 	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_health_label.no_depth_test = true
+	_health_label.position = Vector3(0, 2.5, 0) # Position above
 	add_child(_health_label)
 	_update_debug_label()
 
@@ -45,6 +46,8 @@ func take_damage(amount: int, source: Node = null) -> int:
 	current_health -= actual
 	damaged.emit(actual, source)
 	_update_debug_label()
+	
+	print("[Health] %s took %d damage. Health: %d/%d" % [get_parent().name, actual, current_health, max_health])
 	
 	if current_health <= 0:
 		died.emit()
