@@ -13,6 +13,7 @@ extends Node
 @export var look_yaw: float = 0.0
 
 @onready var camera_pivot: Node3D = get_parent().get_node_or_null("CameraPivot")
+@onready var _server_state = get_parent().get_node_or_null("ServerState")
 @export var mouse_sensitivity: float = 0.005
 
 func _ready() -> void:
@@ -46,6 +47,12 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 func _apply_movement(delta: float) -> void:
 	if not entity: return
 	
+	# 0. Authoritative Knockback from ServerState
+	if _server_state and _server_state.knockback_impulse.length() > 0:
+		current_velocity += _server_state.knockback_impulse
+		if _is_local_authority():
+			_clear_server_impulse.rpc_id(1)
+	
 	# Rotation
 	entity.rotation.y = look_yaw
 	
@@ -63,5 +70,10 @@ func _apply_movement(delta: float) -> void:
 	# Apply movement using the character body's native move_and_collide for stability
 	entity.move_and_collide(current_velocity * delta)
 
+@rpc("any_peer", "call_local", "reliable")
+func _clear_server_impulse() -> void:
+	if multiplayer.is_server() and _server_state:
+		_server_state.knockback_impulse = Vector3.ZERO
+
 func _is_local_authority() -> bool:
-	return entity and entity.is_multiplayer_authority()
+	return is_multiplayer_authority()

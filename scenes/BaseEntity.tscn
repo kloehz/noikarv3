@@ -38,7 +38,7 @@ script = ExtResource("11_server_state")
 [node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
 script = ExtResource("7_state_sync")
 root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name"])
+properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name", ":knockback_impulse"])
 full_state_interval = 8
 
 [node name="CameraPivot" type="Node3D" parent="." unique_id=987654321]

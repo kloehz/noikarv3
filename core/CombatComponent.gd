@@ -7,6 +7,7 @@ extends Node
 
 @export var damage: int = 15
 @export var fire_rate: float = 0.3
+@export var knockback_force: float = 12.0
 
 @onready var entity: BaseEntity = get_parent()
 @onready var logic: Node = get_parent().get_node("LogicComponent")
@@ -23,7 +24,6 @@ func _rollback_tick(_delta: float, _tick: int, is_fresh: bool) -> void:
 		return
 	
 	# ONLY the authority (owner) or the server triggers the attack logic
-	# This prevents clients from trying to call RPCs on entities they don't own
 	if multiplayer.is_server() or entity.is_multiplayer_authority():
 		if logic and logic.get("is_shooting"):
 			_try_attack()
@@ -54,7 +54,7 @@ func _perform_attack() -> void:
 		_show_attack_effects()
 
 func _handle_hit(collider: Node) -> void:
-	print("[Combat] Server hit collider: ", collider.name, " (", collider.get_class(), ")")
+	print("[Combat] Server hit collider: ", collider.name)
 	
 	# Check for Hurtbox in the collider or its children
 	var hurtbox = collider as HurtboxComponent
@@ -66,8 +66,20 @@ func _handle_hit(collider: Node) -> void:
 		if hurtbox.get_parent() == entity:
 			return
 			
-		print("[Combat] Valid Hurtbox found on: ", hurtbox.get_parent().name)
+		var target = hurtbox.get_parent()
+		print("[Combat] Valid Hurtbox found on: ", target.name)
+		
+		# APPLY DAMAGE
 		hurtbox.receive_hit_data(damage, entity)
+		
+		# APPLY KNOCKBACK (Server only)
+		if target.has_node("ServerState"):
+			var target_state = target.get_node("ServerState")
+			# Calculate direction from attacker to target
+			var kb_dir = (target.global_position - entity.global_position).normalized()
+			kb_dir.y = 0 # Keep it horizontal
+			target_state.knockback_impulse = kb_dir * knockback_force
+			print("[Combat] Server applied impulse to: ", target.name)
 	else:
 		print("[Combat] No Hurtbox found on collider.")
 

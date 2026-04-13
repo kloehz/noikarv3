@@ -33,6 +33,9 @@ signal name_changed(new_name: String)
 		player_name = v
 		name_changed.emit(player_name)
 
+## Impulse force sent by the server to push this entity
+@export var knockback_impulse: Vector3 = Vector3.ZERO
+
 func _ready() -> void:
 	# CRITICAL: This node must always be server-authoritative.
 	set_multiplayer_authority(1)

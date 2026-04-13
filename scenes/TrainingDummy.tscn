@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://b8y8u6k8j8k8j"]
+[gd_scene load_steps=13 format=3 uid="uid://b8y8u6k8j8k8j"]
 
 [ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="4_state_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="5_visual_comp"]
 [ext_resource type="Script" path="res://common/components/ServerState.gd" id="6_server_state"]
+[ext_resource type="Script" path="res://core/LogicComponent.gd" id="7_logic"]
+[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -33,6 +35,10 @@ mesh = SubResource("BoxMesh_1")
 script = ExtResource("5_visual_comp")
 entity = NodePath("..")
 
+[node name="LogicComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+script = ExtResource("7_logic")
+entity = NodePath("..")
+
 [node name="HealthComponent" type="Node3D" parent="."]
 script = ExtResource("2_health")
 
@@ -42,14 +48,13 @@ script = ExtResource("6_server_state")
 [node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
 script = ExtResource("4_state_sync")
 root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead"])
+properties = Array[String]([":sync_health", ":sync_is_dead", ":knockback_impulse"])
 full_state_interval = 8
 
-[node name="PositionSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
-script = ExtResource("4_state_sync")
+[node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("8_rb_sync")
 root = NodePath("..")
-properties = Array[String]([":global_position"])
-full_state_interval = 8
+state_properties = Array[String]([":global_position"])
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
