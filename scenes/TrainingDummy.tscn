@@ -1,8 +1,13 @@
-[gd_scene load_steps=8 format=3 uid="uid://b8y8u6k8j8k8j"]
+[gd_scene load_steps=11 format=3 uid="uid://b8y8u6k8j8k8j"]
 
-[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="1_health"]
-[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="2_hurtbox"]
-[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="3_state_sync"]
+[ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
+[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="4_state_sync"]
+[ext_resource type="Script" path="res://client/VisualComponent.gd" id="5_visual_comp"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
+size = Vector3(1, 2, 1)
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 albedo_color = Color(1, 0.2, 0.2, 1)
@@ -11,33 +16,42 @@ albedo_color = Color(1, 0.2, 0.2, 1)
 material = SubResource("StandardMaterial3D_1")
 size = Vector3(1, 2, 1)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_1"]
-size = Vector3(1, 2, 1)
-
-[node name="TrainingDummy" type="StaticBody3D"]
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-mesh = SubResource("BoxMesh_1")
+[node name="TrainingDummy" type="CharacterBody3D"]
+script = ExtResource("1_base_entity")
+entity_name = "DUMMY"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_1")
 
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("BoxMesh_1")
+
+[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+script = ExtResource("5_visual_comp")
+entity = NodePath("..")
+
 [node name="HealthComponent" type="Node3D" parent="."]
-script = ExtResource("1_health")
+script = ExtResource("2_health")
+
+[node name="HealthSynchronizer" type="Node" parent="HealthComponent" node_paths=PackedStringArray("root")]
+script = ExtResource("4_state_sync")
+root = NodePath("..")
+properties = Array[String]([":current_health"])
+full_state_interval = 1
 
 [node name="StateSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
-script = ExtResource("3_state_sync")
-root = NodePath("../HealthComponent")
-properties = Array[String]([":current_health"])
+script = ExtResource("4_state_sync")
+root = NodePath("..")
+properties = Array[String]([":is_dead", ":global_position"])
 full_state_interval = 1
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
 billboard = 1
 no_depth_test = true
-text = "TRAINING DUMMY"
+text = "DUMMY"
 font_size = 48
 outline_size = 12
 
@@ -50,7 +64,7 @@ modulate = Color(0, 1, 0, 1)
 outline_size = 10
 
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
-script = ExtResource("2_hurtbox")
+script = ExtResource("3_hurtbox")
 health_component = NodePath("../HealthComponent")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]

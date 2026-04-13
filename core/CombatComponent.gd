@@ -60,6 +60,10 @@ func _handle_hit(collider: Node) -> void:
 		hurtbox = collider.get_node("HurtboxComponent")
 		
 	if hurtbox:
+		# PROTECTION: Don't hit yourself!
+		if hurtbox.get_parent() == entity:
+			return
+			
 		print("[Combat] ShapeCast hit: ", collider.name)
 		hurtbox.receive_hit_data(damage, entity)
 

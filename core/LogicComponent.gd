@@ -33,6 +33,10 @@ func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
 
 func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
+	if not entity or entity.get("is_dead"): 
+		input_axis = Vector2.ZERO
+		return
+		
 	if _is_local_authority():
 		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 		is_shooting = Input.is_action_pressed("shoot")

@@ -2,10 +2,6 @@
 class_name BaseEntity
 extends CharacterBody3D
 
-## Base entity class for all game entities.
-## Extends CharacterBody3D for physics integration.
-## Uses Netfox for rollback and state synchronization.
-
 #region Signals
 signal health_changed(current: int, maximum: int)
 signal died
@@ -16,115 +12,82 @@ signal died
 @export var entity_name: String = "Entity"
 @export var player_name: String = "Player":
 	set(value):
+		if player_name == value: return # PROTECTION: Avoid spam
 		player_name = value
 		_update_visuals()
 #endregion
 
 #region Public Variables
-@export var current_health: int:
-	set(value):
-		var old := current_health
-		current_health = clampi(value, 0, max_health)
-		if current_health != old:
-			health_changed.emit(current_health, max_health)
-			if current_health <= 0:
-				died.emit()
+@export var is_dead: bool = false:
+	set(v):
+		if is_dead == v: return
+		is_dead = v
+		_on_death_state_changed()
 
 var is_alive: bool:
-	get: return current_health > 0
+	get:
+		var hc = get_node_or_null("HealthComponent")
+		return hc.current_health > 0 if hc else not is_dead
 #endregion
 
-#region Private Variables
-var _health_component: Node
-var _rollback_synchronizer: RollbackSynchronizer
-var _state_synchronizer: StateSynchronizer
-#endregion
 func _ready() -> void:
-	# Set main authority to the player (for movement/input)
 	if name.is_valid_int():
-		var peer_id = name.to_int()
-		set_multiplayer_authority(peer_id)
-
-		# FORCE HealthComponent and its Synchronizer to be owned by the Server (Peer 1)
-		# This ensures health always syncs from Server to Clients
-		if has_node("HealthComponent"):
-			$HealthComponent.set_multiplayer_authority(1)
-		if has_node("StateSynchronizer"):
-			$StateSynchronizer.set_multiplayer_authority(1)
-
-		print("[BaseEntity] Authority split: Entity -> ", peer_id, " | Health -> 1")
+		set_multiplayer_authority(name.to_int())
+	else:
+		set_multiplayer_authority(1)
+	
+	# Authority for components
+	if has_node("HealthComponent"): $HealthComponent.set_multiplayer_authority(1)
+	if has_node("StateSynchronizer"): $StateSynchronizer.set_multiplayer_authority(1)
 
 	_setup_visuals()
 	_setup_netfox()
 	_setup_health_component()
-	
-	if _is_server_authority():
-		current_health = max_health
 
 func _setup_visuals() -> void:
-	# If we are a headless server, we don't need cameras
-	if GameManager._is_headless_environment():
-		return
-
-	# We use the node name which is set to the peer_id string
-	# This is the most reliable way to check ownership during spawn
+	if GameManager._is_headless_environment(): return
 	var is_local_player = (name == str(multiplayer.get_unique_id()))
-	
-	var camera: Camera3D = get_node_or_null("CameraPivot/Camera3D")
+	var camera = get_node_or_null("CameraPivot/Camera3D")
 	if camera:
-		if is_local_player:
-			camera.make_current()
-			print("[BaseEntity] Camera activated for local player: ", name)
+		if is_local_player: camera.make_current()
 		else:
 			camera.current = false
-			# Instead of deleting, we just disable it to avoid race conditions
-			camera.process_mode = Node.PROCESS_MODE_DISABLED
 			camera.hide()
 
 func _setup_netfox() -> void:
-	_rollback_synchronizer = $RollbackSynchronizer
-	_state_synchronizer = $StateSynchronizer
-	
-	# Disable interpolation for the local player to avoid visual delay ( Rakion style )
 	var interpolator = get_node_or_null("TickInterpolator")
 	if interpolator and is_multiplayer_authority():
 		interpolator.enabled = false
-		print("[BaseEntity] Interpolation disabled for local authority: ", name)
 
-## Set up health component integration.
 func _setup_health_component() -> void:
-	_health_component = $HealthComponent
-	if _health_component and _health_component.has_signal("health_changed"):
-		_health_component.health_changed.connect(_on_health_component_changed)
-		_health_component.died.connect(_on_health_component_died)
-
-func _on_health_component_changed(current: int, _maximum: int) -> void:
-	current_health = current
+	var hc = get_node_or_null("HealthComponent")
+	if hc:
+		hc.health_changed.connect(func(c, m): health_changed.emit(c, m))
+		hc.died.connect(_on_health_component_died)
 
 func _on_health_component_died() -> void:
-	died.emit()
+	if multiplayer.is_server():
+		is_dead = true
+		EventBus.entity_died.emit(self)
 
-func take_damage(amount: int, source: Node = null) -> void:
-	if not is_alive or not _is_server_authority():
-		return
-	
-	if _health_component and _health_component.has_method("take_damage"):
-		_health_component.take_damage(amount, source)
+func _on_death_state_changed() -> void:
+	if is_dead:
+		if has_node("VisualComponent"): $VisualComponent.play_death_effect()
+		collision_layer = 0
+		collision_mask = 0
 	else:
-		current_health -= amount
+		if has_node("VisualComponent"): $VisualComponent.play_spawn_effect()
+		if has_node("HealthComponent"): $HealthComponent.reset_health()
+		collision_layer = 1
+		collision_mask = 1
 
-func heal(amount: int) -> void:
-	if not is_alive or not _is_server_authority():
-		return
-	
-	if _health_component and _health_component.has_method("heal"):
-		_health_component.heal(amount)
-	else:
-		current_health = mini(current_health + amount, max_health)
+func respawn(new_position: Vector3) -> void:
+	if not multiplayer.is_server(): return
+	is_dead = false
+	global_position = new_position
 
 func _update_visuals() -> void:
-	if has_node("VisualComponent"):
-		$VisualComponent.update_name(player_name)
+	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)
 
 func _is_server_authority() -> bool:
 	return multiplayer == null or multiplayer.is_server()

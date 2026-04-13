@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://c1ient1t1t1t1"]
+[gd_scene load_steps=13 format=3 uid="uid://c1ient1t1t1t1"]
 
 [ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
@@ -48,14 +48,13 @@ collide_with_areas = true
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 enable_prediction = true
-state_properties = Array[String]([":position", "LogicComponent:current_velocity"])
+state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
-
 
 [node name="StateSynchronizer" type="Node" parent="." unique_id=1767023023 node_paths=PackedStringArray("root")]
 script = ExtResource("7_state_sync")
-root = NodePath("../HealthComponent")
-properties = Array[String]([":current_health"])
+root = NodePath("..")
+properties = Array[String]([":is_dead", ":player_name"])
 full_state_interval = 1
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
@@ -76,6 +75,12 @@ entity = NodePath("..")
 
 [node name="HealthComponent" type="Node3D" parent="." unique_id=2012485610]
 script = ExtResource("4_health_comp")
+
+[node name="HealthSynchronizer" type="Node" parent="HealthComponent" node_paths=PackedStringArray("root")]
+script = ExtResource("7_state_sync")
+root = NodePath("..")
+properties = Array[String]([":current_health"])
+full_state_interval = 1
 
 [node name="NameLabel" type="Label3D" parent="." unique_id=12121212]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
@@ -99,3 +104,7 @@ script = ExtResource("5_hitbox_comp")
 [node name="HurtboxComponent" type="Area3D" parent="." unique_id=304618529 node_paths=PackedStringArray("health_component")]
 script = ExtResource("10_hurtbox")
 health_component = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("BoxShape3D_1")

@@ -24,8 +24,8 @@ var _invincible: bool = false
 @onready var health_label: Label3D = get_parent().get_node_or_null("HealthLabel")
 
 func _ready() -> void:
-	if multiplayer.is_server():
-		current_health = max_health
+	# Initialize on all to avoid flicker, server will sync the real value
+	current_health = max_health
 	
 	health_changed.connect(func(_cur, _max): _update_debug_label())
 	_update_debug_label()

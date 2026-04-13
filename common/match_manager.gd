@@ -15,9 +15,24 @@ func _ready() -> void:
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
+	EventBus.entity_died.connect(_on_entity_died)
 	
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
+
+func _on_entity_died(entity: Node3D) -> void:
+	if not multiplayer.is_server(): return
+	
+	print("[MatchManager] Entity died: ", entity.name, ". Respawning in 3 seconds...")
+	
+	# Wait for respawn
+	await get_tree().create_timer(3.0).timeout
+	
+	if is_instance_valid(entity) and entity.has_method("respawn"):
+		# CALCULATE POSITION ONLY HERE
+		var random_pos = Vector3(randf_range(-10, 10), 0.1, randf_range(-10, 10))
+		print("[MatchManager] Respawning ", entity.name, " at ", random_pos)
+		entity.respawn(random_pos)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():
