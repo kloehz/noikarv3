@@ -54,6 +54,8 @@ func _perform_attack() -> void:
 		_show_attack_effects()
 
 func _handle_hit(collider: Node) -> void:
+	print("[Combat] Server hit collider: ", collider.name, " (", collider.get_class(), ")")
+	
 	# Check for Hurtbox in the collider or its children
 	var hurtbox = collider as HurtboxComponent
 	if not hurtbox and collider.has_node("HurtboxComponent"):
@@ -64,8 +66,10 @@ func _handle_hit(collider: Node) -> void:
 		if hurtbox.get_parent() == entity:
 			return
 			
-		print("[Combat] ShapeCast hit: ", collider.name)
+		print("[Combat] Valid Hurtbox found on: ", hurtbox.get_parent().name)
 		hurtbox.receive_hit_data(damage, entity)
+	else:
+		print("[Combat] No Hurtbox found on collider.")
 
 @rpc("any_peer", "call_local", "unreliable")
 func _show_attack_effects() -> void:

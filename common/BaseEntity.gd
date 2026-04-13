@@ -10,38 +10,33 @@ signal died
 #region Exports
 @export var max_health: int = 100
 @export var entity_name: String = "Entity"
+@export var player_name: String = "Player":
+	set(v):
+		if player_name == v: return
+		player_name = v
+		_update_visuals()
 #endregion
 
-#region Public Accessors (delegate to ServerState)
-var player_name: String:
-	get: return server_state.player_name if server_state else "Player"
-	set(v):
-		if server_state and multiplayer.is_server():
-			server_state.player_name = v
-
+#region Network Sync Variables (Proxy properties)
 var sync_is_dead: bool:
 	get: return server_state.sync_is_dead if server_state else false
-	set(v):
-		if server_state and multiplayer.is_server():
-			server_state.sync_is_dead = v
+	set(v): if server_state and multiplayer.is_server(): server_state.sync_is_dead = v
 
 var sync_health: int:
 	get: return server_state.sync_health if server_state else 100
-	set(v):
-		if server_state and multiplayer.is_server():
-			server_state.sync_health = v
+	set(v): if server_state and multiplayer.is_server(): server_state.sync_health = v
 #endregion
 
 @onready var server_state: ServerState = $ServerState
 
 func _ready() -> void:
-	if name.is_valid_int():
-		set_multiplayer_authority(name.to_int())
-	else:
-		set_multiplayer_authority(1)
+	var peer_id = name.to_int() if name.is_valid_int() else 1
+	set_multiplayer_authority(peer_id)
 	
-	# Connect ServerState signals for visual/logic updates
 	if server_state:
+		# Force server authority for the state container
+		server_state.set_multiplayer_authority(1)
+		
 		server_state.health_changed.connect(_on_sync_health_changed)
 		server_state.death_changed.connect(_on_sync_death_changed)
 		server_state.name_changed.connect(func(_n): _update_visuals())
@@ -55,6 +50,7 @@ func _ready() -> void:
 	_setup_health_component()
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
+	print("[BaseEntity] %s received health sync: %d" % [name, current])
 	var hc = get_node_or_null("HealthComponent")
 	if hc: hc.current_health = current
 	health_changed.emit(current, maximum)
@@ -64,12 +60,18 @@ func _on_sync_death_changed(is_dead: bool) -> void:
 		if has_node("VisualComponent"): $VisualComponent.play_death_effect()
 		collision_layer = 0
 		collision_mask = 0
+		if has_node("HurtboxComponent"):
+			$HurtboxComponent.monitorable = false
+			$HurtboxComponent.monitoring = false
 		EventBus.entity_died.emit(self)
 	else:
 		if has_node("VisualComponent"): $VisualComponent.play_spawn_effect()
 		if has_node("HealthComponent"): $HealthComponent.reset_health()
 		collision_layer = 1
 		collision_mask = 1
+		if has_node("HurtboxComponent"):
+			$HurtboxComponent.monitorable = true
+			$HurtboxComponent.monitoring = true
 
 func _setup_visuals() -> void:
 	if GameManager._is_headless_environment(): return
@@ -91,11 +93,13 @@ func _setup_health_component() -> void:
 	if hc:
 		hc.health_changed.connect(func(c, m): 
 			if multiplayer.is_server() and server_state:
+				print("[BaseEntity] Server updating sync_health for %s to %d" % [name, c])
 				server_state.sync_health = c
 			health_changed.emit(c, m)
 		)
 		hc.died.connect(func(): 
 			if multiplayer.is_server() and server_state:
+				print("[BaseEntity] Server detected death for %s" % name)
 				server_state.sync_is_dead = true
 		)
 

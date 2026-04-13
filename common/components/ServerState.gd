@@ -16,12 +16,14 @@ signal name_changed(new_name: String)
 @export var sync_health: int = 100:
 	set(v):
 		if sync_health == v: return
+		print("[ServerState] %s health changed: %d -> %d (Server: %s)" % [get_parent().name, sync_health, v, str(multiplayer.is_server())])
 		sync_health = v
 		health_changed.emit(sync_health, max_health)
 
 @export var sync_is_dead: bool = false:
 	set(v):
 		if sync_is_dead == v: return
+		print("[ServerState] %s death changed: %s -> %s" % [get_parent().name, str(sync_is_dead), str(v)])
 		sync_is_dead = v
 		death_changed.emit(sync_is_dead)
 
@@ -33,6 +35,9 @@ signal name_changed(new_name: String)
 
 func _ready() -> void:
 	# CRITICAL: This node must always be server-authoritative.
-	# Without this, netfox's StateSynchronizer ownership check will reject
-	# all server snapshots on the client side.
 	set_multiplayer_authority(1)
+	
+	# Force Netfox to update its cache for this node
+	var sync = get_node_or_null("StateSynchronizer")
+	if sync and sync.has_method("process_settings"):
+		sync.process_settings()

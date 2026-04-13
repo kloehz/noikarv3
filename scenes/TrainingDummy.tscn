@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://b8y8u6k8j8k8j"]
+[gd_scene load_steps=11 format=3 uid="uid://b8y8u6k8j8k8j"]
 
 [ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
@@ -29,6 +29,13 @@ shape = SubResource("BoxShape3D_1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_1")
 
+[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+script = ExtResource("5_visual_comp")
+entity = NodePath("..")
+
+[node name="HealthComponent" type="Node3D" parent="."]
+script = ExtResource("2_health")
+
 [node name="ServerState" type="Node" parent="."]
 script = ExtResource("6_server_state")
 
@@ -38,12 +45,11 @@ root = NodePath("..")
 properties = Array[String]([":sync_health", ":sync_is_dead"])
 full_state_interval = 8
 
-[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
-script = ExtResource("5_visual_comp")
-entity = NodePath("..")
-
-[node name="HealthComponent" type="Node3D" parent="."]
-script = ExtResource("2_health")
+[node name="PositionSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("4_state_sync")
+root = NodePath("..")
+properties = Array[String]([":global_position"])
+full_state_interval = 8
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
