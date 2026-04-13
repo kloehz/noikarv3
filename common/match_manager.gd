@@ -8,18 +8,34 @@ const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
 
 ## Store peer data like names.
 var peer_data: Dictionary = {}
+var _pending_name: String = ""
 
 func _ready() -> void:
 	EventBus.server_started.connect(_on_server_started)
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
+	
+	# Listen for successful connection to send pending data
+	multiplayer.connected_to_server.connect(_on_connected_to_server)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():
 		peer_data[1] = {"name": player_name}
+		# Update local host name immediately if already spawned
+		var player = players_container.get_node_or_null("1")
+		if player:
+			player.player_name = player_name
 	else:
-		_submit_name_to_server.rpc_id(1, player_name)
+		_pending_name = player_name
+		# If already connected, send it now, otherwise wait for signal
+		if multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			_submit_name_to_server.rpc_id(1, player_name)
+
+func _on_connected_to_server() -> void:
+	if not _pending_name.is_empty():
+		_submit_name_to_server.rpc_id(1, _pending_name)
+		_pending_name = ""
 
 @rpc("any_peer", "reliable")
 func _submit_name_to_server(player_name: String) -> void:
@@ -66,12 +82,12 @@ func _spawn_player(peer_id: int) -> void:
 	if peer_data.has(peer_id):
 		player.player_name = peer_data[peer_id]["name"]
 	
+	# Random position BEFORE adding to child
+	player.position = Vector3(randf_range(-5, 5), 1.5, randf_range(-5, 5))
+	
 	players_container.add_child(player, true)
 	
-	# Random position for now
-	player.global_position = Vector3(randf_range(-5, 5), 1, randf_range(-5, 5))
-	
-	print("[MatchManager] Spawned player for peer: ", peer_id, " (", player.player_name, ")")
+	print("[MatchManager] Spawned player for peer: ", peer_id, " (", player.player_name, ") at ", player.position)
 
 func _despawn_player(peer_id: int) -> void:
 	var player = players_container.get_node_or_null(str(peer_id))

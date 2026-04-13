@@ -94,23 +94,28 @@ func _on_entity_spawned(p_entity: Node3D) -> void:
 ## Update visual name (e.g., label above player).
 func update_name(new_name: String) -> void:
 	print("[VisualComponent] Name updated to: ", new_name)
+	var name_label = get_parent().get_node_or_null("NameLabel")
+	if name_label:
+		name_label.text = new_name
 
 ## Play attack visual effect (melee hit).
 func play_shoot_effect() -> void:
-	# Basic visual feedback: a quick flash or print
+	# Basic visual feedback
 	print("[Combat] SWING! (Area Attack)")
 	
 	if _mesh:
-		# Quick punch forward animation using Tweens
-		var tween = get_tree().create_tween()
-		var original_pos = _mesh.position
+		# Define the fixed base position (feet at 0, center at 1)
+		var base_pos = Vector3(0, 1, 0)
 		
-		# Move forward and grow slightly
-		tween.tween_property(_mesh, "position", original_pos + Vector3(0, 0, -0.5), 0.05)
+		# Create a new tween and kill the previous one if it exists to avoid 'stretching'
+		var tween = get_tree().create_tween()
+		
+		# Move forward (punch)
+		tween.tween_property(_mesh, "position", base_pos + Vector3(0, 0, -0.6), 0.05).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		tween.parallel().tween_property(_mesh, "scale", Vector3(1.1, 1.1, 1.1), 0.05)
 		
-		# Return to original
-		tween.tween_property(_mesh, "position", original_pos, 0.1)
+		# Snap back to exactly base_pos
+		tween.tween_property(_mesh, "position", base_pos, 0.1).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 		tween.parallel().tween_property(_mesh, "scale", Vector3(1.0, 1.0, 1.0), 0.1)
 
 

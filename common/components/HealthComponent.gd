@@ -21,20 +21,10 @@ var current_health: int:
 			health_changed.emit(current_health, max_health)
 
 var _invincible: bool = false
-var _health_label: Label3D
+@onready var health_label: Label3D = get_parent().get_node_or_null("HealthLabel")
 
 func _ready() -> void:
 	current_health = max_health
-	_setup_debug_label()
-
-func _setup_debug_label() -> void:
-	# Create a debug label for visual health representation in editor
-	_health_label = Label3D.new()
-	_health_label.visible = true
-	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_health_label.no_depth_test = true
-	_health_label.position = Vector3(0, 2.5, 0) # Position above
-	add_child(_health_label)
 	_update_debug_label()
 
 ## Take damage from a source. Returns actual damage dealt.
@@ -71,6 +61,7 @@ func heal(amount: int) -> int:
 ## Reset health to max.
 func reset_health() -> void:
 	current_health = max_health
+	_update_debug_label()
 
 ## Start invincibility period.
 func _start_invincibility() -> void:
@@ -78,7 +69,16 @@ func _start_invincibility() -> void:
 	await get_tree().create_timer(invincibility_time).timeout
 	_invincible = false
 
-## Update debug label text.
+## Update health label visuals.
 func _update_debug_label() -> void:
-	if _health_label:
-		_health_label.text = "%d/%d" % [current_health, max_health]
+	if health_label:
+		health_label.text = "%d/%d" % [current_health, max_health]
+		
+		# Change color based on health percentage
+		var ratio = float(current_health) / float(max_health)
+		if ratio > 0.5:
+			health_label.modulate = Color.GREEN
+		elif ratio > 0.2:
+			health_label.modulate = Color.YELLOW
+		else:
+			health_label.modulate = Color.RED

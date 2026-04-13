@@ -41,23 +41,47 @@ var _state_synchronizer: StateSynchronizer
 #endregion
 
 func _ready() -> void:
-	# Only enable camera for local player
-	var camera: Camera3D = $Camera3D
-	if camera:
-		camera.current = is_multiplayer_authority()
-		
+	# Set authority based on name if the name is a valid peer ID
+	if name.is_valid_int():
+		set_multiplayer_authority(name.to_int())
+		print("[BaseEntity] Authority set to ", name, " for node ", get_path())
+
+	_setup_visuals()
 	_setup_netfox()
 	_setup_health_component()
 	
 	if _is_server_authority():
 		current_health = max_health
 
+func _setup_visuals() -> void:
+	# If we are a headless server, we don't need cameras
+	if GameManager._is_headless_environment():
+		return
+
+	# We use the node name which is set to the peer_id string
+	# This is the most reliable way to check ownership during spawn
+	var is_local_player = (name == str(multiplayer.get_unique_id()))
+	
+	var camera: Camera3D = get_node_or_null("CameraPivot/Camera3D")
+	if camera:
+		if is_local_player:
+			camera.make_current()
+			print("[BaseEntity] Camera activated for local player: ", name)
+		else:
+			camera.current = false
+			# Instead of deleting, we just disable it to avoid race conditions
+			camera.process_mode = Node.PROCESS_MODE_DISABLED
+			camera.hide()
+
 func _setup_netfox() -> void:
 	_rollback_synchronizer = $RollbackSynchronizer
 	_state_synchronizer = $StateSynchronizer
 	
-	# Netfox handles synchronization of properties automatically based on configuration in the inspector
-	pass
+	# Disable interpolation for the local player to avoid visual delay ( Rakion style )
+	var interpolator = get_node_or_null("TickInterpolator")
+	if interpolator and is_multiplayer_authority():
+		interpolator.enabled = false
+		print("[BaseEntity] Interpolation disabled for local authority: ", name)
 
 ## Set up health component integration.
 func _setup_health_component() -> void:

@@ -21,9 +21,12 @@ func _ready() -> void:
 func _rollback_tick(_delta: float, _tick: int, is_fresh: bool) -> void:
 	if not is_fresh:
 		return
-		
-	if logic and logic.get("is_shooting"):
-		_try_attack()
+	
+	# ONLY the authority (owner) or the server triggers the attack logic
+	# This prevents clients from trying to call RPCs on entities they don't own
+	if multiplayer.is_server() or entity.is_multiplayer_authority():
+		if logic and logic.get("is_shooting"):
+			_try_attack()
 
 func _try_attack() -> void:
 	var current_time = Time.get_ticks_msec() / 1000.0
@@ -32,20 +35,23 @@ func _try_attack() -> void:
 		_perform_attack()
 
 func _perform_attack() -> void:
-	# Visual feedback for everyone
-	_show_attack_effects.rpc()
-	
-	# Authoritative Hit Detection (Server Only)
+	# Damage is server-authoritative
 	if multiplayer.is_server():
-		# Force update the shapecast to ensure accuracy during rollback
+		# Visual feedback for everyone else
+		_show_attack_effects.rpc()
+		
+		# Force update the shapecast
 		shapecast.force_shapecast_update()
 		
 		if shapecast.is_colliding():
-			# ShapeCast can hit multiple objects, we process all of them
 			var hit_count = shapecast.get_collision_count()
 			for i in range(hit_count):
 				var collider = shapecast.get_collider(i)
 				_handle_hit(collider)
+	
+	# Local visual feedback for the attacking player (Prediction)
+	if not multiplayer.is_server() and entity.is_multiplayer_authority():
+		_show_attack_effects()
 
 func _handle_hit(collider: Node) -> void:
 	# Check for Hurtbox in the collider or its children
@@ -57,7 +63,7 @@ func _handle_hit(collider: Node) -> void:
 		print("[Combat] ShapeCast hit: ", collider.name)
 		hurtbox.receive_hit_data(damage, entity)
 
-@rpc("call_local", "unreliable")
+@rpc("any_peer", "call_local", "unreliable")
 func _show_attack_effects() -> void:
 	if entity.has_node("VisualComponent"):
-		entity.get_node("VisualComponent").play_shoot_effect() # Reuse current VFX
+		entity.get_node("VisualComponent").play_shoot_effect()

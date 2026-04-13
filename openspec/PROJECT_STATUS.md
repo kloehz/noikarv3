@@ -4,7 +4,8 @@
 **Last Update**: 2026-04-12
 
 ## Completed
-- ✅ **Combat System**: Basic hitscan shooting implemented with Netfox prediction and server authority.
+- ✅ **UI Feedback**: Basic health labels and player names implemented via Label3D.
+- ✅ **Combat System**: Basic hitscan/volumetric melee implemented with Netfox prediction and server authority.
 - ✅ **Base Setup**: Project initialized, Netfox v2.x installed.
 - ✅ **Core Entities**: `BaseEntity` created with components (Logic, Visual, Health).
 - ✅ **Netfox Integration**: 

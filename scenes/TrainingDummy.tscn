@@ -26,6 +26,22 @@ shape = SubResource("BoxShape3D_1")
 [node name="HealthComponent" type="Node3D" parent="."]
 script = ExtResource("1_health")
 
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
+billboard = 1
+no_depth_test = true
+text = "TRAINING DUMMY"
+font_size = 48
+outline_size = 12
+
+[node name="HealthLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+billboard = 1
+no_depth_test = true
+text = "100/100"
+modulate = Color(0, 1, 0, 1)
+outline_size = 10
+
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
 script = ExtResource("2_hurtbox")
 health_component = NodePath("../HealthComponent")
