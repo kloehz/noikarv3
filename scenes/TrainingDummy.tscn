@@ -1,7 +1,8 @@
-[gd_scene load_steps=7 format=3 uid="uid://b8y8u6k8j8k8j"]
+[gd_scene load_steps=8 format=3 uid="uid://b8y8u6k8j8k8j"]
 
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="1_health"]
 [ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="2_hurtbox"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="3_state_sync"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 albedo_color = Color(1, 0.2, 0.2, 1)
@@ -25,6 +26,12 @@ shape = SubResource("BoxShape3D_1")
 
 [node name="HealthComponent" type="Node3D" parent="."]
 script = ExtResource("1_health")
+
+[node name="StateSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("3_state_sync")
+root = NodePath("../HealthComponent")
+properties = Array[String]([":current_health"])
+full_state_interval = 1
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)

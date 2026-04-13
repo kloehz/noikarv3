@@ -18,6 +18,7 @@ extends Node
 func _ready() -> void:
 	if Engine.is_editor_hint(): return
 	_setup_entity()
+	current_velocity = Vector3.ZERO
 	if entity: look_yaw = entity.rotation.y
 
 func _input(event: InputEvent) -> void:

@@ -24,7 +24,10 @@ var _invincible: bool = false
 @onready var health_label: Label3D = get_parent().get_node_or_null("HealthLabel")
 
 func _ready() -> void:
-	current_health = max_health
+	if multiplayer.is_server():
+		current_health = max_health
+	
+	health_changed.connect(func(_cur, _max): _update_debug_label())
 	_update_debug_label()
 
 ## Take damage from a source. Returns actual damage dealt.

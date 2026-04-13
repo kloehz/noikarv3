@@ -83,7 +83,8 @@ func _spawn_player(peer_id: int) -> void:
 		player.player_name = peer_data[peer_id]["name"]
 	
 	# Random position BEFORE adding to child
-	player.position = Vector3(randf_range(-5, 5), 1.5, randf_range(-5, 5))
+	# We use 0.1 to be just slightly above ground and avoid stuck physics
+	player.position = Vector3(randf_range(-5, 5), 0.1, randf_range(-5, 5))
 	
 	players_container.add_child(player, true)
 	

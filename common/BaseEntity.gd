@@ -39,12 +39,20 @@ var _health_component: Node
 var _rollback_synchronizer: RollbackSynchronizer
 var _state_synchronizer: StateSynchronizer
 #endregion
-
 func _ready() -> void:
-	# Set authority based on name if the name is a valid peer ID
+	# Set main authority to the player (for movement/input)
 	if name.is_valid_int():
-		set_multiplayer_authority(name.to_int())
-		print("[BaseEntity] Authority set to ", name, " for node ", get_path())
+		var peer_id = name.to_int()
+		set_multiplayer_authority(peer_id)
+
+		# FORCE HealthComponent and its Synchronizer to be owned by the Server (Peer 1)
+		# This ensures health always syncs from Server to Clients
+		if has_node("HealthComponent"):
+			$HealthComponent.set_multiplayer_authority(1)
+		if has_node("StateSynchronizer"):
+			$StateSynchronizer.set_multiplayer_authority(1)
+
+		print("[BaseEntity] Authority split: Entity -> ", peer_id, " | Health -> 1")
 
 	_setup_visuals()
 	_setup_netfox()
