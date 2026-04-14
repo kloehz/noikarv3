@@ -24,7 +24,10 @@ func _rollback_tick(_delta: float, _tick: int, is_fresh: bool) -> void:
 		return
 	
 	# ONLY the authority (owner) or the server triggers the attack logic
-	if multiplayer.is_server() or entity.is_multiplayer_authority():
+	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
+	var is_owner = (multiplayer.get_unique_id() == owner_id)
+	
+	if multiplayer.is_server() or is_owner:
 		if logic and logic.get("is_shooting"):
 			_try_attack()
 
@@ -50,7 +53,8 @@ func _perform_attack() -> void:
 				_handle_hit(collider)
 	
 	# Local visual feedback for the attacking player (Prediction)
-	if not multiplayer.is_server() and entity.is_multiplayer_authority():
+	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
+	if not multiplayer.is_server() and multiplayer.get_unique_id() == owner_id:
 		_show_attack_effects()
 
 func _handle_hit(collider: Node) -> void:

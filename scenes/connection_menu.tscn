@@ -54,11 +54,19 @@ layout_mode = 2
 
 [node name="AddressLabel" type="Label" parent="Panel/VBox"]
 layout_mode = 2
-text = "Server Address:"
+text = "Noray Server:"
 
 [node name="AddressEdit" type="LineEdit" parent="Panel/VBox"]
 layout_mode = 2
-text = "localhost"
+text = "127.0.0.1"
+
+[node name="OidLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = "Room ID (Leave blank to Host):"
+
+[node name="OidEdit" type="LineEdit" parent="Panel/VBox"]
+layout_mode = 2
+placeholder_text = "Paste Room ID here..."
 
 [node name="ConnectButton" type="Button" parent="Panel/VBox"]
 layout_mode = 2

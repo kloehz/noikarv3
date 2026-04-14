@@ -1,16 +1,16 @@
-[gd_scene load_steps=14 format=3 uid="uid://c1ient1t1t1t1"]
+[gd_scene format=3 uid="uid://c1ient1t1t1t1"]
 
-[ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
+[ext_resource type="Script" uid="uid://bdfmixdkvrx7a" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="3_visual_comp"]
-[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
-[ext_resource type="Script" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
-[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
-[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
-[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
+[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
+[ext_resource type="Script" uid="uid://dhsunkxq0v3wy" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
+[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
+[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
-[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
-[ext_resource type="Script" path="res://common/components/ServerState.gd" id="11_server_state"]
+[ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
+[ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -28,14 +28,14 @@ script = ExtResource("1_base_entity")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_1")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1866681740]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_1")
 
-[node name="ServerState" type="Node" parent="."]
+[node name="ServerState" type="Node" parent="." unique_id=1244681082]
 script = ExtResource("11_server_state")
 
-[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+[node name="StateSynchronizer" type="Node" parent="ServerState" unique_id=173916094 node_paths=PackedStringArray("root")]
 script = ExtResource("7_state_sync")
 root = NodePath("..")
 properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name", ":knockback_impulse"])
@@ -44,7 +44,7 @@ full_state_interval = 8
 [node name="CameraPivot" type="Node3D" parent="." unique_id=987654321]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 
-[node name="Camera3D" type="Camera3D" parent="CameraPivot"]
+[node name="Camera3D" type="Camera3D" parent="CameraPivot" unique_id=2016186712]
 transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 2, 4)
 
 [node name="ShapeCast3D" type="ShapeCast3D" parent="." unique_id=414159265]
@@ -86,14 +86,13 @@ billboard = 1
 no_depth_test = true
 text = "Player"
 font_size = 48
-outline_size = 12
 
 [node name="HealthLabel" type="Label3D" parent="." unique_id=34343434]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
 billboard = 1
 no_depth_test = true
-text = "100/100"
 modulate = Color(0, 1, 0, 1)
+text = "100/100"
 outline_size = 10
 
 [node name="HitboxComponent" type="Area3D" parent="." unique_id=150433228]
@@ -103,6 +102,6 @@ script = ExtResource("5_hitbox_comp")
 script = ExtResource("10_hurtbox")
 health_component = NodePath("../HealthComponent")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent" unique_id=482110286]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 shape = SubResource("BoxShape3D_1")

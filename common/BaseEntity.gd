@@ -31,11 +31,13 @@ var sync_health: int:
 
 func _ready() -> void:
 	var peer_id = name.to_int() if name.is_valid_int() else 1
-	set_multiplayer_authority(peer_id)
+	
+	# Set authority recursively for all nodes in the character
+	set_multiplayer_authority(peer_id, true)
 	
 	if server_state:
-		# Force server authority for the state container
-		server_state.set_multiplayer_authority(1)
+		# Force server authority for the state container recursively
+		server_state.set_multiplayer_authority(1, true)
 		
 		server_state.health_changed.connect(_on_sync_health_changed)
 		server_state.death_changed.connect(_on_sync_death_changed)
@@ -44,6 +46,12 @@ func _ready() -> void:
 		if multiplayer.is_server():
 			server_state.max_health = max_health
 			server_state.sync_health = max_health
+
+	# Netfox requires re-processing settings if authority changes after entering tree
+	if has_node("RollbackSynchronizer"):
+		var rb = $RollbackSynchronizer
+		if rb.has_method("process_settings"):
+			rb.process_settings()
 
 	_setup_visuals()
 	_setup_netfox()
@@ -85,7 +93,8 @@ func _setup_visuals() -> void:
 
 func _setup_netfox() -> void:
 	var interpolator = get_node_or_null("TickInterpolator")
-	if interpolator and is_multiplayer_authority():
+	var owner_id = name.to_int() if name.is_valid_int() else 1
+	if interpolator and multiplayer.get_unique_id() == owner_id:
 		interpolator.enabled = false
 
 func _setup_health_component() -> void:

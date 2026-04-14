@@ -59,6 +59,9 @@ signal on_connect_nat(address: String, port: int)
 ## Emitted when a connect over relay command is received from noray.
 signal on_connect_relay(address: String, port: int)
 
+## Emitted when a requested headless server is ready.
+signal on_host_ready(oid: String)
+
 func _enter_tree():
 	_protocol.on_command.connect(func (cmd, data): on_command.emit(cmd, data))
 	on_command.connect(_handle_commands)
@@ -109,6 +112,18 @@ func disconnect_from_host():
 ## Register as host.
 func register_host() -> Error:
 	return _put_command("register-host")
+
+## Request the backend to spawn a dedicated server.
+func request_host() -> Error:
+	return _put_command("request-host")
+
+## Register a spawned headless server using the provision token.
+func register_server(token: String) -> Error:
+	return _put_command("register-server", token)
+
+## Tell the backend the headless server is bound and ready to accept the waiting client.
+func server_ready() -> Error:
+	return _put_command("server-ready")
 
 ## Register remote address.
 func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: float = 0.1) -> Error:
@@ -200,5 +215,8 @@ func _handle_commands(command: String, data: String):
 		var port = data.to_int()
 		_logger.debug("Received connect relay command to %s:%s", [host, port])
 		on_connect_relay.emit(host, port)
+	elif command == "host-ready":
+		_logger.debug("Received host-ready from backend for OID: %s", [data])
+		on_host_ready.emit(data)
 	else:
 		_logger.trace("Received command %s %s", [command, data])

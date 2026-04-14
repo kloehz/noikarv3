@@ -76,4 +76,6 @@ func _clear_server_impulse() -> void:
 		_server_state.knockback_impulse = Vector3.ZERO
 
 func _is_local_authority() -> bool:
-	return is_multiplayer_authority()
+	if not entity: return false
+	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
+	return multiplayer.get_unique_id() == owner_id

@@ -96,6 +96,9 @@ func over_enet(connection: ENetConnection, address: String, port: int, timeout: 
 ## data over the connection. Instead, we just pretend that the handshake is 
 ## successful on our end and blast that status for a given time.
 func over_enet_peer(peer: ENetMultiplayerPeer, address: String, port: int, timeout: float = 8.0, frequency: float = 0.1) -> Error:
+	if peer == null:
+		return ERR_INVALID_PARAMETER
+
 	var result = OK
 	var status = HandshakeStatus.new()
 
@@ -105,8 +108,11 @@ func over_enet_peer(peer: ENetMultiplayerPeer, address: String, port: int, timeo
 	status.did_handshake = true
 	
 	while timeout >= 0:
-		if peer.get_connection_status() != MultiplayerPeer.CONNECTION_CONNECTED:
+		if peer.get_connection_status() == MultiplayerPeer.CONNECTION_DISCONNECTED:
 			return ERR_CONNECTION_ERROR
+			
+		if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+			return OK
 			
 		# Send our state
 		peer.host.socket_send(address, port, status.to_string().to_ascii_buffer())
