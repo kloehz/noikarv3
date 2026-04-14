@@ -97,11 +97,11 @@ func _spawn_player(peer_id: int) -> void:
 	# We use 0.1 to be just slightly above ground and avoid stuck physics
 	player.position = Vector3(randf_range(-5, 5), 0.1, randf_range(-5, 5))
 	
-	players_container.add_child(player, true)
+	players_container.call_deferred("add_child", player, true)
 	
 	# Set name AFTER add_child — server_state is @onready and needs to be in tree
 	if peer_data.has(peer_id):
-		player.player_name = peer_data[peer_id]["name"]
+		player.set_deferred("player_name", peer_data[peer_id]["name"])
 	
 	print("[MatchManager] Spawned player for peer: ", peer_id, " (", player.player_name, ") at ", player.position)
 

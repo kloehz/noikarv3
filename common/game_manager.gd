@@ -57,8 +57,9 @@ func _start_as_server() -> void:
 		print("[GameManager] Failed to host ENet server: ", err)
 		return
 
-	multiplayer.multiplayer_peer = peer
-	EventBus.server_started.emit()
+	# Fix Mac Headless Threading Crash by deferring these
+	multiplayer.set_deferred("multiplayer_peer", peer)
+	EventBus.call_deferred("emit_signal", "server_started")
 	
 	if not provision_token.is_empty():
 		print("[GameManager] Notifying backend that server is ready...")
