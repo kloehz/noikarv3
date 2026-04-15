@@ -54,7 +54,7 @@ full_state_interval = 8
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("8_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position"])
+state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)

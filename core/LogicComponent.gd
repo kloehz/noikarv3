@@ -47,33 +47,35 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 func _apply_movement(delta: float) -> void:
 	if not entity: return
 	
-	# 0. Authoritative Knockback from ServerState
-	if _server_state and _server_state.knockback_impulse.length() > 0:
-		current_velocity += _server_state.knockback_impulse
-		if _is_local_authority():
-			_clear_server_impulse.rpc_id(1)
-	
-	# Rotation
-	entity.rotation.y = look_yaw
-	
-	# Direction
-	var move_dir = Vector3.ZERO
-	if input_axis.length() > 0:
-		var forward = -entity.global_transform.basis.z
-		var right = entity.global_transform.basis.x
-		move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
-	
-	# Basic Velocity
-	var target_vel = move_dir * max_speed
-	current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
+	# 0. Authoritative Knockback State from ServerState
+	if _server_state and _server_state.knockback_remaining_time > 0:
+		current_velocity = _server_state.knockback_velocity
+		
+		# Server manages the timer
+		if multiplayer.is_server():
+			_server_state.knockback_remaining_time -= delta
+			if _server_state.knockback_remaining_time <= 0:
+				_server_state.knockback_velocity = Vector3.ZERO
+	else:
+		# Normal Input-based movement
+		# Rotation
+		entity.rotation.y = look_yaw
+		
+		# Direction
+		var move_dir = Vector3.ZERO
+		if input_axis.length() > 0:
+			var forward = -entity.global_transform.basis.z
+			var right = entity.global_transform.basis.x
+			move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+		
+		# Basic Velocity
+		var target_vel = move_dir * max_speed
+		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
 	
 	# Apply movement using the character body's native move_and_collide for stability
 	entity.move_and_collide(current_velocity * delta)
 
-@rpc("any_peer", "call_local", "reliable")
-func _clear_server_impulse() -> void:
-	if multiplayer.is_server() and _server_state:
-		_server_state.knockback_impulse = Vector3.ZERO
+# Removed _clear_server_impulse as it's no longer needed with time-based state
 
 func _is_local_authority() -> bool:
 	if not entity: return false

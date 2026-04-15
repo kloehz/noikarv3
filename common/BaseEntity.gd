@@ -27,7 +27,7 @@ var sync_health: int:
 	set(v): if server_state and multiplayer.is_server(): server_state.sync_health = v
 #endregion
 
-@onready var server_state: ServerState = $ServerState
+@onready var server_state = $ServerState
 
 func _ready() -> void:
 	var peer_id = name.to_int() if name.is_valid_int() else 1

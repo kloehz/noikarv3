@@ -82,8 +82,11 @@ func _handle_hit(collider: Node) -> void:
 			# Calculate direction from attacker to target
 			var kb_dir = (target.global_position - entity.global_position).normalized()
 			kb_dir.y = 0 # Keep it horizontal
-			target_state.knockback_impulse = kb_dir * knockback_force
-			print("[Combat] Server applied impulse to: ", target.name)
+			
+			# Use state-based knockback for a longer, more consistent push
+			target_state.knockback_velocity = kb_dir * knockback_force
+			target_state.knockback_remaining_time = 0.25 # Lasts for 0.25 seconds
+			print("[Combat] Server applied state-based knockback to: ", target.name)
 	else:
 		print("[Combat] No Hurtbox found on collider.")
 
