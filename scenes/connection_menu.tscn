@@ -76,3 +76,17 @@ text = "Connect"
 layout_mode = 2
 text = ""
 horizontal_alignment = 1
+
+[node name="RoomInfo" type="Label" parent="."]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -250.0
+offset_top = 20.0
+offset_right = -20.0
+offset_bottom = 43.0
+grow_horizontal = 0
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+text = "Not Connected"
+horizontal_alignment = 2

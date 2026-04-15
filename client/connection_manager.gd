@@ -11,10 +11,13 @@ const DEFAULT_PORT = 7777
 @onready var oid_edit: LineEdit = $Panel/VBox/OidEdit
 @onready var name_edit: LineEdit = $Panel/VBox/NameEdit
 @onready var status_label: Label = $Panel/VBox/StatusLabel
+@onready var room_info_label: Label = $RoomInfo
+@onready var main_panel: Panel = $Panel
 
 var player_name: String = "Player"
 var _active_peer: ENetMultiplayerPeer
 var _is_host: bool = false
+var _current_oid: String = ""
 
 func _ready() -> void:
 	host_button.pressed.connect(_on_host_pressed)
@@ -30,6 +33,8 @@ func _ready() -> void:
 	# Connect to Noray signals
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
+	
+	room_info_label.text = "Not Connected"
 
 func _on_host_pressed() -> void:
 	_is_host = false # In a dedicated server model, the local player is just a client
@@ -50,9 +55,11 @@ func _on_host_pressed() -> void:
 	Noray.request_host()
 	
 	var spawned_oid: String = await Noray.on_host_ready
+	_current_oid = spawned_oid
 	
 	status_label.text = "Server Ready! Joining Room ID: " + spawned_oid
 	oid_edit.text = spawned_oid
+	room_info_label.text = "Room ID: " + spawned_oid
 	print("[ConnectionManager] Dedicated server spawned with OID: ", spawned_oid)
 	
 	# Wait for OID and PID to be fully registered before connecting
@@ -82,6 +89,8 @@ func _on_connect_pressed() -> void:
 	if room_id.is_empty():
 		status_label.text = "Room ID is required to connect."
 		return
+	
+	_current_oid = room_id
 
 	status_label.text = "Connecting to Noray Server..."
 	
@@ -153,25 +162,28 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not multiplayer.is_server() and peer_id == 1:
 		_show_menu()
 		status_label.text = "Disconnected from server"
+		room_info_label.text = "Disconnected"
 
 func _on_connected_to_server() -> void:
 	status_label.text = "Connected!"
+	room_info_label.text = "Room ID: " + _current_oid
 	EventBus.client_connected.emit(multiplayer.get_unique_id())
 	_hide_menu()
 	print("[ConnectionManager] Connected to server")
 
 func _on_connection_failed() -> void:
 	status_label.text = "Connection failed"
+	room_info_label.text = "Failed"
 	print("[ConnectionManager] Connection failed")
 	_show_menu()
 
 func _hide_menu() -> void:
-	visible = false
-	process_mode = Node.PROCESS_MODE_DISABLED
+	main_panel.visible = false
+	# We don't disable process_mode anymore so we can still handle RoomInfo
+	# and toggle menu back with Input
 
 func _show_menu() -> void:
-	visible = true
-	process_mode = Node.PROCESS_MODE_INHERIT
+	main_panel.visible = true
 
 func _input(event: InputEvent) -> void:
 	var toggle_pressed = event.is_action_pressed("ui_cancel")
@@ -180,7 +192,10 @@ func _input(event: InputEvent) -> void:
 		toggle_pressed = toggle_pressed or event.is_action_pressed("toggle_menu")
 
 	if toggle_pressed:
-		if visible:
+		if main_panel.visible:
 			_hide_menu()
 		else:
-			_show_menu()
+			_show_panel_manual() # Re-show panel
+
+func _show_panel_manual() -> void:
+	main_panel.visible = true
