@@ -7,9 +7,23 @@ signal death_changed(is_dead: bool)
 signal name_changed(new_name: String)
 
 @export var max_health: int = 100
-@export var sync_health: int = 100
-@export var sync_is_dead: bool = false
-@export var player_name: String = "Player"
+@export var sync_health: int = 100:
+	set(v):
+		if sync_health == v: return
+		sync_health = v
+		health_changed.emit(sync_health, max_health)
+
+@export var sync_is_dead: bool = false:
+	set(v):
+		if sync_is_dead == v: return
+		sync_is_dead = v
+		death_changed.emit(sync_is_dead)
+
+@export var player_name: String = "Player":
+	set(v):
+		if player_name == v: return
+		player_name = v
+		name_changed.emit(player_name)
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
 
