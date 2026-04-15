@@ -29,6 +29,7 @@ func _rollback_tick(_delta: float, _tick: int, is_fresh: bool) -> void:
 	
 	if multiplayer.is_server() or is_owner:
 		if logic and logic.get("is_shooting"):
+			print("[Combat] is_shooting detected for: ", entity.name)
 			_try_attack()
 
 func _try_attack() -> void:
@@ -38,6 +39,13 @@ func _try_attack() -> void:
 		_perform_attack()
 
 func _perform_attack() -> void:
+	print("[Combat] _perform_attack triggered on ", "Server" if multiplayer.is_server() else "Client", " for entity: ", entity.name)
+	# Position shapecast at weapon socket if available
+	if entity.character_actor:
+		var socket = entity.character_actor.get_socket("WeaponMain")
+		if socket:
+			shapecast.global_transform = socket.global_transform
+	
 	# Damage is server-authoritative
 	if multiplayer.is_server():
 		# Visual feedback for everyone else

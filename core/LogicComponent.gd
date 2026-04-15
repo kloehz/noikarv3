@@ -41,6 +41,8 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 	if _is_local_authority():
 		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 		is_shooting = Input.is_action_pressed("shoot")
+		if is_shooting:
+			print("[Logic] Shooting input detected on Client for: ", entity.name)
 	
 	_apply_movement(delta)
 

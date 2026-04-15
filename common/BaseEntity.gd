@@ -10,14 +10,15 @@ signal died
 #region Exports
 @export var max_health: int = 100
 @export var entity_name: String = "Entity"
-@export var player_name: String = "Player":
-	set(v):
-		if player_name == v: return
-		player_name = v
-		_update_visuals()
+@export var character_actor_path: String = "res://scenes/characters/Aatrox.tscn"
 #endregion
 
+var character_actor: CharacterActor
+
 #region Network Sync Variables (Proxy properties)
+var player_name: String:
+	get: return server_state.player_name if server_state else "Player"
+	set(v): if server_state and multiplayer.is_server(): server_state.player_name = v
 var sync_is_dead: bool:
 	get: return server_state.sync_is_dead if server_state else false
 	set(v): if server_state and multiplayer.is_server(): server_state.sync_is_dead = v
@@ -34,6 +35,8 @@ func _ready() -> void:
 	
 	# Set authority recursively for all nodes in the character
 	set_multiplayer_authority(peer_id, true)
+	
+	_load_character_actor()
 	
 	if server_state:
 		# Force server authority for the state container recursively
@@ -81,8 +84,25 @@ func _on_sync_death_changed(is_dead: bool) -> void:
 			$HurtboxComponent.monitorable = true
 			$HurtboxComponent.monitoring = true
 
+func _load_character_actor() -> void:
+	if character_actor_path.is_empty(): return
+	
+	var scene = load(character_actor_path) as PackedScene
+	if scene:
+		character_actor = scene.instantiate() as CharacterActor
+		add_child(character_actor)
+		# Ensure authority matches
+		character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
+		print("[BaseEntity] Character actor loaded: ", character_actor_path)
+
 func _setup_visuals() -> void:
 	if GameManager._is_headless_environment(): return
+	
+	if has_node("VisualComponent"):
+		$VisualComponent.entity = self
+		$VisualComponent.setup_with_actor(character_actor)
+		_update_visuals()
+	
 	var is_local_player = (name == str(multiplayer.get_unique_id()))
 	var camera = get_node_or_null("CameraPivot/Camera3D")
 	if camera:
