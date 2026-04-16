@@ -154,10 +154,12 @@ func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: f
 				timeout = 0 # Break outer loop
 				break
 			else:
-				_logger.error("Failed to register local port!")
-				result = FAILED
-				timeout = 0 # Break outer loop
-				break
+				_logger.error("Registrar returned error: %s - will retry...", [recv])
+				# Don't break here, let the timeout loop handle it
+		
+		if result == OK:
+			break
+			
 		# Sleep
 		await get_tree().create_timer(interval).timeout
 		timeout -= interval

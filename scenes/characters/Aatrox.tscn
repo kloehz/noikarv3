@@ -7,12 +7,12 @@
 script = ExtResource("1_actor")
 
 [node name="Model" parent="." unique_id=515501182 instance=ExtResource("2_model")]
-transform = Transform3D(-0.01, 0, -8.7422775e-10, 0, 0.01, 0, 8.7422775e-10, 0, -0.01, 0, 0, 0)
+transform = Transform3D(-0.01, 0, -1.5099579e-09, 0, 0.01, 0, 1.5099579e-09, 0, -0.01, 0, 0, 0)
 
 [node name="Sockets" type="Node3D" parent="Model" unique_id=2121407755]
 
 [node name="WeaponMain" type="Marker3D" parent="Model/Sockets" unique_id=1604189832]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 150, 100)
+transform = Transform3D(1, 0, 1.4210855e-14, 0, 1, 0, -1.4210855e-14, 0, 1, 0, 50, 0)
 
 [node name="Chest" type="Marker3D" parent="Model/Sockets" unique_id=1185862313]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)

@@ -43,10 +43,18 @@ func _start_as_server() -> void:
 	if Noray.pid.is_empty():
 		await Noray.on_pid
 		
-	print("[GameManager] Registering Remote Port...")
-	err = await Noray.register_remote()
+	print("[GameManager] Registering Remote Port (with retries)...")
+	var retries = 3
+	while retries > 0:
+		err = await Noray.register_remote()
+		if err == OK:
+			break
+		retries -= 1
+		print("[GameManager] Failed to register port, retrying... (%d left)" % retries)
+		await get_tree().create_timer(1.0).timeout
+		
 	if err != OK:
-		print("[GameManager] Failed to register port on Noray")
+		print("[GameManager] Failed to register port on Noray after all retries")
 		return
 		
 	var port = Noray.local_port

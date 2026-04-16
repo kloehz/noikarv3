@@ -136,10 +136,21 @@ func _connect_to_peer(address: String, port: int) -> void:
 	status_label.text = "Connecting via ENet to " + address + ":" + str(port)
 	
 	_active_peer = ENetMultiplayerPeer.new()
-	var err = _active_peer.create_client(address, port, 0, 0, 0, Noray.local_port)
+	
+	# Retry loop for ENet client creation (port might be in TIME_WAIT)
+	var err = ERR_CONNECTION_ERROR
+	var retries = 5
+	while retries > 0:
+		err = _active_peer.create_client(address, port, 0, 0, 0, Noray.local_port)
+		if err == OK:
+			break
+		
+		retries -= 1
+		print("[ConnectionManager] Failed to create ENet client, retrying in 0.2s... (%d left)" % retries)
+		await get_tree().create_timer(0.2).timeout
 
 	if err != OK:
-		status_label.text = "Failed to connect: " + str(err)
+		status_label.text = "Failed to connect after retries: " + str(err)
 		return
 
 	multiplayer.multiplayer_peer = _active_peer

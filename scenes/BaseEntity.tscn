@@ -19,7 +19,14 @@ size = Vector3(1, 2, 1)
 size = Vector3(1, 2, 1)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_1"]
-radius = 1.0
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debug"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 1, 0, 0.6)
+
+[sub_resource type="SphereMesh" id="SphereMesh_debug"]
+material = SubResource("StandardMaterial3D_debug")
 
 [node name="BaseEntity" type="CharacterBody3D" unique_id=2131335616]
 script = ExtResource("1_base_entity")
@@ -38,7 +45,7 @@ script = ExtResource("11_server_state")
 [node name="StateSynchronizer" type="Node" parent="ServerState" unique_id=173916094 node_paths=PackedStringArray("root")]
 script = ExtResource("7_state_sync")
 root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name", ":knockback_impulse"])
+properties = Array[String]([":sync_health", ":sync_is_dead", ":player_name", ":knockback_velocity", ":knockback_remaining_time"])
 full_state_interval = 8
 
 [node name="CameraPivot" type="Node3D" parent="." unique_id=987654321]
@@ -48,9 +55,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
 transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 2, 4)
 
 [node name="ShapeCast3D" type="ShapeCast3D" parent="." unique_id=414159265]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6083056, 1, 0)
 shape = SubResource("SphereShape3D_1")
-target_position = Vector3(0, 0, -2.5)
+target_position = Vector3(0, 0, -2)
 max_results = 8
 collide_with_areas = true
 
@@ -58,7 +65,7 @@ collide_with_areas = true
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 enable_prediction = true
-state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
+state_properties = Array[String]([":global_position", "LogicComponent:current_velocity", "CombatComponent:current_attack_state"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
@@ -72,6 +79,10 @@ entity = NodePath("..")
 
 [node name="CombatComponent" type="Node" parent="." unique_id=1122334455]
 script = ExtResource("9_combat")
+
+[node name="AttackDebugMesh" type="MeshInstance3D" parent="." unique_id=777888999]
+visible = false
+mesh = SubResource("SphereMesh_debug")
 
 [node name="VisualComponent" type="Node" parent="." unique_id=1343345633 node_paths=PackedStringArray("entity")]
 script = ExtResource("3_visual_comp")

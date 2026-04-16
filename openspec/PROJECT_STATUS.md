@@ -30,7 +30,7 @@ To avoid "Unknown Property" warnings and jitter:
 ### ⚔️ Combat System
 - **Volumetric Melee**: Uses `ShapeCast3D` (Sphere) for generous and robust hit detection.
 - **Authoritative Damage**: Server calculates hits and applies damage to `ServerState`.
-- **Authoritative Knockback**: Server sets a `knockback_impulse` in the victim's `ServerState`. The victim's `LogicComponent` detects and applies it to their own velocity.
+- **Authoritative Knockback**: Server sets a `knockback_velocity` and `knockback_remaining_time` in the victim's `ServerState`. The victim's `LogicComponent` applies this velocity while the timer is active, overriding local movement.
 
 ### ⚰️ Life Cycle
 - **Death**: At 0 HP, `is_dead` is synced. Visuals hide, collisions disable, and control is locked.

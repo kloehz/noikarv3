@@ -48,7 +48,7 @@ script = ExtResource("6_server_state")
 [node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
 script = ExtResource("4_state_sync")
 root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead", ":knockback_impulse"])
+properties = Array[String]([":sync_health", ":sync_is_dead", ":knockback_velocity", ":knockback_remaining_time"])
 full_state_interval = 8
 
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
