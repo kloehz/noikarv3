@@ -30,6 +30,29 @@ func _connect_signals() -> void:
 	EventBus.entity_spawned.connect(_on_entity_spawned)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.entity_damaged.connect(_on_entity_damaged)
+	
+	var health = entity.get_node_or_null("HealthComponent")
+	if health:
+		health.health_changed.connect(_on_health_changed)
+		_on_health_changed(health.current_health, health.max_health)
+	
+	var combat = entity.get_node_or_null("CombatComponent")
+	if combat:
+		combat.attack_started.connect(play_shoot_effect)
+
+func _on_health_changed(current: int, maximum: int) -> void:
+	var health_label = get_parent().get_node_or_null("HealthLabel") as Label3D
+	if health_label:
+		health_label.text = "%d/%d" % [current, maximum]
+		
+		# Change color based on health percentage
+		var ratio = float(current) / float(maximum)
+		if ratio > 0.5:
+			health_label.modulate = Color.GREEN
+		elif ratio > 0.2:
+			health_label.modulate = Color.YELLOW
+		else:
+			health_label.modulate = Color.RED
 
 ## Initialize with a specific character actor
 func setup_with_actor(actor: CharacterActor) -> void:
@@ -54,19 +77,56 @@ func update_name(new_name: String) -> void:
 func play_shoot_effect() -> void:
 	print("[VisualComponent] play_shoot_effect called for: ", entity.name)
 	if _actor:
+		# Force restart if already playing
+		if _actor.animation_player:
+			_actor.animation_player.stop()
 		_actor.play_animation("Attack") 
 		_anim_lock_time = 0.5 # Wait 0.5s before allowing Idle/Run to override
 	else:
 		_play_fallback_punch()
 
+func _update_debug_pos(debug_mesh: MeshInstance3D) -> void:
+	var forward = -entity.global_transform.basis.z
+	var attack_pos = Vector3.ZERO
+	
+	if not _actor: 
+		attack_pos = entity.global_position + (forward * 3.0) + Vector3(0, 1.2, 0)
+	else:
+		var socket = _actor.get_socket("WeaponMain")
+		if socket:
+			attack_pos = socket.global_position + (forward * 1.5)
+		else:
+			attack_pos = entity.global_position + (forward * 3.0) + Vector3(0, 1.2, 0)
+	
+	debug_mesh.global_position = attack_pos
+
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+	
+	# Handle Attack Debug visuals deterministically based on synchronized state
+	_handle_attack_debug_visuals()
 	
 	if _anim_lock_time > 0:
 		_anim_lock_time -= delta
 		return
 		
 	_update_movement_animations()
+
+func _handle_attack_debug_visuals() -> void:
+	var debug_mesh = get_parent().get_node_or_null("AttackDebugMesh") as MeshInstance3D
+	if not debug_mesh: return
+	
+	var combat = entity.get_node_or_null("CombatComponent")
+	if not combat:
+		debug_mesh.visible = false
+		return
+	
+	# AttackState.ACTIVE is 2
+	if combat.get("current_attack_state") == 2:
+		debug_mesh.visible = true
+		_update_debug_pos(debug_mesh)
+	else:
+		debug_mesh.visible = false
 
 func _update_movement_animations() -> void:
 	if not _actor: return

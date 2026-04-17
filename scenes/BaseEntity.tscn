@@ -39,6 +39,10 @@ shape = SubResource("BoxShape3D_1")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("BoxMesh_1")
 
+[node name="MeshInstance3D2" type="MeshInstance3D" parent="." unique_id=178304026]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("BoxMesh_1")
+
 [node name="ServerState" type="Node" parent="." unique_id=1244681082]
 script = ExtResource("11_server_state")
 
@@ -65,13 +69,13 @@ collide_with_areas = true
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 enable_prediction = true
-state_properties = Array[String]([":global_position", "LogicComponent:current_velocity", "CombatComponent:current_attack_state"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
 script = ExtResource("8_interpolator")
 root = NodePath("..")
-properties = Array[String]([":global_position", ":global_rotation"])
+properties = Array[String]([":global_position", ":quaternion"])
 
 [node name="LogicComponent" type="Node" parent="." unique_id=942950674 node_paths=PackedStringArray("entity")]
 script = ExtResource("2_logic_comp")

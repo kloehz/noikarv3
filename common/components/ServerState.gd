@@ -24,6 +24,7 @@ signal name_changed(new_name: String)
 		if player_name == v: return
 		player_name = v
 		name_changed.emit(player_name)
+
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
 
