@@ -29,13 +29,18 @@ signal name_changed(new_name: String)
 @export var knockback_remaining_time: float = 0.0
 
 func _ready() -> void:
+	print("[DEBUG] ServerState initialization for entity: %s" % get_parent().name)
 	set_multiplayer_authority(1)
 	var sync = get_node_or_null("StateSynchronizer")
 	if sync:
+		print("[DEBUG] ServerState %s found StateSynchronizer, adding states" % get_parent().name)
 		sync.add_state(self, "sync_health")
 		sync.add_state(self, "sync_is_dead")
 		sync.add_state(self, "player_name")
 		sync.add_state(self, "knockback_velocity")
 		sync.add_state(self, "knockback_remaining_time")
 		if sync.has_method("process_settings"):
+			print("[DEBUG] ServerState %s processing synchronizer settings" % get_parent().name)
 			sync.process_settings()
+	else:
+		print("[WARNING] ServerState %s: StateSynchronizer not found!" % get_parent().name)

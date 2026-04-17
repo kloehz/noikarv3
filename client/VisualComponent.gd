@@ -18,26 +18,36 @@ func _ready() -> void:
 		_setup_from_parent()
 		return
 	
+	print("[DEBUG] VisualComponent ready on %s" % (entity.name if entity else "Unknown"))
 	_connect_signals()
 
 ## Set up from parent node (for tool mode and runtime).
 func _setup_from_parent() -> void:
 	if not entity:
 		entity = get_parent() as CharacterBody3D
+		if entity:
+			print("[DEBUG] VisualComponent auto-assigned entity: %s" % entity.name)
 
 ## Connect to EventBus signals for game event-driven visuals.
 func _connect_signals() -> void:
+	if not entity:
+		print("[ERROR] VisualComponent: Cannot connect signals, entity is null!")
+		return
+		
+	print("[DEBUG] VisualComponent %s connecting signals" % entity.name)
 	EventBus.entity_spawned.connect(_on_entity_spawned)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.entity_damaged.connect(_on_entity_damaged)
 	
 	var health = entity.get_node_or_null("HealthComponent")
 	if health:
+		print("[DEBUG] VisualComponent %s connected to HealthComponent" % entity.name)
 		health.health_changed.connect(_on_health_changed)
 		_on_health_changed(health.current_health, health.max_health)
 	
 	var combat = entity.get_node_or_null("CombatComponent")
 	if combat:
+		print("[DEBUG] VisualComponent %s connected to CombatComponent" % entity.name)
 		combat.attack_started.connect(play_shoot_effect)
 
 func _on_health_changed(current: int, maximum: int) -> void:
@@ -58,9 +68,12 @@ func _on_health_changed(current: int, maximum: int) -> void:
 func setup_with_actor(actor: CharacterActor) -> void:
 	_actor = actor
 	if _actor:
-		print("[VisualComponent] Setup with actor: ", _actor.name)
-		var mesh = entity.get_node_or_null("MeshInstance3D")
-		if mesh: mesh.visible = false
+		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else "Entity", _actor.name])
+		if entity:
+			var mesh = entity.get_node_or_null("MeshInstance3D")
+			if mesh: mesh.visible = false
+	else:
+		print("[WARNING] VisualComponent setup_with_actor called with null actor")
 
 ## Called when entity spawns - play spawn VFX/effects.
 func _on_entity_spawned(p_entity: Node3D) -> void:
@@ -86,19 +99,11 @@ func play_shoot_effect() -> void:
 		_play_fallback_punch()
 
 func _update_debug_pos(debug_mesh: MeshInstance3D) -> void:
-	var forward = -entity.global_transform.basis.z
-	var attack_pos = Vector3.ZERO
+	var combat = entity.get_node_or_null("CombatComponent")
+	if not combat or not combat.shapecast: return
 	
-	if not _actor: 
-		attack_pos = entity.global_position + (forward * 3.0) + Vector3(0, 1.2, 0)
-	else:
-		var socket = _actor.get_socket("WeaponMain")
-		if socket:
-			attack_pos = socket.global_position + (forward * 1.5)
-		else:
-			attack_pos = entity.global_position + (forward * 3.0) + Vector3(0, 1.2, 0)
-	
-	debug_mesh.global_position = attack_pos
+	# Match exactly what the server is checking
+	debug_mesh.global_position = combat.shapecast.global_position
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return

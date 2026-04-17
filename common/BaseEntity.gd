@@ -31,14 +31,21 @@ var sync_health: int:
 @onready var server_state = $ServerState
 
 func _ready() -> void:
+	if not is_inside_tree():
+		await ready
+		
+	print("[DEBUG] BaseEntity %s initialization started (peer_id: %d)" % [name, multiplayer.get_unique_id()])
+	
 	var peer_id = name.to_int() if name.is_valid_int() else 1
 	
 	# Set authority recursively for all nodes in the character
+	print("[DEBUG] BaseEntity %s setting authority to %d" % [name, peer_id])
 	set_multiplayer_authority(peer_id, true)
 	
 	_load_character_actor()
 	
 	if server_state:
+		print("[DEBUG] BaseEntity %s configuring server_state" % name)
 		# Force server authority for the state container recursively
 		server_state.set_multiplayer_authority(1, true)
 		
@@ -49,16 +56,21 @@ func _ready() -> void:
 		if multiplayer.is_server():
 			server_state.max_health = max_health
 			server_state.sync_health = max_health
+	else:
+		print("[WARNING] BaseEntity %s: ServerState not found!" % name)
 
 	# Netfox requires re-processing settings if authority changes after entering tree
 	if has_node("RollbackSynchronizer"):
-		var rb = $RollbackSynchronizer
-		if rb.has_method("process_settings"):
+		var rb = get_node("RollbackSynchronizer")
+		if rb and rb.has_method("process_settings"):
+			print("[DEBUG] BaseEntity %s processing RollbackSynchronizer settings" % name)
 			rb.process_settings()
 
 	_setup_visuals()
 	_setup_netfox()
 	_setup_health_component()
+	
+	print("[DEBUG] BaseEntity %s initialization complete" % name)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
 	print("[BaseEntity] %s received health sync: %d" % [name, current])

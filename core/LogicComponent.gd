@@ -12,15 +12,29 @@ extends Node
 @export var is_shooting: bool = false
 @export var look_yaw: float = 0.0
 
-@onready var camera_pivot: Node3D = get_parent().get_node_or_null("CameraPivot")
-@onready var _server_state = get_parent().get_node_or_null("ServerState")
+var camera_pivot: Node3D
+var _server_state: Node
 @export var mouse_sensitivity: float = 0.005
 
 func _ready() -> void:
 	if Engine.is_editor_hint(): return
+	
 	_setup_entity()
+	var entity_name = entity.name if entity else "Unknown"
+	print("[DEBUG] LogicComponent initializing for entity: %s" % entity_name)
+	
 	current_velocity = Vector3.ZERO
-	if entity: look_yaw = entity.rotation.y
+	if entity: 
+		look_yaw = entity.rotation.y
+		print("[DEBUG] LogicComponent %s: Initial rotation captured" % entity_name)
+	
+	camera_pivot = get_parent().get_node_or_null("CameraPivot")
+	_server_state = get_parent().get_node_or_null("ServerState")
+	
+	if not _server_state:
+		print("[WARNING] LogicComponent %s: ServerState not found!" % entity_name)
+	else:
+		print("[DEBUG] LogicComponent %s: ServerState linked" % entity_name)
 
 func _input(event: InputEvent) -> void:
 	if not _is_local_authority(): return

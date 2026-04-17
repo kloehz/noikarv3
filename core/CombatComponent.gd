@@ -11,15 +11,26 @@ signal attack_started
 @export var fire_rate: float = 0.3
 @export var knockback_force: float = 12.0
 
-@onready var entity: BaseEntity = get_parent()
-@onready var logic: Node = get_parent().get_node("LogicComponent")
-@onready var shapecast: ShapeCast3D = get_parent().get_node("ShapeCast3D")
+var entity: BaseEntity
+var logic: Node
+var shapecast: ShapeCast3D
 
 var _last_fire_time: float = 0.0
 
 func _ready() -> void:
+	entity = get_parent() as BaseEntity
+	var entity_name = entity.name if entity else "Unknown"
+	print("[DEBUG] CombatComponent initializing for entity: %s" % entity_name)
+	
+	shapecast = get_node_or_null("../ShapeCast3D")
 	if not shapecast:
-		push_error("CombatComponent: ShapeCast3D not found!")
+		print("[ERROR] CombatComponent %s: ShapeCast3D not found!" % entity_name)
+	else:
+		print("[DEBUG] CombatComponent %s: ShapeCast3D linked" % entity_name)
+	
+	logic = get_node_or_null("../LogicComponent")
+	if not logic:
+		print("[WARNING] CombatComponent %s: LogicComponent not found!" % entity_name)
 
 enum AttackState { READY, STARTUP, ACTIVE, RECOVERY }
 var current_attack_state: AttackState = AttackState.READY
@@ -76,24 +87,17 @@ func _start_attack() -> void:
 func _on_attack_active() -> void:
 	# Damage is server-authoritative
 	if multiplayer.is_server():
-		# Sync shapecast position with the attack point
-		var forward = -entity.global_transform.basis.z
-		var attack_pos = entity.global_position + (forward * 3.0) + Vector3(0, 1.2, 0)
-		
-		if entity.character_actor:
-			var socket = entity.character_actor.get_socket("WeaponMain")
-			if socket:
-				attack_pos = socket.global_position + (forward)
-		
-		shapecast.global_position = attack_pos
+		# The ShapeCast3D should already be positioned in the scene/node tree
+		# We just force an update to check for collisions at its current location
 		shapecast.force_shapecast_update()
-		
+
 		if shapecast.is_colliding():
 			var hit_count = shapecast.get_collision_count()
-			print("[Combat] HIT! Count: ", hit_count)
+			print("[Combat] Server HIT! Count: ", hit_count)
 			for i in range(hit_count):
 				var collider = shapecast.get_collider(i)
 				_handle_hit(collider)
+
 
 func _handle_hit(collider: Node) -> void:
 	print("[Combat] Server hit collider: ", collider.name)
