@@ -102,10 +102,31 @@ func _load_character_actor() -> void:
 	var scene = load(character_actor_path) as PackedScene
 	if scene:
 		character_actor = scene.instantiate() as CharacterActor
+		
+		# SECURITY & CRASH FIX: If headless, strip all visual nodes immediately
+		if GameManager._is_headless_environment():
+			print("[DEBUG] Headless environment detected. Stripping visual nodes from %s" % name)
+			_strip_visual_nodes(character_actor)
+		
 		add_child(character_actor)
 		# Ensure authority matches
 		character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
 		print("[BaseEntity] Character actor loaded: ", character_actor_path)
+
+func _strip_visual_nodes(node: Node) -> void:
+	if not node: return
+	
+	# Create a list of children to remove to avoid modifying the collection while iterating
+	var to_remove = []
+	for child in node.get_children():
+		if child is MeshInstance3D or child is Sprite3D or child is Decal or child is GPUParticles3D or child is CPUParticles3D:
+			to_remove.append(child)
+		else:
+			_strip_visual_nodes(child)
+	
+	for child in to_remove:
+		print("[DEBUG] Removing visual node immediately: %s" % child.name)
+		child.free() # Immediate removal to prevent any engine processing
 
 func _setup_visuals() -> void:
 	if GameManager._is_headless_environment(): return

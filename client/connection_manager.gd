@@ -37,46 +37,62 @@ func _ready() -> void:
 	room_info_label.text = "Not Connected"
 
 func _on_host_pressed() -> void:
-	_is_host = false # In a dedicated server model, the local player is just a client
+	print("[DEBUG] Host button pressed")
+	# Small safety delay to let the UI finish its click processing
+	await get_tree().process_frame
+	
+	_is_host = false 
 	player_name = name_edit.text.strip_edges()
 	if player_name.is_empty():
 		player_name = "Player"
 	
 	status_label.text = "Connecting to Noray Server..."
+	var noray_addr = address_edit.text.strip_edges()
+	print("[DEBUG] Connecting to Noray at: %s" % noray_addr)
 	
 	# Ensure Noray connection
 	if not Noray.is_connected_to_host():
-		var err = await Noray.connect_to_host(address_edit.text.strip_edges())
+		var err = await Noray.connect_to_host(noray_addr)
 		if err != OK:
-			status_label.text = "Failed to connect to Noray"
+			status_label.text = "Failed to connect to Noray: " + str(err)
+			print("[ERROR] Noray connection failed: ", err)
 			return
 			
 	status_label.text = "Requesting Dedicated Server..."
+	print("[DEBUG] Requesting host from Noray...")
 	Noray.request_host()
 	
+	print("[DEBUG] Waiting for Noray.on_host_ready signal...")
 	var spawned_oid: String = await Noray.on_host_ready
 	_current_oid = spawned_oid
+	print("[DEBUG] Server ready, OID: %s" % spawned_oid)
 	
 	status_label.text = "Server Ready! Joining Room ID: " + spawned_oid
 	oid_edit.text = spawned_oid
 	room_info_label.text = "Room ID: " + spawned_oid
-	print("[ConnectionManager] Dedicated server spawned with OID: ", spawned_oid)
 	
 	# Wait for OID and PID to be fully registered before connecting
 	status_label.text = "Registering as Client for NAT..."
+	print("[DEBUG] Registering as host on Noray...")
 	Noray.register_host()
+	
 	if Noray.oid.is_empty():
+		print("[DEBUG] Waiting for OID signal...")
 		await Noray.on_oid
 	if Noray.pid.is_empty():
+		print("[DEBUG] Waiting for PID signal...")
 		await Noray.on_pid
 		
 	status_label.text = "Registering Remote Port..."
+	print("[DEBUG] Registering remote port on Noray...")
 	var err = await Noray.register_remote()
 	if err != OK:
-		status_label.text = "Failed to register port on Noray"
+		status_label.text = "Failed to register port on Noray: " + str(err)
+		print("[ERROR] Port registration failed: ", err)
 		return
 		
 	status_label.text = "Requesting Connection to Dedicated Server..."
+	print("[DEBUG] Connecting to NAT OID: %s" % spawned_oid)
 	Noray.connect_nat(spawned_oid)
 
 func _on_connect_pressed() -> void:

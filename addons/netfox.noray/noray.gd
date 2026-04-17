@@ -198,6 +198,11 @@ func _put_command(command: String, data = null) -> Error:
 	return OK
 
 func _handle_commands(command: String, data: String):
+	# SAFETY: Defer execution to the main thread to avoid "propagate_notification"
+	# errors and thread-related crashes in Godot 4.x.
+	_handle_commands_safe.call_deferred(command, data)
+
+func _handle_commands_safe(command: String, data: String):
 	if command == "set-oid":
 		_oid = data
 		on_oid.emit(oid)

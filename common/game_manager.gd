@@ -53,22 +53,23 @@ func _start_as_server() -> void:
 		print("[GameManager] Failed to register port, retrying... (%d left)" % retries)
 		await get_tree().create_timer(1.0).timeout
 		
-	if err != OK:
-		print("[GameManager] Failed to register port on Noray after all retries")
-		return
-		
+	# Final server initialization
 	var port = Noray.local_port
 	var peer = ENetMultiplayerPeer.new()
+
+	print("[GameManager] Creating ENet server on port: %d" % port)
 	err = peer.create_server(port)
 
 	if err != OK:
 		print("[GameManager] Failed to host ENet server: ", err)
 		return
 
-	# Fix Mac Headless Threading Crash by deferring these
-	multiplayer.set_deferred("multiplayer_peer", peer)
+	# CRITICAL: In some Godot 4.x versions, setting the peer immediately 
+	# can cause a crash if the scene tree is still busy.
+	multiplayer.call_deferred("set_multiplayer_peer", peer)
+
+	print("[GameManager] SERVER STARTED SUCCESSFULLY")
 	EventBus.call_deferred("emit_signal", "server_started")
-	
 	if not provision_token.is_empty():
 		print("[GameManager] Notifying backend that server is ready...")
 		Noray.server_ready()
