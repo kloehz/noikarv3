@@ -54,6 +54,7 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 @export var anim_run: String = "Run"
 @export var anim_attack: String = "Cast_Damage"
 @export var anim_death: String = "Death"
+@export var anim_hit: String = "Damage_Hurt"
 
 ## Play an animation by standard name
 func play_animation(anim_name: String, blend: float = 0.2) -> void:
@@ -68,6 +69,7 @@ func play_animation(anim_name: String, blend: float = 0.2) -> void:
 		"Run": actual_anim = anim_run
 		"Attack": actual_anim = anim_attack
 		"Death": actual_anim = anim_death
+		"Hit": actual_anim = anim_hit
 	
 	if animation_player.has_animation(actual_anim):
 		if animation_player.current_animation != actual_anim:

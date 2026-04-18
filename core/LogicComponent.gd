@@ -88,8 +88,15 @@ func _apply_movement(delta: float) -> void:
 		var target_vel = move_dir * max_speed
 		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
 	
-	# Apply movement using the character body's native move_and_collide for stability
-	entity.move_and_collide(current_velocity * delta)
+	# APPLY MOVEMENT (Refactored to move_and_slide)
+	entity.velocity = current_velocity
+	entity.move_and_slide()
+	
+	# CRITICAL FOR NETFOX: Force transform update so rollback captures the new position
+	entity.force_update_transform()
+	
+	# Sync back velocity for next frame (handles collisions stopping movement)
+	current_velocity = entity.velocity
 
 # Removed _clear_server_impulse as it's no longer needed with time-based state
 

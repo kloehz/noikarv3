@@ -194,8 +194,20 @@ func play_spawn_effect() -> void:
 
 ## Play hit/damage visual effect.
 func _play_hit_effect() -> void:
+	if _actor:
+		_actor.play_animation("Hit")
+		# Short lock to ensure hit animation is visible
+		_anim_lock_time = 0.3 
+		
+	_apply_hitstop(0.08) # Freeze for 80ms for weight
 	EventBus.visual_effect_requested.emit(entity, "hit")
-	# Potential flash on actor mesh here
+
+func _apply_hitstop(duration: float) -> void:
+	if _actor and _actor.animation_player:
+		var original_speed = _actor.animation_player.speed_scale
+		_actor.animation_player.speed_scale = 0.0
+		await get_tree().create_timer(duration).timeout
+		_actor.animation_player.speed_scale = original_speed
 
 ## Play an animation by name.
 func play_animation(animation_name: String, blend: float = 0.2) -> void:

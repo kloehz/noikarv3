@@ -73,8 +73,13 @@ func _ready() -> void:
 	print("[DEBUG] BaseEntity %s initialization complete" % name)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
-	print("[BaseEntity] %s received health sync: %d" % [name, current])
 	var hc = get_node_or_null("HealthComponent")
+	var old_health = hc.current_health if hc else 100
+	
+	if current < old_health:
+		print("[BaseEntity] %s took damage! %d -> %d" % [name, old_health, current])
+		EventBus.entity_damaged.emit(self, old_health - current, null)
+
 	if hc: hc.current_health = current
 	health_changed.emit(current, maximum)
 
