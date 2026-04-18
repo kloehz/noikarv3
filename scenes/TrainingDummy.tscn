@@ -6,8 +6,12 @@
 [ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="4_state_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="5_visual_comp"]
 [ext_resource type="Script" path="res://common/components/ServerState.gd" id="6_server_state"]
+[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="7_logic"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
+viewport_path = NodePath("HealthViewport")
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -42,6 +46,20 @@ entity = NodePath("..")
 [node name="HealthComponent" type="Node3D" parent="."]
 script = ExtResource("2_health")
 
+[node name="HealthViewport" type="SubViewport" parent="."]
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(150, 20)
+render_target_update_mode = 4
+
+[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("9_health_bar_2d")]
+
+[node name="HealthBar3D" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+billboard = 1
+no_depth_test = true
+texture = SubResource("ViewportTexture_health")
+
 [node name="ServerState" type="Node" parent="."]
 script = ExtResource("6_server_state")
 
@@ -65,12 +83,8 @@ font_size = 48
 outline_size = 12
 
 [node name="HealthLabel" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
-billboard = 1
-no_depth_test = true
-text = "100/100"
-modulate = Color(0, 1, 0, 1)
-outline_size = 10
 
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
 script = ExtResource("3_hurtbox")

@@ -11,6 +11,10 @@
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
+[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
+viewport_path = NodePath("HealthViewport")
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -91,6 +95,20 @@ entity = NodePath("..")
 [node name="HealthComponent" type="Node3D" parent="." unique_id=2012485610]
 script = ExtResource("4_health_comp")
 
+[node name="HealthViewport" type="SubViewport" parent="." unique_id=999888777]
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(150, 20)
+render_target_update_mode = 4
+
+[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("12_health_bar_2d")]
+
+[node name="HealthBar3D" type="Sprite3D" parent="." unique_id=111222333]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+billboard = 1
+no_depth_test = true
+texture = SubResource("ViewportTexture_health")
+
 [node name="NameLabel" type="Label3D" parent="." unique_id=12121212]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
 billboard = 1
@@ -99,12 +117,8 @@ text = "Player"
 font_size = 48
 
 [node name="HealthLabel" type="Label3D" parent="." unique_id=34343434]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
-billboard = 1
-no_depth_test = true
-modulate = Color(0, 1, 0, 1)
-text = "100/100"
-outline_size = 10
 
 [node name="HitboxComponent" type="Area3D" parent="." unique_id=150433228]
 script = ExtResource("5_hitbox_comp")

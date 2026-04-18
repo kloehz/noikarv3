@@ -51,18 +51,15 @@ func _connect_signals() -> void:
 		combat.attack_started.connect(play_shoot_effect)
 
 func _on_health_changed(current: int, maximum: int) -> void:
+	# Update new Pro Health Bar (2D node inside SubViewport)
+	var health_bar_2d = entity.get_node_or_null("HealthViewport/HealthBar2D")
+	if health_bar_2d and health_bar_2d.has_method("update_health"):
+		health_bar_2d.update_health(current, maximum)
+	
+	# Legacy Label support (now hidden in TSCN)
 	var health_label = get_parent().get_node_or_null("HealthLabel") as Label3D
 	if health_label:
 		health_label.text = "%d/%d" % [current, maximum]
-		
-		# Change color based on health percentage
-		var ratio = float(current) / float(maximum)
-		if ratio > 0.5:
-			health_label.modulate = Color.GREEN
-		elif ratio > 0.2:
-			health_label.modulate = Color.YELLOW
-		else:
-			health_label.modulate = Color.RED
 
 ## Initialize with a specific character actor
 func setup_with_actor(actor: CharacterActor) -> void:
@@ -174,8 +171,11 @@ func play_death_effect() -> void:
 	# Hide UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
 	var health_label = get_parent().get_node_or_null("HealthLabel")
+	var health_bar_3d = get_parent().get_node_or_null("HealthBar3D")
+	
 	if name_label: name_label.visible = false
 	if health_label: health_label.visible = false
+	if health_bar_3d: health_bar_3d.visible = false
 	
 	EventBus.visual_effect_requested.emit(entity, "death")
 
@@ -187,8 +187,11 @@ func play_spawn_effect() -> void:
 	# Show UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
 	var health_label = get_parent().get_node_or_null("HealthLabel")
+	var health_bar_3d = get_parent().get_node_or_null("HealthBar3D")
+	
 	if name_label: name_label.visible = true
-	if health_label: health_label.visible = true
+	# We keep legacy label hidden
+	if health_bar_3d: health_bar_3d.visible = true
 	
 	EventBus.visual_effect_requested.emit(entity, "spawn")
 
