@@ -70,6 +70,11 @@ func _ready() -> void:
 	_setup_netfox()
 	_setup_health_component()
 	
+	# SECURITY & CRASH FIX: Strip visual nodes from BaseEntity itself in headless mode
+	if GameManager._is_headless_environment():
+		print("[DEBUG] Headless environment: Stripping visual nodes from BaseEntity root: %s" % name)
+		_strip_visual_nodes(self)
+	
 	print("[DEBUG] BaseEntity %s initialization complete" % name)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:

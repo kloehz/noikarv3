@@ -11,6 +11,10 @@ var peer_data: Dictionary = {}
 var _pending_name: String = ""
 
 func _ready() -> void:
+	if GameManager._is_headless_environment():
+		print("[DEBUG] MatchManager: Headless mode detected. Stripping visual nodes from world.")
+		_strip_visual_nodes_recursive(get_tree().root)
+
 	EventBus.server_started.connect(_on_server_started)
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
@@ -19,6 +23,20 @@ func _ready() -> void:
 	
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
+
+func _strip_visual_nodes_recursive(node: Node) -> void:
+	if not node: return
+	
+	var to_remove = []
+	for child in node.get_children():
+		if child is MeshInstance3D or child is Sprite3D or child is Label3D or child is WorldEnvironment or child is DirectionalLight3D or child is GPUParticles3D or child is CPUParticles3D or child is CSGPrimitive3D:
+			to_remove.append(child)
+		else:
+			_strip_visual_nodes_recursive(child)
+	
+	for child in to_remove:
+		print("[DEBUG] MatchManager removing visual: %s" % child.name)
+		child.free()
 
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
