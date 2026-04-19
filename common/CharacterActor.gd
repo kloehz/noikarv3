@@ -88,7 +88,7 @@ func is_playing(anim_name: String) -> bool:
 	return animation_player.is_playing() and animation_player.current_animation == actual_anim
 
 func get_current_animation() -> String:
-	return animation_player.current_animation if animation_player else ""
+	return animation_player.current_animation if animation_player else &""
 
 ## Get a socket by name or type
 func get_socket(socket_name: String) -> Marker3D:

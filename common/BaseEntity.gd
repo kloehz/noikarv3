@@ -2,7 +2,8 @@
 class_name BaseEntity
 extends CharacterBody3D
 
-#region Signals
+# regions
+@warning_ignore("unused_signal")
 signal health_changed(current: int, maximum: int)
 signal died
 #endregion

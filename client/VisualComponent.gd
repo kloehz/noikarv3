@@ -18,7 +18,7 @@ func _ready() -> void:
 		_setup_from_parent()
 		return
 	
-	print("[DEBUG] VisualComponent ready on %s" % (entity.name if entity else "Unknown"))
+	print("[DEBUG] VisualComponent ready on %s" % (entity.name if entity else &"Unknown"))
 	_connect_signals()
 
 ## Set up from parent node (for tool mode and runtime).
@@ -65,7 +65,7 @@ func _on_health_changed(current: int, maximum: int) -> void:
 func setup_with_actor(actor: CharacterActor) -> void:
 	_actor = actor
 	if _actor:
-		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else "Entity", _actor.name])
+		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		if entity:
 			var mesh = entity.get_node_or_null("MeshInstance3D")
 			if mesh: mesh.visible = false
@@ -166,28 +166,25 @@ func _on_entity_died(p_entity: Node3D) -> void:
 func _on_entity_damaged(p_entity: Node3D, _amount: int, _source: Node) -> void:
 	if p_entity == self.entity:
 		_play_hit_effect()
-
 ## Play death visual effect.
 func play_death_effect() -> void:
 	if _actor:
 		_actor.play_animation("Death")
-		
-		# Optional: Hide the model after the animation ends (approx 1-2 seconds)
+
+		# Optional: Hide the model after the animation ends (approx 1.5 seconds)
 		var timer = get_tree().create_timer(1.5)
 		timer.timeout.connect(func(): 
 			if entity.get("sync_is_dead"):
 				_actor.visible = false
 		)
-	
+
 	# Hide UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
-	var health_label = get_parent().get_node_or_null("HealthLabel")
 	var health_bar_3d = get_parent().get_node_or_null("HealthBar3D")
-	
+
 	if name_label: name_label.visible = false
-	if health_label: health_label.visible = false
 	if health_bar_3d: health_bar_3d.visible = false
-	
+
 	EventBus.visual_effect_requested.emit(entity, "death")
 
 ## Play spawn/respawn visual effect.
@@ -195,17 +192,17 @@ func play_spawn_effect() -> void:
 	if _actor:
 		_actor.visible = true
 		_actor.play_animation("Idle")
-	
+
 	# Show UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
-	var health_label = get_parent().get_node_or_null("HealthLabel")
 	var health_bar_3d = get_parent().get_node_or_null("HealthBar3D")
-	
+
 	if name_label: name_label.visible = true
 	# We keep legacy label hidden
 	if health_bar_3d: health_bar_3d.visible = true
-	
+
 	EventBus.visual_effect_requested.emit(entity, "spawn")
+
 
 ## Play hit/damage visual effect.
 func _play_hit_effect() -> void:

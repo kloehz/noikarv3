@@ -2,6 +2,7 @@ extends Control
 
 @onready var health_bar: ProgressBar = $HealthBar
 @onready var catchup_bar: ProgressBar = $CatchupBar
+@onready var hp_text: Label = $HPText
 
 var _health_style: StyleBoxFlat
 var _catchup_style: StyleBoxFlat
@@ -15,6 +16,7 @@ func _ensure_init() -> void:
 
 	if not health_bar: health_bar = $HealthBar
 	if not catchup_bar: catchup_bar = $CatchupBar
+	if not hp_text: hp_text = $HPText
 
 	# Create unique copies for this specific health bar
 	_health_style = health_bar.get_theme_stylebox("fill").duplicate()
@@ -34,6 +36,10 @@ func _ensure_init() -> void:
 func update_health(current: int, maximum: int) -> void:
 	_ensure_init()
 	if not health_bar: return
+
+	# Update text
+	if hp_text:
+		hp_text.text = "%d / %d" % [current, maximum]
 
 	# Snap values instantly on the very first update to avoid "filling up" animation
 	if _is_first_update:

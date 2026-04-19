@@ -15,11 +15,9 @@ var entity: BaseEntity
 var logic: Node
 var shapecast: ShapeCast3D
 
-var _last_fire_time: float = 0.0
-
 func _ready() -> void:
 	entity = get_parent() as BaseEntity
-	var entity_name = entity.name if entity else "Unknown"
+	var entity_name = entity.name if entity else &"Unknown"
 	print("[DEBUG] CombatComponent initializing for entity: %s" % entity_name)
 	
 	shapecast = get_node_or_null("../ShapeCast3D")
@@ -27,6 +25,8 @@ func _ready() -> void:
 		print("[ERROR] CombatComponent %s: ShapeCast3D not found!" % entity_name)
 	else:
 		print("[DEBUG] CombatComponent %s: ShapeCast3D linked" % entity_name)
+		# EXCEPTION: Ensure the shapecast ignores our own body
+		shapecast.add_exception(get_parent())
 	
 	logic = get_node_or_null("../LogicComponent")
 	if not logic:
@@ -88,14 +88,15 @@ func _on_attack_active() -> void:
 	# Damage is server-authoritative
 	if multiplayer.is_server():
 		# The ShapeCast3D should already be positioned in the scene/node tree
-		# We just force an update to check for collisions at its current location
 		shapecast.force_shapecast_update()
 
 		if shapecast.is_colliding():
 			var hit_count = shapecast.get_collision_count()
-			print("[Combat] Server HIT! Count: ", hit_count)
+			print("[Combat Server] Found %d colliders" % hit_count)
+			
 			for i in range(hit_count):
 				var collider = shapecast.get_collider(i)
+				print("[Combat Server] Hit object #%d: %s" % [i, collider.name])
 				_handle_hit(collider)
 
 
