@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://common/components/ServerState.gd" id="4_server_state"]
 [ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
+[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
 radius = 0.4
@@ -21,6 +23,14 @@ material = SubResource("StandardMaterial3D_pet")
 radius = 0.4
 height = 1.2
 
+[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
+viewport_path = NodePath("HealthViewport")
+
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pet"]
+properties/0/path = NodePath(".:global_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+
 [node name="PetEntity" type="CharacterBody3D"]
 collision_layer = 2
 collision_mask = 3
@@ -34,8 +44,34 @@ shape = SubResource("CapsuleShape3D_pet")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
 mesh = SubResource("CapsuleMesh_pet")
 
+[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+script = ExtResource("7_visual")
+entity = NodePath("..")
+
 [node name="HealthComponent" type="Node3D" parent="."]
 script = ExtResource("2_health")
+
+[node name="HealthViewport" type="SubViewport" parent="."]
+transparent_bg = true
+handle_input_locally = false
+size = Vector2i(105, 14)
+render_target_update_mode = 4
+
+[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("8_health_bar")]
+
+[node name="HealthBar3D" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
+billboard = 1
+no_depth_test = true
+texture = SubResource("ViewportTexture_health")
+
+[node name="NameLabel" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
+billboard = 1
+no_depth_test = true
+text = "PET"
+font_size = 24
+outline_size = 12
 
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
 script = ExtResource("3_hurtbox")
@@ -57,3 +93,6 @@ properties = Array[String]([":sync_health", ":sync_is_dead"])
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 state_properties = Array[String]([":global_position"])
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_pet")

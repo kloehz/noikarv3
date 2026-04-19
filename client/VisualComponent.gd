@@ -50,6 +50,20 @@ func _connect_signals() -> void:
 		print("[DEBUG] VisualComponent %s connected to CombatComponent" % entity.name)
 		combat.attack_started.connect(play_shoot_effect)
 
+	var server_state = entity.get_node_or_null("ServerState")
+	if server_state:
+		server_state.souls_changed.connect(_on_souls_changed)
+		_on_souls_changed(server_state.sync_souls)
+
+func _on_souls_changed(amount: int) -> void:
+	# Only update HUD for the local controlled player
+	if not entity.is_multiplayer_authority():
+		return
+		
+	var hud_counter = get_tree().root.find_child("SoulCounter", true, false) as Label
+	if hud_counter:
+		hud_counter.text = "Almas: %d" % amount
+
 func _on_health_changed(current: int, maximum: int) -> void:
 	# Update new Pro Health Bar (2D node inside SubViewport)
 	var health_bar_2d = entity.get_node_or_null("HealthViewport/HealthBar2D")

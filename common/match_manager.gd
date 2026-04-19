@@ -9,6 +9,12 @@ const PET_SCENE = preload("res://scenes/PetEntity.tscn")
 
 @onready var players_container: Node3D = $Players
 
+# --- CONFIGURATION: ELITE MOBS ---
+@export var elite_respawn_chance: float = 0.4
+@export var elite_hp_multiplier: float = 2.5
+@export var elite_damage_multiplier: float = 1.6
+# ---------------------------------
+
 ## Store peer data like names.
 var peer_data: Dictionary = {}
 var _pending_name: String = ""
@@ -60,35 +66,43 @@ func _on_entity_died(entity: Node3D) -> void:
 
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
-	add_child(soul, true)
-	soul.global_position = pos
+	# SET POSITION BEFORE ADD_CHILD
+	soul.global_position = pos 
+	players_container.add_child(soul, true)
 	
 	soul.expired.connect(func(): _on_soul_expired(pos))
 
 func _on_soul_expired(pos: Vector3) -> void:
-	# 40% chance is already handled by SoulEntity emitting expired ONLY if it decides to try respawn
-	# Actually, let's move the 40% chance here for cleaner management
-	if randf() < 0.4:
+	if randf() < elite_respawn_chance:
 		print("[MatchManager] SOUL EXPIRED - Spawning ELITE MOB at ", pos)
 		_spawn_elite_mob(pos)
 
 func _spawn_elite_mob(pos: Vector3) -> void:
 	var dummy_scene = load("res://scenes/TrainingDummy.tscn")
 	var elite = dummy_scene.instantiate()
-	add_child(elite, true)
-	elite.global_position = pos
+	
 	elite.name = "ELITE_" + str(randi() % 1000)
+	elite.global_position = pos
 	
-	# Set elite stats (wait a frame for components to initialize)
+	# Setting stats based on multipliers
+	var base_hp = 100
+	var elite_hp = int(base_hp * elite_hp_multiplier)
+	elite.max_health = elite_hp
+	
+	players_container.add_child(elite, true)
+	
 	await get_tree().process_frame
-	if elite.has_node("ServerState"):
-		var state = elite.get_node("ServerState")
-		state.max_health = 200
-		state.sync_health = 200
-	if elite.has_node("CombatComponent"):
-		elite.get_node("CombatComponent").damage = 25
-	
-	print("[MatchManager] Elite Mob spawned with 200HP / 25DMG")
+	if is_instance_valid(elite):
+		if elite.has_node("ServerState"):
+			var state = elite.get_node("ServerState")
+			state.max_health = elite_hp
+			state.sync_health = elite_hp
+			
+		if elite.has_node("CombatComponent"):
+			var base_dmg = 15
+			elite.get_node("CombatComponent").damage = int(base_dmg * elite_damage_multiplier)
+		
+	print("[MatchManager] Elite Mob spawned with %d HP" % elite_hp)
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return
@@ -98,22 +112,28 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	player.server_state.sync_souls = 0
 	
 	var totem = TOTEM_SCENE.instantiate()
-	add_child(totem, true)
-	totem.global_position = player.global_position + (-player.global_transform.basis.z * 1.5)
+	
+	# Calculate position in front of player
+	var forward = -player.global_transform.basis.z
+	totem.global_position = player.global_position + (forward * 2.0)
+	
+	players_container.add_child(totem, true)
 	totem.totem_type = type
 	totem.stored_souls = souls
 	
 	totem.summoned.connect(func(p_type, p_souls): _on_totem_complete(player.name.to_int(), p_type, p_souls, totem.global_position))
-	print("[MatchManager] Totem requested by ", player.name, " with ", souls, " souls")
+	print("[MatchManager] Totem requested by ", player.name, " in front at ", totem.global_position)
 
 func _on_totem_complete(owner_id: int, type: String, souls: int, pos: Vector3) -> void:
 	var pet = PET_SCENE.instantiate()
-	add_child(pet, true)
+	# Set position BEFORE add_child
 	pet.global_position = pos
+	players_container.add_child(pet, true)
+	
 	pet.owner_id = owner_id
 	pet.pet_type = type
 	pet.power_level = souls
-	print("[MatchManager] Pet spawned! Type: ", type, " Souls: ", souls)
+	print("[MatchManager] Pet spawned at totem position: ", pos)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():

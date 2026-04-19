@@ -1,10 +1,10 @@
-[gd_scene format=4 uid="uid://dx07sojrxn8a6"]
+[gd_scene format=4]
 
-[ext_resource type="Texture2D" uid="uid://be4onpg06m7lx" path="res://MODELS_TEST/chibi_blood_moon_aatrox_EyesBase.png" id="1_pcg0i"]
-[ext_resource type="Texture2D" uid="uid://c75uxw0d3nod2" path="res://MODELS_TEST/chibi_blood_moon_aatrox_Head.png" id="2_4fil7"]
-[ext_resource type="Texture2D" uid="uid://eg67bxtbojid" path="res://MODELS_TEST/chibi_blood_moon_aatrox_HairBase.png" id="3_hj2qd"]
-[ext_resource type="Texture2D" uid="uid://d21g67s1qic76" path="res://MODELS_TEST/chibi_blood_moon_aatrox_HairBase2.png" id="4_a6iel"]
-[ext_resource type="Texture2D" uid="uid://c3grcudnsqqur" path="res://MODELS_TEST/chibi_blood_moon_aatrox_Weapon.png" id="5_716mj"]
+[ext_resource type="Texture2D" path="res://MODELS_TEST/chibi_blood_moon_aatrox_EyesBase.png" id="1_pcg0i"]
+[ext_resource type="Texture2D" path="res://MODELS_TEST/chibi_blood_moon_aatrox_Head.png" id="2_4fil7"]
+[ext_resource type="Texture2D" path="res://MODELS_TEST/chibi_blood_moon_aatrox_HairBase.png" id="3_hj2qd"]
+[ext_resource type="Texture2D" path="res://MODELS_TEST/chibi_blood_moon_aatrox_HairBase2.png" id="4_a6iel"]
+[ext_resource type="Texture2D" path="res://MODELS_TEST/chibi_blood_moon_aatrox_Weapon.png" id="5_716mj"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rnphi"]
 resource_name = "EyesBase"

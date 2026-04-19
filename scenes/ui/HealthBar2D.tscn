@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://c6f3r5u8y2k1"]
+[gd_scene format=3 uid="uid://bcde1ykml4i3h"]
 
 [ext_resource type="Script" path="res://client/ui/HealthBar2D.gd" id="1_script"]
 
@@ -64,7 +64,7 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_fill")
 value = 100.0
 show_percentage = false
 
-[node name="HPText" type="Label" parent="."]
+[node name="HPText" type="Label" parent="." unique_id=583393246]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
