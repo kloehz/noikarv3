@@ -91,6 +91,12 @@ func _on_sync_health_changed(current: int, maximum: int) -> void:
 
 func _on_sync_death_changed(is_dead: bool) -> void:
 	if is_dead:
+		# DEATH PENALTY: Lose half of souls if it's a player
+		if multiplayer.is_server() and server_state and server_state.sync_souls > 0:
+			var lost_souls = server_state.sync_souls / 2
+			print("[BaseEntity] %s DIED - Losing %d souls" % [name, lost_souls])
+			server_state.sync_souls -= lost_souls
+		
 		if has_node("VisualComponent"): $VisualComponent.play_death_effect()
 		collision_layer = 0
 		collision_mask = 0
