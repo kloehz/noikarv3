@@ -6,6 +6,7 @@ const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
 const SOUL_SCENE = preload("res://scenes/SoulEntity.tscn")
 const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
 const PET_SCENE = preload("res://scenes/PetEntity.tscn")
+const AI_COMPONENT = preload("res://core/AIComponent.gd")
 
 @onready var players_container: Node3D = $Players
 
@@ -32,6 +33,22 @@ func _ready() -> void:
 	
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
+	
+	# INITIAL AI: Give brains to static dummies if server
+	if multiplayer.is_server():
+		_initialize_static_ai.call_deferred()
+
+func _initialize_static_ai() -> void:
+	var root = get_tree().root.find_child("Main", true, false)
+	if not root: return
+	
+	for child in root.get_children():
+		if child is BaseEntity and child.name.begins_with("Dummy"):
+			var ai = AI_COMPONENT.new()
+			ai.name = "AIComponent"
+			child.add_child(ai)
+			ai.state = 1 # State.CHASE
+			print("[MatchManager] Static AI initialized for %s" % child.name)
 
 func _strip_visual_nodes_recursive(node: Node) -> void:
 	if not node: return
@@ -87,22 +104,23 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 	# Setting stats based on multipliers
 	var base_hp = 100
 	var elite_hp = int(base_hp * elite_hp_multiplier)
-	elite.max_health = elite_hp
 	
 	players_container.add_child(elite, true)
 	
-	await get_tree().process_frame
+	# Force apply stats immediately after entering tree
 	if is_instance_valid(elite):
-		if elite.has_node("ServerState"):
-			var state = elite.get_node("ServerState")
-			state.max_health = elite_hp
-			state.sync_health = elite_hp
-			
-		if elite.has_node("CombatComponent"):
-			var base_dmg = 15
-			elite.get_node("CombatComponent").damage = int(base_dmg * elite_damage_multiplier)
+		elite.apply_stats(elite_hp)
 		
-	print("[MatchManager] Elite Mob spawned with %d HP" % elite_hp)
+		if elite.has_node("CombatComponent"):
+			elite.get_node("CombatComponent").damage = int(15 * elite_damage_multiplier)
+		
+		# ADD AI Brain AFTER it's in tree
+		var ai = AI_COMPONENT.new()
+		ai.name = "AIComponent"
+		elite.add_child(ai)
+		ai.state = 1 # State.CHASE
+		
+		print("[MatchManager] Elite Mob %s fully initialized with %d HP" % [elite.name, elite_hp])
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return
@@ -126,14 +144,35 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 
 func _on_totem_complete(owner_id: int, type: String, souls: int, pos: Vector3) -> void:
 	var pet = PET_SCENE.instantiate()
-	# Set position BEFORE add_child
 	pet.global_position = pos
+	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
+	
 	players_container.add_child(pet, true)
 	
-	pet.owner_id = owner_id
-	pet.pet_type = type
-	pet.power_level = souls
-	print("[MatchManager] Pet spawned at totem position: ", pos)
+	if is_instance_valid(pet):
+		pet.owner_id = owner_id
+		pet.pet_type = type
+		pet.power_level = souls
+		
+		# Force apply stats based on power_level (souls)
+		var base_hp = 100 if type != "TANK" else 200
+		var multiplier = 1.0 + (souls * 0.1)
+		pet.apply_stats(int(base_hp * multiplier))
+		
+		# ADD AI Brain for Pet
+		var ai = AI_COMPONENT.new()
+		ai.name = "AIComponent"
+		pet.add_child(ai)
+		ai.state = 3 # State.FOLLOW_OWNER
+		
+		# Find owner node to follow
+		var owner_node = players_container.get_node_or_null(str(owner_id))
+		if owner_node:
+			ai.owner_node = owner_node
+			print("[MatchManager] Pet %s linked to owner %s" % [pet.name, owner_node.name])
+		
+		print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.max_health])
+
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():

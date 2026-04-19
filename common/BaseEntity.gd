@@ -189,6 +189,20 @@ func respawn(new_position: Vector3) -> void:
 		server_state.sync_is_dead = false
 		server_state.sync_health = max_health
 
+## Apply new base stats from the server
+func apply_stats(new_hp: int) -> void:
+	max_health = new_hp
+	if server_state:
+		server_state.max_health = new_hp
+		server_state.sync_health = new_hp
+	
+	var hc = get_node_or_null("HealthComponent")
+	if hc:
+		hc.max_health = new_hp
+		hc.reset_health()
+	
+	print("[BaseEntity] Stats applied to %s: HP %d" % [name, new_hp])
+
 func _update_visuals() -> void:
 	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)
 

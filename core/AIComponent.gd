@@ -1,0 +1,168 @@
+# res://core/AIComponent.gd
+class_name AIComponent
+extends Node
+
+## AI Brain that simulates inputs for LogicComponent.
+## Only runs on the Server.
+
+enum State { IDLE, CHASE, ATTACK, FOLLOW_OWNER }
+
+@export var state: State = State.IDLE
+@export var detection_range: float = 15.0
+@export var attack_range: float = 3.0
+@export var follow_distance: float = 4.0
+
+var entity: BaseEntity
+var logic: Node
+
+var target: Node3D = null
+var owner_node: Node3D = null # For pets
+
+func _ready() -> void:
+	# AI logic only runs on the server
+	if not multiplayer.is_server():
+		set_process(false)
+		return
+	
+	entity = get_parent() as BaseEntity
+	if not entity:
+		set_process(false)
+		return
+
+	# Search for logic component
+	logic = entity.get_node_or_null("LogicComponent")
+	
+	print("[AI] Brain started for ", entity.name)
+	# Disable normal process, LogicComponent will call tick()
+	set_process(false)
+
+func tick(_delta: float) -> void:
+	if not entity or entity.get("sync_is_dead"):
+		if logic: _stop_inputs()
+		return
+	
+	if not logic:
+		logic = entity.get_node_or_null("LogicComponent")
+		if not logic: return
+		
+	# DEBUG: Log state occasionally
+	if Engine.get_frames_drawn() % 120 == 0:
+		print("[AI Debug] %s | State: %s | Target: %s" % [entity.name, State.keys()[state], target.name if target else &"None"])
+
+	match state:
+		State.IDLE:
+			_logic_idle()
+		State.CHASE:
+			_logic_chase()
+		State.ATTACK:
+			_logic_attack()
+		State.FOLLOW_OWNER:
+			_logic_follow()
+
+func _logic_idle() -> void:
+	_stop_inputs()
+	_find_nearest_target()
+	if target:
+		state = State.CHASE
+
+func _logic_chase() -> void:
+	if not is_instance_valid(target) or target.get("sync_is_dead"):
+		target = null
+		state = State.IDLE
+		return
+		
+	var dist = entity.global_position.distance_to(target.global_position)
+	
+	if dist <= attack_range:
+		state = State.ATTACK
+		return
+		
+	if dist > detection_range:
+		target = null
+		state = State.IDLE
+		return
+		
+	# Move towards target
+	_move_towards(target.global_position)
+
+func _logic_attack() -> void:
+	if not is_instance_valid(target) or target.get("sync_is_dead"):
+		state = State.IDLE
+		return
+		
+	var dist = entity.global_position.distance_to(target.global_position)
+	if dist > attack_range:
+		state = State.CHASE
+		logic.is_shooting = false
+		return
+		
+	# Look at target and shoot
+	_look_at_target(target.global_position)
+	logic.input_axis = Vector2.ZERO
+	logic.is_shooting = true
+
+func _logic_follow() -> void:
+	if not is_instance_valid(owner_node):
+		state = State.IDLE
+		return
+		
+	var dist = entity.global_position.distance_to(owner_node.global_position)
+	
+	# If enemies are nearby, prioritize attacking them? 
+	# For now, just follow
+	if dist > follow_distance:
+		_move_towards(owner_node.global_position)
+	else:
+		_stop_inputs()
+		# Face the same way as owner
+		logic.look_yaw = owner_node.rotation.y
+
+func _move_towards(pos: Vector3) -> void:
+	var dir = (pos - entity.global_position).normalized()
+	# Convert 3D direction to 2D input axis for LogicComponent
+	# We rotate the direction relative to the entity's look_yaw
+	var local_dir = dir.rotated(Vector3.UP, -logic.look_yaw)
+	logic.input_axis = Vector2(local_dir.x, -local_dir.z)
+	
+	# Update rotation to look where moving
+	logic.look_yaw = lerp_angle(logic.look_yaw, atan2(-dir.x, -dir.z), 0.1)
+
+func _look_at_target(pos: Vector3) -> void:
+	var dir = (pos - entity.global_position).normalized()
+	logic.look_yaw = lerp_angle(logic.look_yaw, atan2(-dir.x, -dir.z), 0.2)
+
+func _stop_inputs() -> void:
+	logic.input_axis = Vector2.ZERO
+	logic.is_shooting = false
+
+func _find_nearest_target() -> void:
+	var best_dist = detection_range
+	var new_target = null
+	
+	var players_node = get_tree().root.find_child("Players", true, false)
+	if not players_node: return
+	
+	for potential in players_node.get_children():
+		if potential == entity or potential.get("sync_is_dead"): continue
+		
+		# FACTION CHECK
+		# am_i_mob: name starts with "Dummy" or "ELITE"
+		# is_potential_mob: name starts with "Dummy" or "ELITE"
+		# am_i_player_pet: name is numeric OR is "PET"
+		# is_potential_player_pet: name is numeric OR is "PET"
+		
+		var am_i_mob = entity.name.begins_with("Dummy") or entity.name.begins_with("ELITE")
+		var is_potential_mob = potential.name.begins_with("Dummy") or potential.name.begins_with("ELITE")
+		
+		# Only target if we are from different factions
+		if am_i_mob == is_potential_mob:
+			continue
+		
+		var d = entity.global_position.distance_to(potential.global_position)
+		if d < best_dist:
+			best_dist = d
+			new_target = potential
+			
+	if new_target:
+		print("[AI] %s found target: %s" % [entity.name, new_target.name])
+	target = new_target

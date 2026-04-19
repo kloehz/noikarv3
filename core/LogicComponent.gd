@@ -53,20 +53,25 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 		input_axis = Vector2.ZERO
 		return
 		
-	if _is_local_authority():
+	var is_human = entity.name.is_valid_int()
+	
+	if is_human and _is_local_authority():
 		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 		is_shooting = Input.is_action_pressed("shoot")
-		if is_shooting:
-			print("[Logic] Shooting input detected on Client for: ", entity.name)
 		
 		# Summon Inputs
 		if Input.is_key_pressed(KEY_1): summon_type = 0
 		elif Input.is_key_pressed(KEY_2): summon_type = 1
 		elif Input.is_key_pressed(KEY_3): summon_type = 2
 		else: summon_type = -1
+	elif not is_human and multiplayer.is_server():
+		# AI CONTROL: Only on server for non-humans
+		var ai = entity.get_node_or_null("AIComponent")
+		if ai and ai.has_method("tick"):
+			ai.tick(delta)
 
-	# Authoritative Summoning (Server only)
-	if multiplayer.is_server() and summon_type != -1:
+	# Authoritative Summoning (Server only, for humans)
+	if is_human and multiplayer.is_server() and summon_type != -1:
 		var match_manager = get_tree().root.find_child("Main", true, false)
 		if match_manager and match_manager.has_method("request_spawn_totem"):
 			match_manager.request_spawn_totem(entity, summon_type)
