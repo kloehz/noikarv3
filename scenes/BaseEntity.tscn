@@ -1,20 +1,17 @@
-[gd_scene format=3 uid="uid://c1ient1t1t1t1"]
+[gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://bdfmixdkvrx7a" path="res://common/BaseEntity.gd" id="1_base_entity"]
+[ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="3_visual_comp"]
-[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
-[ext_resource type="Script" uid="uid://dhsunkxq0v3wy" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
-[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
-[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
-[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
+[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
+[ext_resource type="Script" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
+[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
+[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
-[ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
-[ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
-[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
-
-[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
-viewport_path = NodePath("HealthViewport")
+[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
+[ext_resource type="Script" path="res://common/components/ServerState.gd" id="11_server_state"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -31,6 +28,9 @@ albedo_color = Color(1, 1, 0, 0.6)
 
 [sub_resource type="SphereMesh" id="SphereMesh_debug"]
 material = SubResource("StandardMaterial3D_debug")
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
+viewport_path = NodePath("HealthViewport")
 
 [node name="BaseEntity" type="CharacterBody3D" unique_id=2131335616]
 script = ExtResource("1_base_entity")

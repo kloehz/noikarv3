@@ -3,6 +3,7 @@ extends Node3D
 ## Manages match lifecycle and player spawning.
 
 const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
+const SOUL_SCENE = preload("res://scenes/SoulEntity.tscn")
 
 @onready var players_container: Node3D = $Players
 
@@ -41,16 +42,51 @@ func _strip_visual_nodes_recursive(node: Node) -> void:
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
 	
+	# If a non-player entity (dummy/mob) died, spawn a soul
+	if not entity.name.is_valid_int():
+		_spawn_soul(entity.global_position)
+		
 	print("[MatchManager] Entity died: ", entity.name, ". Respawning in 3 seconds...")
 	
-	# Wait for respawn
+	# Wait for respawn (Normal respawn logic)
 	await get_tree().create_timer(3.0).timeout
 	
 	if is_instance_valid(entity) and entity.has_method("respawn"):
-		# CALCULATE POSITION ONLY HERE
 		var random_pos = Vector3(randf_range(-10, 10), 0.1, randf_range(-10, 10))
 		print("[MatchManager] Respawning ", entity.name, " at ", random_pos)
 		entity.respawn(random_pos)
+
+func _spawn_soul(pos: Vector3) -> void:
+	var soul = SOUL_SCENE.instantiate()
+	add_child(soul, true)
+	soul.global_position = pos
+	
+	soul.expired.connect(func(): _on_soul_expired(pos))
+
+func _on_soul_expired(pos: Vector3) -> void:
+	# 40% chance is already handled by SoulEntity emitting expired ONLY if it decides to try respawn
+	# Actually, let's move the 40% chance here for cleaner management
+	if randf() < 0.4:
+		print("[MatchManager] SOUL EXPIRED - Spawning ELITE MOB at ", pos)
+		_spawn_elite_mob(pos)
+
+func _spawn_elite_mob(pos: Vector3) -> void:
+	var dummy_scene = load("res://scenes/TrainingDummy.tscn")
+	var elite = dummy_scene.instantiate()
+	add_child(elite, true)
+	elite.global_position = pos
+	elite.name = "ELITE_" + str(randi() % 1000)
+	
+	# Set elite stats (wait a frame for components to initialize)
+	await get_tree().process_frame
+	if elite.has_node("ServerState"):
+		var state = elite.get_node("ServerState")
+		state.max_health = 200
+		state.sync_health = 200
+	if elite.has_node("CombatComponent"):
+		elite.get_node("CombatComponent").damage = 25
+	
+	print("[MatchManager] Elite Mob spawned with 200HP / 25DMG")
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():

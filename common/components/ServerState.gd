@@ -5,6 +5,7 @@ extends Node
 signal health_changed(current: int, maximum: int)
 signal death_changed(is_dead: bool)
 signal name_changed(new_name: String)
+signal souls_changed(amount: int)
 
 @export var max_health: int = 100
 @export var sync_health: int = 100:
@@ -25,6 +26,12 @@ signal name_changed(new_name: String)
 		player_name = v
 		name_changed.emit(player_name)
 
+@export var sync_souls: int = 0:
+	set(v):
+		if sync_souls == v: return
+		sync_souls = v
+		souls_changed.emit(sync_souls)
+
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
 
@@ -37,6 +44,7 @@ func _ready() -> void:
 		sync.add_state(self, "sync_health")
 		sync.add_state(self, "sync_is_dead")
 		sync.add_state(self, "player_name")
+		sync.add_state(self, "sync_souls")
 		sync.add_state(self, "knockback_velocity")
 		sync.add_state(self, "knockback_remaining_time")
 		if sync.has_method("process_settings"):

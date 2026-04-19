@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://b8y8u6k8j8k8j"]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
@@ -6,12 +6,9 @@
 [ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="4_state_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="5_visual_comp"]
 [ext_resource type="Script" path="res://common/components/ServerState.gd" id="6_server_state"]
-[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="7_logic"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
-
-[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
-viewport_path = NodePath("HealthViewport")
+[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -22,6 +19,9 @@ albedo_color = Color(1, 0.2, 0.2, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
 material = SubResource("StandardMaterial3D_1")
 size = Vector3(1, 2, 1)
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
+viewport_path = NodePath("HealthViewport")
 
 [node name="TrainingDummy" type="CharacterBody3D"]
 script = ExtResource("1_base_entity")
