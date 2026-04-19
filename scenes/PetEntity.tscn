@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://b8v4k2j8y2k1"]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://common/PetEntity.gd" id="1_pet"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]

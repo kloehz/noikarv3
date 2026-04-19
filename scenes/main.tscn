@@ -20,7 +20,7 @@ use_collision = true
 size = Vector3(100, 2, 100)
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=342014473]
-_spawnable_scenes = PackedStringArray("uid://c1ient1t1t1t1", "uid://b6p2v4j8y2k1", "uid://b7v4k2j8y2k1", "uid://b8v4k2j8y2k1")
+_spawnable_scenes = PackedStringArray("res://scenes/BaseEntity.tscn", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn")
 spawn_path = NodePath("../Players")
 
 [node name="ConnectionMenu" parent="." unique_id=2043948072 instance=ExtResource("2_conn")]
