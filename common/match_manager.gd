@@ -4,6 +4,8 @@ extends Node3D
 
 const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
 const SOUL_SCENE = preload("res://scenes/SoulEntity.tscn")
+const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
+const PET_SCENE = preload("res://scenes/PetEntity.tscn")
 
 @onready var players_container: Node3D = $Players
 
@@ -87,6 +89,31 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 		elite.get_node("CombatComponent").damage = 25
 	
 	print("[MatchManager] Elite Mob spawned with 200HP / 25DMG")
+
+func request_spawn_totem(player: BaseEntity, type: int) -> void:
+	if not multiplayer.is_server(): return
+	if not player.server_state or player.server_state.sync_souls <= 0: return
+	
+	var souls = player.server_state.sync_souls
+	player.server_state.sync_souls = 0
+	
+	var totem = TOTEM_SCENE.instantiate()
+	add_child(totem, true)
+	totem.global_position = player.global_position + (-player.global_transform.basis.z * 1.5)
+	totem.totem_type = type
+	totem.stored_souls = souls
+	
+	totem.summoned.connect(func(p_type, p_souls): _on_totem_complete(player.name.to_int(), p_type, p_souls, totem.global_position))
+	print("[MatchManager] Totem requested by ", player.name, " with ", souls, " souls")
+
+func _on_totem_complete(owner_id: int, type: String, souls: int, pos: Vector3) -> void:
+	var pet = PET_SCENE.instantiate()
+	add_child(pet, true)
+	pet.global_position = pos
+	pet.owner_id = owner_id
+	pet.pet_type = type
+	pet.power_level = souls
+	print("[MatchManager] Pet spawned! Type: ", type, " Souls: ", souls)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	if multiplayer.is_server():

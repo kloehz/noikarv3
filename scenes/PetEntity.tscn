@@ -1,0 +1,59 @@
+[gd_scene load_steps=12 format=3 uid="uid://b8v4k2j8y2k1"]
+
+[ext_resource type="Script" path="res://common/PetEntity.gd" id="1_pet"]
+[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://common/components/ServerState.gd" id="4_server_state"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
+[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
+radius = 0.4
+height = 1.2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pet"]
+albedo_color = Color(0.2, 0.6, 1.0, 1)
+emission_enabled = true
+emission = Color(0.1, 0.4, 0.8, 1)
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_pet"]
+material = SubResource("StandardMaterial3D_pet")
+radius = 0.4
+height = 1.2
+
+[node name="PetEntity" type="CharacterBody3D"]
+collision_layer = 2
+collision_mask = 3
+script = ExtResource("1_pet")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("CapsuleShape3D_pet")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+mesh = SubResource("CapsuleMesh_pet")
+
+[node name="HealthComponent" type="Node3D" parent="."]
+script = ExtResource("2_health")
+
+[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+script = ExtResource("3_hurtbox")
+health_component = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+shape = SubResource("CapsuleShape3D_pet")
+
+[node name="ServerState" type="Node" parent="."]
+script = ExtResource("4_server_state")
+
+[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+script = ExtResource("5_state_sync")
+root = NodePath("..")
+properties = Array[String]([":sync_health", ":sync_is_dead"])
+
+[node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("6_rb_sync")
+root = NodePath("..")
+state_properties = Array[String]([":global_position"])

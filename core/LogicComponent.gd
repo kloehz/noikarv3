@@ -10,6 +10,7 @@ extends Node
 @export var current_velocity: Vector3 = Vector3.ZERO
 @export var input_axis: Vector2 = Vector2.ZERO
 @export var is_shooting: bool = false
+@export var summon_type: int = -1 # 0: Attack, 1: Tank, 2: Heal
 @export var look_yaw: float = 0.0
 
 var camera_pivot: Node3D
@@ -57,6 +58,19 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 		is_shooting = Input.is_action_pressed("shoot")
 		if is_shooting:
 			print("[Logic] Shooting input detected on Client for: ", entity.name)
+		
+		# Summon Inputs
+		if Input.is_key_pressed(KEY_1): summon_type = 0
+		elif Input.is_key_pressed(KEY_2): summon_type = 1
+		elif Input.is_key_pressed(KEY_3): summon_type = 2
+		else: summon_type = -1
+
+	# Authoritative Summoning (Server only)
+	if multiplayer.is_server() and summon_type != -1:
+		var match_manager = get_tree().root.find_child("Main", true, false)
+		if match_manager and match_manager.has_method("request_spawn_totem"):
+			match_manager.request_spawn_totem(entity, summon_type)
+			summon_type = -1 # Consume input
 	
 	_apply_movement(delta)
 

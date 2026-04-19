@@ -1,0 +1,66 @@
+[gd_scene load_steps=10 format=3 uid="uid://b7v4k2j8y2k1"]
+
+[ext_resource type="Script" path="res://common/TotemEntity.gd" id="1_totem"]
+[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
+[ext_resource type="Script" path="res://common/components/ServerState.gd" id="4_server_state"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_totem"]
+height = 2.0
+radius = 0.5
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_totem"]
+albedo_color = Color(0.6, 0.4, 0.8, 1)
+metallic = 0.5
+roughness = 0.2
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_totem"]
+material = SubResource("StandardMaterial3D_totem")
+top_radius = 0.4
+bottom_radius = 0.5
+height = 2.0
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_interact"]
+radius = 3.0
+
+[node name="TotemEntity" type="CharacterBody3D"]
+collision_layer = 1
+collision_mask = 3
+script = ExtResource("1_totem")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CylinderShape3D_totem")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+mesh = SubResource("CylinderMesh_totem")
+
+[node name="HealthComponent" type="Node3D" parent="."]
+script = ExtResource("2_health")
+max_health = 50
+
+[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+script = ExtResource("3_hurtbox")
+health_component = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CylinderShape3D_totem")
+
+[node name="InteractArea" type="Area3D" parent="."]
+collision_layer = 0
+collision_mask = 2
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="InteractArea"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("SphereShape3D_interact")
+
+[node name="ServerState" type="Node" parent="."]
+script = ExtResource("4_server_state")
+
+[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+script = ExtResource("5_state_sync")
+root = NodePath("..")
+properties = Array[String]([":sync_health", ":sync_is_dead"])
