@@ -133,6 +133,10 @@ func _handle_attack_debug_visuals() -> void:
 func _update_movement_animations() -> void:
 	if not _actor: return
 	
+	# CRITICAL: If dead, don't play movement/idle animations
+	if entity.get("sync_is_dead"):
+		return
+	
 	# Priority: If we are playing an attack, don't override it with move/idle
 	if _actor.is_playing("Attack"):
 		return
@@ -167,6 +171,13 @@ func _on_entity_damaged(p_entity: Node3D, _amount: int, _source: Node) -> void:
 func play_death_effect() -> void:
 	if _actor:
 		_actor.play_animation("Death")
+		
+		# Optional: Hide the model after the animation ends (approx 1-2 seconds)
+		var timer = get_tree().create_timer(1.5)
+		timer.timeout.connect(func(): 
+			if entity.get("sync_is_dead"):
+				_actor.visible = false
+		)
 	
 	# Hide UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
@@ -182,6 +193,7 @@ func play_death_effect() -> void:
 ## Play spawn/respawn visual effect.
 func play_spawn_effect() -> void:
 	if _actor:
+		_actor.visible = true
 		_actor.play_animation("Idle")
 	
 	# Show UI

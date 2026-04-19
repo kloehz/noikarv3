@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://c6f3r5u8y2k1"]
+[gd_scene format=3 uid="uid://c6f3r5u8y2k1"]
 
 [ext_resource type="Script" path="res://client/ui/HealthBar2D.gd" id="1_script"]
 
@@ -21,15 +21,15 @@ corner_radius_top_right = 2
 corner_radius_bottom_right = 2
 corner_radius_bottom_left = 2
 
-[node name="HealthBar2D" type="Control"]
-custom_minimum_size = Vector2(150, 20)
+[node name="HealthBar2D" type="Control" unique_id=1883694202]
+custom_minimum_size = Vector2(105, 14)
 layout_mode = 3
 anchors_preset = 0
-offset_right = 150.0
-offset_bottom = 20.0
+offset_right = 105.0
+offset_bottom = 14.0
 script = ExtResource("1_script")
 
-[node name="Background" type="Panel" parent="."]
+[node name="Background" type="Panel" parent="." unique_id=1542368737]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -38,7 +38,7 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
 
-[node name="CatchupBar" type="ProgressBar" parent="."]
+[node name="CatchupBar" type="ProgressBar" parent="." unique_id=1654185109]
 modulate = Color(1, 0.3, 0.3, 1)
 layout_mode = 1
 anchors_preset = 15
@@ -51,7 +51,7 @@ theme_override_styles/fill = SubResource("StyleBoxFlat_fill")
 value = 100.0
 show_percentage = false
 
-[node name="HealthBar" type="ProgressBar" parent="."]
+[node name="HealthBar" type="ProgressBar" parent="." unique_id=405049624]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0

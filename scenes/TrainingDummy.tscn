@@ -49,13 +49,13 @@ script = ExtResource("2_health")
 [node name="HealthViewport" type="SubViewport" parent="."]
 transparent_bg = true
 handle_input_locally = false
-size = Vector2i(150, 20)
+size = Vector2i(105, 14)
 render_target_update_mode = 4
 
 [node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("9_health_bar_2d")]
 
 [node name="HealthBar3D" type="Sprite3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
 billboard = 1
 no_depth_test = true
 texture = SubResource("ViewportTexture_health")
@@ -75,11 +75,11 @@ root = NodePath("..")
 state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
 
 [node name="NameLabel" type="Label3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
 billboard = 1
 no_depth_test = true
 text = "DUMMY"
-font_size = 48
+font_size = 34
 outline_size = 12
 
 [node name="HealthLabel" type="Label3D" parent="."]
