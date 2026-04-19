@@ -20,7 +20,7 @@ func _ready() -> void:
 	if Engine.is_editor_hint(): return
 	
 	_setup_entity()
-	var entity_name = entity.name if entity else "Unknown"
+	var entity_name = entity.name if entity else &"Unknown"
 	print("[DEBUG] LogicComponent initializing for entity: %s" % entity_name)
 	
 	current_velocity = Vector3.ZERO

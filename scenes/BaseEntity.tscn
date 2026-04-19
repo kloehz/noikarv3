@@ -116,10 +116,6 @@ no_depth_test = true
 text = "Player"
 font_size = 34
 
-[node name="HealthLabel" type="Label3D" parent="." unique_id=34343434]
-visible = false
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
-
 [node name="HitboxComponent" type="Area3D" parent="." unique_id=150433228]
 script = ExtResource("5_hitbox_comp")
 

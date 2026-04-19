@@ -85,10 +85,10 @@ func _on_host_pressed() -> void:
 		
 	status_label.text = "Registering Remote Port..."
 	print("[DEBUG] Registering remote port on Noray...")
-	var err = await Noray.register_remote()
-	if err != OK:
-		status_label.text = "Failed to register port on Noray: " + str(err)
-		print("[ERROR] Port registration failed: ", err)
+	var reg_err = await Noray.register_remote()
+	if reg_err != OK:
+		status_label.text = "Failed to register port on Noray: " + str(reg_err)
+		print("[ERROR] Port registration failed: ", reg_err)
 		return
 		
 	status_label.text = "Requesting Connection to Dedicated Server..."
@@ -125,9 +125,11 @@ func _on_connect_pressed() -> void:
 		await Noray.on_pid
 		
 	status_label.text = "Registering Remote Port..."
-	var err = await Noray.register_remote()
-	if err != OK:
-		status_label.text = "Failed to register port on Noray"
+	print("[DEBUG] Registering remote port on Noray...")
+	var reg_err_conn = await Noray.register_remote()
+	if reg_err_conn != OK:
+		status_label.text = "Failed to register port on Noray: " + str(reg_err_conn)
+		print("[ERROR] Port registration failed: ", reg_err_conn)
 		return
 		
 	status_label.text = "Requesting Connection to Room..."

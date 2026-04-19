@@ -82,10 +82,6 @@ text = "DUMMY"
 font_size = 34
 outline_size = 12
 
-[node name="HealthLabel" type="Label3D" parent="."]
-visible = false
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.4, 0)
-
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
 script = ExtResource("3_hurtbox")
 health_component = NodePath("../HealthComponent")
