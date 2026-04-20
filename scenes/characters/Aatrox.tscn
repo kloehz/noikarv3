@@ -1,7 +1,7 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://MODELS_TEST/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://b3ms2o4mufeko" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
 
 [node name="Aatrox" type="Node3D" unique_id=969678927]
 script = ExtResource("1_actor")
