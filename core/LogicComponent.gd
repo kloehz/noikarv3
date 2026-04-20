@@ -108,11 +108,14 @@ func _apply_movement(delta: float) -> void:
 		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
 	
 	# APPLY MOVEMENT (Refactored to move_and_slide)
+	var old_pos = entity.global_position
 	entity.velocity = current_velocity
 	entity.move_and_slide()
 	
 	# CRITICAL FOR NETFOX: Force transform update so rollback captures the new position
-	entity.force_update_transform()
+	# Optimization: Only force update if position actually changed or if it's the server
+	if old_pos.distance_squared_to(entity.global_position) > 0.0001 or multiplayer.is_server():
+		entity.force_update_transform()
 	
 	# Sync back velocity for next frame (handles collisions stopping movement)
 	current_velocity = entity.velocity

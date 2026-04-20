@@ -17,6 +17,12 @@ var logic: Node
 
 var target: Node3D = null
 var owner_node: Node3D = null # For pets
+var _players_node: Node3D = null
+
+# Performance Optimization: Throttling
+var _target_search_timer: float = 0.0
+var _target_search_interval: float = 0.2 # Search every 200ms
+var _is_mob: bool = false
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -32,11 +38,17 @@ func _ready() -> void:
 	# Search for logic component
 	logic = entity.get_node_or_null("LogicComponent")
 	
+	# Cache players node to avoid expensive root searches
+	_players_node = get_tree().root.find_child("Players", true, false)
+	
+	# Cache faction to avoid string comparisons every tick
+	_is_mob = entity.is_in_group(&"mobs")
+	
 	print("[AI] Brain started for ", entity.name)
 	# Disable normal process, LogicComponent will call tick()
 	set_process(false)
 
-func tick(_delta: float) -> void:
+func tick(delta: float) -> void:
 	if not entity or entity.get("sync_is_dead"):
 		if logic: _stop_inputs()
 		return
@@ -44,10 +56,14 @@ func tick(_delta: float) -> void:
 	if not logic:
 		logic = entity.get_node_or_null("LogicComponent")
 		if not logic: return
-		
-	# DEBUG: Log state occasionally
-	#if Engine.get_frames_drawn() % 120 == 0:
-		#print("[AI Debug] %s | State: %s | Target: %s" % [entity.name, State.keys()[state], target.name if target else &"None"])
+	
+	# Ensure we have the players node
+	if not is_instance_valid(_players_node):
+		_players_node = get_tree().root.find_child("Players", true, false)
+		if not _players_node: return
+
+	# Update search timer
+	_target_search_timer -= delta
 
 	match state:
 		State.IDLE:
@@ -61,7 +77,12 @@ func tick(_delta: float) -> void:
 
 func _logic_idle() -> void:
 	_stop_inputs()
-	_find_nearest_target()
+	
+	# Only search for targets occasionally
+	if _target_search_timer <= 0:
+		_find_nearest_target()
+		_target_search_timer = _target_search_interval
+		
 	if target:
 		state = State.CHASE
 
@@ -107,9 +128,8 @@ func _logic_follow() -> void:
 		if entity.has_method("get"):
 			var owner_id = entity.get("owner_id")
 			if owner_id:
-				var players_node = get_tree().root.find_child("Players", true, false)
-				if players_node:
-					owner_node = players_node.get_node_or_null(str(owner_id))
+				if _players_node:
+					owner_node = _players_node.get_node_or_null(str(owner_id))
 		
 		if not is_instance_valid(owner_node):
 			state = State.IDLE
@@ -151,23 +171,16 @@ func _find_nearest_target() -> void:
 	var best_dist = detection_range
 	var new_target = null
 	
-	var players_node = get_tree().root.find_child("Players", true, false)
-	if not players_node: return
+	if not _players_node: return
 	
-	for potential in players_node.get_children():
+	for potential in _players_node.get_children():
 		if potential == entity or potential.get("sync_is_dead"): continue
 		
-		# FACTION CHECK
-		# am_i_mob: name starts with "Dummy" or "ELITE"
-		# is_potential_mob: name starts with "Dummy" or "ELITE"
-		# am_i_player_pet: name is numeric OR is "PET"
-		# is_potential_player_pet: name is numeric OR is "PET"
-		
-		var am_i_mob = entity.name.begins_with("Dummy") or entity.name.begins_with("ELITE")
-		var is_potential_mob = potential.name.begins_with("Dummy") or potential.name.begins_with("ELITE")
+		# FACTION CHECK via Groups (Optimized)
+		var is_potential_mob = potential.is_in_group(&"mobs")
 		
 		# Only target if we are from different factions
-		if am_i_mob == is_potential_mob:
+		if _is_mob == is_potential_mob:
 			continue
 		
 		var d = entity.global_position.distance_to(potential.global_position)
@@ -175,6 +188,4 @@ func _find_nearest_target() -> void:
 			best_dist = d
 			new_target = potential
 			
-	if new_target:
-		print("[AI] %s found target: %s" % [entity.name, new_target.name])
 	target = new_target

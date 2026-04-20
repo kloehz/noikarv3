@@ -6,6 +6,7 @@ const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
 const SOUL_SCENE = preload("res://scenes/SoulEntity.tscn")
 const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
 const PET_SCENE = preload("res://scenes/PetEntity.tscn")
+const DUMMY_SCENE = preload("res://scenes/TrainingDummy.tscn")
 const AI_COMPONENT = preload("res://core/AIComponent.gd")
 
 @onready var players_container: Node3D = $Players
@@ -178,8 +179,7 @@ func _on_soul_expired(pos: Vector3) -> void:
 		_spawn_elite_mob(pos)
 
 func _spawn_elite_mob(pos: Vector3) -> void:
-	var dummy_scene = load("res://scenes/TrainingDummy.tscn")
-	var elite = dummy_scene.instantiate()
+	var elite = DUMMY_SCENE.instantiate()
 	
 	elite.name = "ELITE_" + str(randi() % 1000)
 	elite.global_position = pos

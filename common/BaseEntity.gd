@@ -31,9 +31,20 @@ var sync_health: int:
 
 @onready var server_state = $ServerState
 
+# Static cache to avoid repeated load calls across all instances
+static var _actor_scene_cache: Dictionary = {}
+
 func _ready() -> void:
 	if not is_inside_tree():
 		await ready
+		
+	# Assign groups for faster AI faction detection
+	if name.is_valid_int():
+		add_to_group(&"players")
+	elif name.begins_with("Dummy") or name.begins_with("ELITE"):
+		add_to_group(&"mobs")
+	elif name.begins_with("PET"):
+		add_to_group(&"pets")
 		
 	var peer_id = 1 # Default to server
 	var is_human = name.is_valid_int()
@@ -126,7 +137,13 @@ func _on_sync_death_changed(is_dead: bool) -> void:
 func _load_character_actor() -> void:
 	if character_actor_path.is_empty(): return
 	
-	var scene = load(character_actor_path) as PackedScene
+	var scene: PackedScene
+	if _actor_scene_cache.has(character_actor_path):
+		scene = _actor_scene_cache[character_actor_path]
+	else:
+		scene = load(character_actor_path) as PackedScene
+		_actor_scene_cache[character_actor_path] = scene
+	
 	if scene:
 		character_actor = scene.instantiate() as CharacterActor
 		
