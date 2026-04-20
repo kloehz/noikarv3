@@ -10,7 +10,11 @@ signal damaged(amount: int, source: Node)
 signal healed(amount: int)
 signal died
 
-@export var max_health: int = 100
+@export var max_health: int = 100:
+	set(v):
+		max_health = v
+		health_changed.emit(current_health, max_health)
+
 @export var invincibility_time: float = 0.0
 
 var current_health: int:

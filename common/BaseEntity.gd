@@ -35,12 +35,15 @@ func _ready() -> void:
 	if not is_inside_tree():
 		await ready
 		
-	print("[DEBUG] BaseEntity %s initialization started (peer_id: %d)" % [name, multiplayer.get_unique_id()])
+	var peer_id = 1 # Default to server
+	var is_human = name.is_valid_int()
 	
-	var peer_id = name.to_int() if name.is_valid_int() else 1
+	if is_human:
+		peer_id = name.to_int()
+		
+	print("[DEBUG] BaseEntity %s initialization (peer_id: %d, is_human: %s)" % [name, peer_id, is_human])
 	
-	# Set authority recursively for all nodes in the character
-	print("[DEBUG] BaseEntity %s setting authority to %d" % [name, peer_id])
+	# Set authority recursively
 	set_multiplayer_authority(peer_id, true)
 	
 	_load_character_actor()
@@ -79,7 +82,14 @@ func _ready() -> void:
 	print("[DEBUG] BaseEntity %s initialization complete" % name)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
+	# Update local max_health if server changed it
+	max_health = maximum
+	
 	var hc = get_node_or_null("HealthComponent")
+	if hc:
+		hc.max_health = maximum
+		hc.current_health = current
+	
 	var old_health = hc.current_health if hc else 100
 	
 	if current < old_health:
@@ -126,6 +136,8 @@ func _load_character_actor() -> void:
 			_strip_visual_nodes(character_actor)
 		
 		add_child(character_actor)
+		# Compensate for models imported with +Z as forward (Godot expects -Z)
+		character_actor.rotation.y = PI
 		# Ensure authority matches
 		character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
 		print("[BaseEntity] Character actor loaded: ", character_actor_path)

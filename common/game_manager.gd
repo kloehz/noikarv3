@@ -17,6 +17,9 @@ func _is_headless_environment() -> bool:
 
 func _start_as_server() -> void:
 	print("[GameManager] Server environment starting. Connecting to Noray...")
+	if DisplayServer.get_name() != "headless":
+		print("[WARNING] DisplayServer is not headless, but we are a server. macOS may crash.")
+	
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
 	

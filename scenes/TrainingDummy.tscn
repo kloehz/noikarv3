@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="7_logic"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
+[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -72,7 +73,12 @@ full_state_interval = 8
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("8_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position", "LogicComponent:current_velocity"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity"])
+
+[node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("10_interpolator")
+root = NodePath("..")
+properties = Array[String]([":global_position", ":quaternion"])
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)

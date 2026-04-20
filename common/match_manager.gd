@@ -14,7 +14,11 @@ const AI_COMPONENT = preload("res://core/AIComponent.gd")
 @export var elite_respawn_chance: float = 0.4
 @export var elite_hp_multiplier: float = 2.5
 @export var elite_damage_multiplier: float = 1.6
+# --- CONFIGURATION: SERVER AUTO-CLOSE ---
+@export var shutdown_delay: float = 30.0 # Wait 30s before closing empty room
 # ---------------------------------
+
+var _shutdown_timer: SceneTreeTimer = null
 
 ## Store peer data like names.
 var peer_data: Dictionary = {}
@@ -64,6 +68,85 @@ func _strip_visual_nodes_recursive(node: Node) -> void:
 		print("[DEBUG] MatchManager removing visual: %s" % child.name)
 		child.free()
 
+func _on_server_started() -> void:
+	print("[MatchManager] Match started as server")
+	# Spawn local player if not headless
+	if not GameManager._is_headless_environment():
+		_spawn_player(1)
+
+func _on_client_connected(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	
+	print("[MatchManager] Client connected: ", peer_id)
+	_spawn_player(peer_id)
+	_shutdown_timer = null # Reset timer on join
+
+func _on_client_disconnected(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	
+	print("[MatchManager] Client disconnected: ", peer_id)
+	_despawn_player(peer_id)
+	peer_data.erase(peer_id)
+	
+	# Wait a frame to ensure queue_free() is processed or use robust check
+	_check_for_empty_server.call_deferred()
+
+func _check_for_empty_server() -> void:
+	if not multiplayer.is_server(): return
+	
+	# Count human players (nodes with numeric names in Players container)
+	var human_count = 0
+	for child in players_container.get_children():
+		# IMPORTANT: ignore nodes about to be destroyed
+		if child.name.is_valid_int() and not child.is_queued_for_deletion():
+			human_count += 1
+	
+	print("[MatchManager] Human player count: ", human_count)
+	
+	if human_count == 0:
+		if _shutdown_timer == null:
+			print("[MatchManager] Server is empty. Starting shutdown timer (%ds)..." % shutdown_delay)
+			_shutdown_timer = get_tree().create_timer(shutdown_delay)
+			_shutdown_timer.timeout.connect(_auto_shutdown)
+	elif _shutdown_timer:
+		print("[MatchManager] Player joined. Aborting shutdown.")
+		_shutdown_timer = null
+
+func _auto_shutdown() -> void:
+	# Double check count before actually quitting
+	var human_count = 0
+	if is_instance_valid(players_container):
+		for child in players_container.get_children():
+			if child.name.is_valid_int():
+				human_count += 1
+			
+	if human_count == 0:
+		print("[MatchManager] ROOM EMPTY. SHUTTING DOWN SERVER TO SAVE RESOURCES.")
+		get_tree().quit()
+
+func _on_connected_to_server() -> void:
+	if not _pending_name.is_empty():
+		_submit_name_to_server.rpc_id(1, _pending_name)
+
+func _on_player_name_submitted(player_name: String) -> void:
+	_pending_name = player_name
+	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
+		_submit_name_to_server.rpc_id(1, player_name)
+
+@rpc("any_peer", "call_local", "reliable")
+func _submit_name_to_server(player_name: String) -> void:
+	var peer_id = multiplayer.get_remote_sender_id()
+	print("[MatchManager] Received name from peer ", peer_id, ": ", player_name)
+	peer_data[peer_id] = {"name": player_name}
+	
+	if multiplayer.is_server():
+		# Update player if already exists
+		var player = players_container.get_node_or_null(str(peer_id))
+		if player and player.has_node("ServerState"):
+			player.get_node("ServerState").player_name = player_name
+
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
 	
@@ -101,26 +184,28 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 	elite.name = "ELITE_" + str(randi() % 1000)
 	elite.global_position = pos
 	
-	# Setting stats based on multipliers
-	var base_hp = 100
-	var elite_hp = int(base_hp * elite_hp_multiplier)
-	
 	players_container.add_child(elite, true)
 	
-	# Force apply stats immediately after entering tree
-	if is_instance_valid(elite):
+	# INITIALIZE AI AND STATS (Deferred to ensure _ready is done)
+	_setup_elite_logic.call_deferred(elite)
+
+func _setup_elite_logic(elite: Node3D) -> void:
+	if not is_instance_valid(elite): return
+	
+	var elite_hp = int(100 * elite_hp_multiplier)
+	if elite.has_method("apply_stats"):
 		elite.apply_stats(elite_hp)
-		
-		if elite.has_node("CombatComponent"):
-			elite.get_node("CombatComponent").damage = int(15 * elite_damage_multiplier)
-		
-		# ADD AI Brain AFTER it's in tree
-		var ai = AI_COMPONENT.new()
-		ai.name = "AIComponent"
-		elite.add_child(ai)
-		ai.state = 1 # State.CHASE
-		
-		print("[MatchManager] Elite Mob %s fully initialized with %d HP" % [elite.name, elite_hp])
+	
+	if elite.has_node("CombatComponent"):
+		elite.get_node("CombatComponent").damage = int(15 * elite_damage_multiplier)
+	
+	# ADD AI Brain
+	var ai = AI_COMPONENT.new()
+	ai.name = "AIComponent"
+	elite.add_child(ai)
+	ai.state = 1 # State.CHASE
+	
+	print("[MatchManager] Elite Mob %s initialized with %d HP" % [elite.name, elite_hp])
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return
@@ -148,102 +233,56 @@ func _on_totem_complete(owner_id: int, type: String, souls: int, pos: Vector3) -
 	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
 	
 	players_container.add_child(pet, true)
+	_setup_pet_logic.call_deferred(pet, owner_id, type, souls)
+
+func _setup_pet_logic(pet: Node3D, owner_id: int, type: String, souls: int) -> void:
+	if not is_instance_valid(pet): return
 	
-	if is_instance_valid(pet):
-		pet.owner_id = owner_id
-		pet.pet_type = type
-		pet.power_level = souls
-		
-		# Force apply stats based on power_level (souls)
-		var base_hp = 100 if type != "TANK" else 200
-		var multiplier = 1.0 + (souls * 0.1)
+	pet.owner_id = owner_id
+	pet.pet_type = type
+	pet.power_level = souls
+	
+	# Force apply stats based on power_level (souls)
+	var base_hp = 100 if type != "TANK" else 200
+	var multiplier = 1.0 + (souls * 0.1)
+	if pet.has_method("apply_stats"):
 		pet.apply_stats(int(base_hp * multiplier))
-		
-		# ADD AI Brain for Pet
-		var ai = AI_COMPONENT.new()
-		ai.name = "AIComponent"
-		pet.add_child(ai)
-		ai.state = 3 # State.FOLLOW_OWNER
-		
-		# Find owner node to follow
-		var owner_node = players_container.get_node_or_null(str(owner_id))
-		if owner_node:
-			ai.owner_node = owner_node
-			print("[MatchManager] Pet %s linked to owner %s" % [pet.name, owner_node.name])
-		
-		print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.max_health])
-
-
-func _on_player_name_submitted(player_name: String) -> void:
-	if multiplayer.is_server():
-		peer_data[1] = {"name": player_name}
-		# Update local host name immediately if already spawned
-		var player = players_container.get_node_or_null("1")
-		if player:
-			player.player_name = player_name
-	else:
-		_pending_name = player_name
-		# If already connected, send it now, otherwise wait for signal
-		if multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
-			_submit_name_to_server.rpc_id(1, player_name)
-
-func _on_connected_to_server() -> void:
-	if not _pending_name.is_empty():
-		_submit_name_to_server.rpc_id(1, _pending_name)
-		_pending_name = ""
-
-@rpc("any_peer", "reliable")
-func _submit_name_to_server(player_name: String) -> void:
-	var peer_id = multiplayer.get_remote_sender_id()
-	print("[MatchManager] Received name from peer ", peer_id, ": ", player_name)
-	peer_data[peer_id] = {"name": player_name}
 	
-	# If player already spawned, update their name
-	var player = players_container.get_node_or_null(str(peer_id))
-	if player:
-		player.player_name = player_name
-
-func _on_server_started() -> void:
-	print("[MatchManager] Match started as server")
-	# Spawn local player if not dedicated server
-	if not GameManager._is_headless_environment():
-		_spawn_player(1)
-
-func _on_client_connected(peer_id: int) -> void:
-	if not multiplayer.is_server():
-		return
+	# ADD AI Brain for Pet
+	var ai = AI_COMPONENT.new()
+	ai.name = "AIComponent"
+	pet.add_child(ai)
+	ai.state = 3 # State.FOLLOW_OWNER
 	
-	print("[MatchManager] Client connected: ", peer_id)
-	_spawn_player(peer_id)
-
-func _on_client_disconnected(peer_id: int) -> void:
-	if not multiplayer.is_server():
-		return
+	# Find owner node to follow
+	var owner_node = players_container.get_node_or_null(str(owner_id))
+	if owner_node:
+		ai.owner_node = owner_node
+		print("[MatchManager] Pet %s linked to owner %s" % [pet.name, owner_node.name])
 	
-	print("[MatchManager] Client disconnected: ", peer_id)
-	_despawn_player(peer_id)
-	peer_data.erase(peer_id)
+	print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.max_health])
 
 func _spawn_player(peer_id: int) -> void:
 	# Check if already spawned
 	if players_container.has_node(str(peer_id)):
 		return
-
+		
 	var player = PLAYER_SCENE.instantiate()
 	player.name = str(peer_id)
-	player.set_multiplayer_authority(peer_id)
 	
-	# Random position BEFORE adding to tree
-	# We use 0.1 to be just slightly above ground and avoid stuck physics
-	player.position = Vector3(randf_range(-5, 5), 0.1, randf_range(-5, 5))
+	# Spawn at a safe position (away from dummies)
+	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
+	player.position = spawn_pos
 	
-	players_container.call_deferred("add_child", player, true)
+	players_container.add_child(player, true)
 	
-	# Set name AFTER add_child — server_state is @onready and needs to be in tree
-	if peer_data.has(peer_id):
-		player.set_deferred("player_name", peer_data[peer_id]["name"])
-	
-	print("[MatchManager] Spawned player for peer: ", peer_id, " (", player.player_name, ") at ", player.position)
+	# Initial server-side state setup
+	if multiplayer.is_server():
+		# Setup name from peer data if available
+		if peer_data.has(peer_id):
+			player.player_name = peer_data[peer_id].name
+		
+	print("[MatchManager] Spawned player for peer: ", peer_id, " at ", player.position)
 
 func _despawn_player(peer_id: int) -> void:
 	var player = players_container.get_node_or_null(str(peer_id))

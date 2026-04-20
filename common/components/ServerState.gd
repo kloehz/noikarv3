@@ -7,7 +7,12 @@ signal death_changed(is_dead: bool)
 signal name_changed(new_name: String)
 signal souls_changed(amount: int)
 
-@export var max_health: int = 100
+@export var max_health: int = 100:
+	set(v):
+		if max_health == v: return
+		max_health = v
+		health_changed.emit(sync_health, max_health)
+
 @export var sync_health: int = 100:
 	set(v):
 		if sync_health == v: return
@@ -41,6 +46,7 @@ func _ready() -> void:
 	var sync = get_node_or_null("StateSynchronizer")
 	if sync:
 		print("[DEBUG] ServerState %s found StateSynchronizer, adding states" % get_parent().name)
+		sync.add_state(self, "max_health")
 		sync.add_state(self, "sync_health")
 		sync.add_state(self, "sync_is_dead")
 		sync.add_state(self, "player_name")

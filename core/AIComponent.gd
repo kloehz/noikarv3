@@ -46,8 +46,8 @@ func tick(_delta: float) -> void:
 		if not logic: return
 		
 	# DEBUG: Log state occasionally
-	if Engine.get_frames_drawn() % 120 == 0:
-		print("[AI Debug] %s | State: %s | Target: %s" % [entity.name, State.keys()[state], target.name if target else &"None"])
+	#if Engine.get_frames_drawn() % 120 == 0:
+		#print("[AI Debug] %s | State: %s | Target: %s" % [entity.name, State.keys()[state], target.name if target else &"None"])
 
 	match state:
 		State.IDLE:
@@ -103,35 +103,47 @@ func _logic_attack() -> void:
 
 func _logic_follow() -> void:
 	if not is_instance_valid(owner_node):
-		state = State.IDLE
-		return
+		# Try to re-find owner if lost
+		if entity.has_method("get"):
+			var owner_id = entity.get("owner_id")
+			if owner_id:
+				var players_node = get_tree().root.find_child("Players", true, false)
+				if players_node:
+					owner_node = players_node.get_node_or_null(str(owner_id))
+		
+		if not is_instance_valid(owner_node):
+			state = State.IDLE
+			return
 		
 	var dist = entity.global_position.distance_to(owner_node.global_position)
 	
-	# If enemies are nearby, prioritize attacking them? 
-	# For now, just follow
 	if dist > follow_distance:
 		_move_towards(owner_node.global_position)
 	else:
 		_stop_inputs()
-		# Face the same way as owner
-		logic.look_yaw = owner_node.rotation.y
+		# Smoothly face the same way as owner
+		logic.look_yaw = lerp_angle(logic.look_yaw, owner_node.rotation.y, 0.1)
 
 func _move_towards(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()
-	# Convert 3D direction to 2D input axis for LogicComponent
-	# We rotate the direction relative to the entity's look_yaw
-	var local_dir = dir.rotated(Vector3.UP, -logic.look_yaw)
-	logic.input_axis = Vector2(local_dir.x, -local_dir.z)
 	
-	# Update rotation to look where moving
-	logic.look_yaw = lerp_angle(logic.look_yaw, atan2(-dir.x, -dir.z), 0.1)
+	# Point the character at the target
+	var target_yaw = atan2(-dir.x, -dir.z)
+	
+	# Force look_yaw to the target instantly (faster rotation)
+	logic.look_yaw = lerp_angle(logic.look_yaw, target_yaw, 0.4)
+	
+	# MOVE FORWARD relative to the rotation
+	# Vector2(0, -1) is always "Forward" in our LogicComponent
+	logic.input_axis = Vector2(0, -1)
 
 func _look_at_target(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()
-	logic.look_yaw = lerp_angle(logic.look_yaw, atan2(-dir.x, -dir.z), 0.2)
+	var target_yaw = atan2(-dir.x, -dir.z)
+	logic.look_yaw = lerp_angle(logic.look_yaw, target_yaw, 0.5)
 
 func _stop_inputs() -> void:
+	if not logic: return
 	logic.input_axis = Vector2.ZERO
 	logic.is_shooting = false
 

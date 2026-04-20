@@ -187,14 +187,19 @@ func _process(_delta):
 	_protocol.ingest(_peer.get_utf8_string(available))
 
 func _put_command(command: String, data = null) -> Error:
+	# SAFETY: Prevent calling network writes if not in the main thread 
+	# or if peer is being deallocated.
+	if not is_inside_tree():
+		return ERR_UNCONFIGURED
+
 	if not is_connected_to_host():
 		return ERR_CONNECTION_ERROR
 		
+	var cmd_str = command + "\n"
 	if data != null:
-		_peer.put_data(("%s %s\n" % [command, data]).to_utf8_buffer())
-	else:
-		_peer.put_data((command + "\n").to_utf8_buffer())
+		cmd_str = "%s %s\n" % [command, data]
 
+	_peer.put_data(cmd_str.to_utf8_buffer())
 	return OK
 
 func _handle_commands(command: String, data: String):
