@@ -23,6 +23,7 @@ var _players_node: Node3D = null
 var _target_search_timer: float = 0.0
 var _target_search_interval: float = 0.2 # Search every 200ms
 var _is_mob: bool = false
+var _is_pet: bool = false
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -43,8 +44,9 @@ func _ready() -> void:
 	
 	# Cache faction to avoid string comparisons every tick
 	_is_mob = entity.is_in_group(&"mobs")
+	_is_pet = entity.is_in_group(&"pets")
 	
-	print("[AI] Brain started for ", entity.name)
+	print("[AI] Brain started for %s (Pet: %s, Mob: %s)" % [entity.name, _is_pet, _is_mob])
 	# Disable normal process, LogicComponent will call tick()
 	set_process(false)
 
@@ -78,6 +80,11 @@ func tick(delta: float) -> void:
 func _logic_idle() -> void:
 	_stop_inputs()
 	
+	# If we are a pet with an owner, prefer following over idling
+	if _is_pet and is_instance_valid(owner_node):
+		state = State.FOLLOW_OWNER
+		return
+	
 	# Only search for targets occasionally
 	if _target_search_timer <= 0:
 		_find_nearest_target()
@@ -89,7 +96,8 @@ func _logic_idle() -> void:
 func _logic_chase() -> void:
 	if not is_instance_valid(target) or target.get("sync_is_dead"):
 		target = null
-		state = State.IDLE
+		# Pets go back to following owner, mobs to idle
+		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
 		
 	var dist = entity.global_position.distance_to(target.global_position)
@@ -100,7 +108,7 @@ func _logic_chase() -> void:
 		
 	if dist > detection_range:
 		target = null
-		state = State.IDLE
+		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
 		
 	# Move towards target
@@ -108,7 +116,7 @@ func _logic_chase() -> void:
 
 func _logic_attack() -> void:
 	if not is_instance_valid(target) or target.get("sync_is_dead"):
-		state = State.IDLE
+		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
 		
 	var dist = entity.global_position.distance_to(target.global_position)
@@ -137,6 +145,16 @@ func _logic_follow() -> void:
 		
 	var dist = entity.global_position.distance_to(owner_node.global_position)
 	
+	# If we see an enemy while following, switch to CHASE (unless we are a HEALER)
+	if _target_search_timer <= 0:
+		var type = entity.get("pet_type") if entity.has_method("get") else ""
+		if type != "HEAL":
+			_find_nearest_target()
+			if target:
+				state = State.CHASE
+				return
+		_target_search_timer = _target_search_interval
+
 	if dist > follow_distance:
 		_move_towards(owner_node.global_position)
 	else:
@@ -179,8 +197,14 @@ func _find_nearest_target() -> void:
 		# FACTION CHECK via Groups (Optimized)
 		var is_potential_mob = potential.is_in_group(&"mobs")
 		
-		# Only target if we are from different factions
-		if _is_mob == is_potential_mob:
+		# Pets target mobs, Mobs target humans/pets
+		var am_i_hostile_to_it = false
+		if _is_pet:
+			am_i_hostile_to_it = is_potential_mob
+		elif _is_mob:
+			am_i_hostile_to_it = potential.is_in_group(&"players") or potential.is_in_group(&"pets")
+		
+		if not am_i_hostile_to_it:
 			continue
 		
 		var d = entity.global_position.distance_to(potential.global_position)

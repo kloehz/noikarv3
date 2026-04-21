@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://common/PetEntity.gd" id="1_pet"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
@@ -8,23 +8,12 @@
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
 [ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
+[ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
+[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
 radius = 0.4
 height = 1.2
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pet"]
-albedo_color = Color(0.2, 0.6, 1.0, 1)
-emission_enabled = true
-emission = Color(0.1, 0.4, 0.8, 1)
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_pet"]
-material = SubResource("StandardMaterial3D_pet")
-radius = 0.4
-height = 1.2
-
-[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
-viewport_path = NodePath("HealthViewport")
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pet"]
 properties/0/path = NodePath(".:global_position")
@@ -40,9 +29,9 @@ script = ExtResource("1_pet")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
 shape = SubResource("CapsuleShape3D_pet")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-mesh = SubResource("CapsuleMesh_pet")
+[node name="LogicComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+script = ExtResource("9_logic")
+entity = NodePath("..")
 
 [node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
 script = ExtResource("7_visual")
@@ -63,7 +52,7 @@ render_target_update_mode = 4
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 billboard = 1
 no_depth_test = true
-texture = SubResource("ViewportTexture_health")
+texture_filter = 0
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
@@ -87,12 +76,18 @@ script = ExtResource("4_server_state")
 [node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
 script = ExtResource("5_state_sync")
 root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead"])
+properties = Array[String]([":sync_health", ":sync_is_dead", ":pet_type_sync", ":power_level_sync"])
 
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity"])
+input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
+
+[node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("10_interpolator")
+root = NodePath("..")
+properties = Array[String]([":global_position", ":quaternion"])
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_pet")

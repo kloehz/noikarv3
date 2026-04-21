@@ -1,20 +1,25 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://MODELS_TEST/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="PackedScene" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
 
-[node name="Aatrox" type="Node3D" unique_id=969678927]
+[node name="Aatrox" type="Node3D"]
 script = ExtResource("1_actor")
+anim_idle = "Idle_Base"
+anim_run = "Run"
+anim_attack = "Cast_Damage"
+anim_death = "Death"
+anim_hit = "Damage_Hurt"
 
-[node name="Model" parent="." unique_id=515501182 instance=ExtResource("2_model")]
+[node name="Model" parent="." instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)
 
-[node name="Sockets" type="Node3D" parent="Model" unique_id=2121407755]
+[node name="Sockets" type="Node3D" parent="Model"]
 
-[node name="WeaponMain" type="Marker3D" parent="Model/Sockets" unique_id=1604189832]
+[node name="WeaponMain" type="Marker3D" parent="Model/Sockets"]
 transform = Transform3D(1, 0, 1.4210855e-14, 0, 1, 0, -1.4210855e-14, 0, 1, 0, 50, 0)
 
-[node name="Chest" type="Marker3D" parent="Model/Sockets" unique_id=1185862313]
+[node name="Chest" type="Marker3D" parent="Model/Sockets"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
 
-[node name="Feet" type="Marker3D" parent="Model/Sockets" unique_id=1373705031]
+[node name="Feet" type="Marker3D" parent="Model/Sockets"]

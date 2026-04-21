@@ -235,5 +235,9 @@ func apply_stats(new_hp: int) -> void:
 func _update_visuals() -> void:
 	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)
 
+func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	if has_node("LogicComponent"):
+		$LogicComponent._rollback_tick(delta, tick, is_fresh)
+
 func _is_server_authority() -> bool:
 	return multiplayer == null or multiplayer.is_server()

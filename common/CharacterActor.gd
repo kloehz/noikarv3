@@ -17,21 +17,15 @@ func _ready() -> void:
 	_find_sockets()
 
 func _find_animation_player() -> void:
-	# Try common paths
-	animation_player = get_node_or_null("AnimationPlayer")
-	if not animation_player:
-		animation_player = get_node_or_null("Model/AnimationPlayer")
-	
-	# If still not found, search recursively (useful for varied model imports)
-	if not animation_player:
-		for child in get_children():
-			if child is AnimationPlayer:
-				animation_player = child
-				break
-			var sub_child = child.get_node_or_null("AnimationPlayer")
-			if sub_child:
-				animation_player = sub_child
-				break
+	animation_player = _recursive_find_class(self, "AnimationPlayer")
+
+func _recursive_find_class(node: Node, class_name_to_find: String) -> Node:
+	if node.get_class() == class_name_to_find:
+		return node
+	for child in node.get_children():
+		var found = _recursive_find_class(child, class_name_to_find)
+		if found: return found
+	return null
 
 func _find_sockets() -> void:
 	socket_weapon_main = _find_socket_path("WeaponMain")

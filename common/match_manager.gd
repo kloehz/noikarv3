@@ -238,50 +238,42 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	pet.global_position = pos
 	
 	players_container.add_child(pet, true)
+	
+	# Initial pet setup on server
+	var type_str = "ATTACK"
+	match type_int:
+		1: type_str = "TANK"
+		2: type_str = "HEAL"
+		
+	if pet.has_method("setup_pet"):
+		pet.setup_pet(owner_id, type_str, souls)
+	
 	_setup_pet_logic.call_deferred(pet, owner_id, type_int, souls)
 
 func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, souls: int) -> void:
 	if not is_instance_valid(pet): return
 	
-	var type_str = "ATTACK"
-	match type_int:
-		0: type_str = "ATTACK"
-		1: type_str = "TANK"
-		2: type_str = "HEAL"
-	
-	pet.owner_id = owner_id
-	pet.pet_type = type_str
-	pet.power_level = souls
-	
-	# Force apply stats based on power_level (souls)
-	var base_hp = 100
-	if type_str == "TANK": base_hp = 250
-	elif type_str == "HEAL": base_hp = 80
-	
-	var multiplier = 1.0 + (souls * 0.1)
-	if pet.has_method("apply_stats"):
-		pet.apply_stats(int(base_hp * multiplier))
+	# (pet_type and power_level already set by setup_pet)
 	
 	# ADD AI Brain for Pet
 	var ai = AI_COMPONENT.new()
 	ai.name = "AIComponent"
 	pet.add_child(ai)
 	
-	if type_str == "HEAL":
+	if type_int == 2: # HEAL
 		ai.state = 3 # State.FOLLOW_OWNER
 	else:
-		ai.state = 1 # State.CHASE (Will switch to follow if no targets, handled in AI)
+		ai.state = 1 # State.CHASE
 	
 	# Find owner node to follow
 	var owner_node = players_container.get_node_or_null(str(owner_id))
 	if owner_node:
 		ai.owner_node = owner_node
-		print("[MatchManager] Pet %s (%s) linked to owner %s" % [pet.name, type_str, owner_node.name])
 	
 	# Ensure authority is correct for AI to run on server
 	pet.set_multiplayer_authority(1)
 	
-	print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.get("max_health") if pet.get("max_health") else 0])
+	print("[MatchManager] Pet %s AI initialized for owner %d" % [pet.name, owner_id])
 
 func _spawn_player(peer_id: int) -> void:
 	# Check if already spawned

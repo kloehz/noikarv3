@@ -1,99 +1,90 @@
 # res://common/PetEntity.gd
-extends CharacterBody3D
+extends BaseEntity
 
 ## A summoned pet that follows its owner and attacks enemies.
 ## Scales with power_level (souls invested).
+## Inherits from BaseEntity to reuse component handling logic.
 
 @export var owner_id: int = 1
 @export var pet_type: String = "ATTACK"
 @export var power_level: int = 0
 
-@onready var server_state: Node = $ServerState
-@onready var health_comp: Node = $HealthComponent
-
-var character_actor: CharacterActor
-# Static cache to avoid repeated load calls
-static var _actor_scene_cache: Dictionary = {}
-
 # Skill Timers
 var skill_timer: float = 0.0
 var skill_interval: float = 4.0 # Base interval
 
-func _ready() -> void:
-	# Assign groups for AI
-	add_to_group(&"pets")
-	
-	_load_character_actor()
-	_setup_visuals()
-	
-	if not multiplayer.is_server():
-		return
-		
-	# Scale stats based on power level
-	_apply_power_scaling()
-	print("[Pet] %s summoned for %d | Power: %d" % [pet_type, owner_id, power_level])
+var _has_setup: bool = false
 
-func _load_character_actor() -> void:
+func _ready() -> void:
+	# BaseEntity handles authority and initial loading
+	# We override _ready to add pet-specific signals
+	super._ready()
+	
+	if server_state:
+		# On clients, wait for synchronized data to trigger setup
+		if not multiplayer.is_server():
+			server_state.pet_data_received.connect(func(t, l): setup_pet(owner_id, t, l))
+			# Initial check in case it's already there
+			if not server_state.pet_type_sync.is_empty():
+				setup_pet(owner_id, server_state.pet_type_sync, server_state.power_level_sync)
+	
+	if multiplayer.is_server():
+		# On server, we'll wait for setup_pet call from MatchManager
+		pass
+
+func setup_pet(p_owner_id: int, p_type: String, p_souls: int) -> void:
+	if _has_setup and pet_type == p_type: return
+	
+	owner_id = p_owner_id
+	pet_type = p_type
+	power_level = p_souls
+	
+	_has_setup = true
+	
+	# Update path for BaseEntity to load the correct model
 	var actor_path = "res://scenes/characters/PetDmg.tscn"
 	match pet_type:
 		"TANK": actor_path = "res://scenes/characters/PetTank.tscn"
 		"HEAL": actor_path = "res://scenes/characters/PetHeal.tscn"
 	
-	var scene: PackedScene
-	if _actor_scene_cache.has(actor_path):
-		scene = _actor_scene_cache[actor_path]
-	else:
-		scene = load(actor_path) as PackedScene
-		_actor_scene_cache[actor_path] = scene
+	character_actor_path = actor_path
 	
-	if scene:
-		character_actor = scene.instantiate() as CharacterActor
-		
-		# Headless check
-		if GameManager._is_headless_environment():
-			_strip_visual_nodes(character_actor)
-		
-		add_child(character_actor)
-		# Correct 180 degree rotation for models
-		character_actor.rotation.y = PI
-		character_actor.set_multiplayer_authority(1)
-
-func _setup_visuals() -> void:
-	if GameManager._is_headless_environment(): return
+	# Re-load model via BaseEntity logic
+	if character_actor:
+		character_actor.queue_free()
+	_load_character_actor()
+	
+	# Re-link VisualComponent
 	if has_node("VisualComponent"):
-		$VisualComponent.entity = self
 		$VisualComponent.setup_with_actor(character_actor)
 		$VisualComponent.update_name(pet_type)
-
-func _strip_visual_nodes(node: Node) -> void:
-	if not node: return
-	var to_remove = []
-	for child in node.get_children():
-		if child is MeshInstance3D or child is Sprite3D or child is Decal or child is GPUParticles3D or child is CPUParticles3D:
-			to_remove.append(child)
-		else:
-			_strip_visual_nodes(child)
-	for child in to_remove:
-		child.free()
+	
+	if multiplayer.is_server() and server_state:
+		server_state.pet_type_sync = p_type
+		server_state.power_level_sync = p_souls
+		_apply_power_scaling()
+		print("[Pet] %s setup for %d | Power: %d" % [pet_type, owner_id, power_level])
 
 func _apply_power_scaling() -> void:
 	var multiplier = 1.0 + (power_level * 0.1)
 	
-	if health_comp:
+	if server_state:
 		var base_hp = 100
 		if pet_type == "TANK": base_hp = 250
 		elif pet_type == "HEAL": base_hp = 80
 		
-		health_comp.max_health = int(base_hp * multiplier)
-		health_comp.reset_health()
+		apply_stats(int(base_hp * multiplier))
 	
 	# Visual scaling
 	scale = Vector3.ONE * (1.0 + (power_level * 0.02))
 
-func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
+func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	# 1. Physics/Movement (Inherited logic from BaseEntity -> LogicComponent)
+	super._rollback_tick(delta, tick, is_fresh)
+	
+	# 2. Skill execution logic (Server only)
 	if not is_fresh or not multiplayer.is_server(): return
 	
-	# Skill execution logic
 	skill_timer += delta
 	if skill_timer >= skill_interval:
 		_execute_skill()
