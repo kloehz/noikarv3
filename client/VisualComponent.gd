@@ -100,15 +100,16 @@ func update_name(new_name: String) -> void:
 
 ## Play attack visual effect (melee hit).
 func play_shoot_effect() -> void:
-	print("[VisualComponent] play_shoot_effect called for: ", entity.name)
-	if _actor:
-		# Force restart if already playing
-		if _actor.animation_player:
-			_actor.animation_player.stop()
-		_actor.play_animation("Attack") 
-		_anim_lock_time = 0.5 # Wait 0.5s before allowing Idle/Run to override
-	else:
+	if not _actor: 
 		_play_fallback_punch()
+		return
+		
+	# Force restart if already playing to show rapid attacks
+	if _actor.animation_player:
+		_actor.animation_player.stop()
+	
+	_actor.play_animation("Attack") 
+	_anim_lock_time = 0.5 # Wait 0.5s before allowing Idle/Run to override
 
 func _update_debug_pos(debug_mesh: MeshInstance3D) -> void:
 	var combat = entity.get_node_or_null("CombatComponent")
@@ -123,12 +124,26 @@ func _process(delta: float) -> void:
 	# Handle Attack Debug visuals deterministically based on synchronized state
 	_handle_attack_debug_visuals()
 	_handle_summon_preview()
+	_handle_networked_attack_vfx()
 	
 	if _anim_lock_time > 0:
 		_anim_lock_time -= delta
 		return
 		
 	_update_movement_animations()
+
+func _handle_networked_attack_vfx() -> void:
+	var combat = entity.get_node_or_null("CombatComponent")
+	if not combat: return
+	
+	# Detect if the attack counter increased on the network
+	var sync_count = combat.get("sync_attack_count")
+	var local_count = combat.get("_local_attack_count")
+	
+	# Robust null check to prevent Red Screen of Death
+	if sync_count != null and local_count != null and sync_count > local_count:
+		combat.set("_local_attack_count", sync_count)
+		play_shoot_effect()
 
 func _handle_summon_preview() -> void:
 	if not entity or not entity.is_multiplayer_authority(): return
@@ -189,6 +204,14 @@ func _update_movement_animations() -> void:
 	
 	var logic = entity.get_node_or_null("LogicComponent")
 	if logic:
+		var is_dashing = logic.get("is_dashing") as bool
+		if is_dashing:
+			_actor.animation_player.speed_scale = 2.0 # Fast animation during dash
+			_actor.play_animation("Run")
+			return
+		else:
+			_actor.animation_player.speed_scale = 1.0
+
 		var velocity = logic.get("current_velocity") as Vector3
 		if velocity and velocity.length() > 0.1:
 			_actor.play_animation("Run")
@@ -235,6 +258,7 @@ func play_death_effect() -> void:
 
 ## Play spawn/respawn visual effect.
 func play_spawn_effect() -> void:
+	print("[Visual] Play spawn effect for: ", entity.name if entity else "Unknown")
 	if _actor:
 		_actor.visible = true
 		_actor.play_animation("Idle")

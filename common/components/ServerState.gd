@@ -44,6 +44,8 @@ signal pet_data_received(type: String, level: int)
 @export var is_stunned: bool = false
 @export var stun_remaining_time: float = 0.0
 
+@export var sync_is_dashing: bool = false
+
 @export var pet_type_sync: String = "":
 	set(v):
 		if pet_type_sync == v: return
@@ -73,6 +75,7 @@ func _ready() -> void:
 		sync.add_state(self, "knockback_remaining_time")
 		sync.add_state(self, "is_stunned")
 		sync.add_state(self, "stun_remaining_time")
+		sync.add_state(self, "sync_is_dashing")
 		sync.add_state(self, "pet_type_sync")
 		sync.add_state(self, "power_level_sync")
 		if sync.has_method("process_settings"):

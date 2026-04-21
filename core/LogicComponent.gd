@@ -10,7 +10,17 @@ extends Node
 @export var current_velocity: Vector3 = Vector3.ZERO
 @export var input_axis: Vector2 = Vector2.ZERO
 @export var is_shooting: bool = false
+@export var is_dashing: bool = false
 @export var summon_type: int = -1 # 0: Attack, 1: Tank, 2: Heal
+
+# Dash settings
+const DASH_SPEED_MULT: float = 3.0
+const DASH_DURATION: float = 0.2
+const DASH_COOLDOWN_TIME: float = 1.2
+
+var dash_timer: float = 0.0
+var dash_cooldown: float = 0.0
+var dash_direction: Vector3 = Vector3.ZERO
 @export var look_yaw: float = 0.0
 
 # Preview system variables
@@ -81,14 +91,22 @@ func _handle_preview_input(event: InputEvent) -> void:
 			elif not event.pressed and is_previewing and preview_type == keys[key]:
 				# Key released, confirm summon if not cancelled
 				if not preview_cancelled:
-					summon_type = preview_type
-					print("[Logic] Summon confirmed: ", summon_type)
-					# Reset local state to prevent multiple triggers
-					is_previewing = false
-					preview_type = -1
-				else:
-					is_previewing = false
-					preview_type = -1
+					print("[Logic] Intentando invocar tipo %d. Buscando MatchManager..." % preview_type)
+					
+					# 1. Try Group
+					var mm = get_tree().get_first_node_in_group(&"match_manager")
+					# 2. Try Absolute Path
+					if not mm: mm = get_node_or_null("/root/Main")
+					# 3. Try Hierarchy
+					if not mm: mm = get_parent().get_parent().get_parent()
+					
+					if mm and mm.has_method("spawn_totem_rpc"):
+						print("[Logic] MatchManager encontrado. Enviando RPC...")
+						mm.spawn_totem_rpc.rpc_id(1, preview_type)
+					else:
+						print("[Logic ERROR] ¡No se pudo encontrar el MatchManager para invocar!")
+				is_previewing = false
+				preview_type = -1
 
 func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
@@ -114,21 +132,45 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 	if is_human and _is_local_authority():
 		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 		is_shooting = Input.is_action_pressed("shoot")
+		
+		# Dash trigger (Prediction handled by Netfox)
+		if Input.is_action_just_pressed("dash") and dash_cooldown <= 0 and not is_dashing:
+			is_dashing = true
+			dash_timer = DASH_DURATION
+			dash_cooldown = DASH_COOLDOWN_TIME
+			
+			# Dash in movement direction, or forward if standing still
+			var move_dir = Vector3.ZERO
+			if input_axis.length() > 0:
+				var forward = -entity.global_transform.basis.z
+				var right = entity.global_transform.basis.x
+				move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+			else:
+				move_dir = -entity.global_transform.basis.z
+			
+			dash_direction = move_dir
+
 	elif not is_human and multiplayer.is_server():
 		# AI CONTROL: Only on server for non-humans
 		var ai = entity.get_node_or_null("AIComponent")
 		if ai and ai.has_method("tick"):
 			ai.tick(delta)
 
-	# Authoritative Summoning (Server only, for humans)
-	if is_human and summon_type != -1:
-		if multiplayer.is_server():
-			var match_manager = get_tree().root.find_child("Main", true, false)
-			if match_manager and match_manager.has_method("request_spawn_totem"):
-				match_manager.request_spawn_totem(entity, summon_type)
+	# --- Dash & Cooldown Management ---
+	if dash_timer > 0:
+		dash_timer -= delta
+		if dash_timer <= 0:
+			is_dashing = false
+			
+	if dash_cooldown > 0:
+		dash_cooldown -= delta
 		
-		# CRITICAL: Reset summon_type on BOTH client and server 
-		# after it has been used/predicted for this tick.
+	# Sync dash state to ServerState for visuals
+	if _server_state and multiplayer.is_server():
+		_server_state.sync_is_dashing = is_dashing
+
+	# Authoritative Summoning input consumed
+	if is_human and summon_type != -1:
 		summon_type = -1 
 	
 	_apply_movement(delta)
@@ -138,7 +180,10 @@ func _apply_movement(delta: float) -> void:
 	
 	if _server_state and _server_state.is_stunned:
 		current_velocity = current_velocity.move_toward(Vector3.ZERO, acceleration * 10.0 * delta)
-	# 0. Authoritative Knockback State from ServerState
+	# 0. DASH Logic (Predictive)
+	elif is_dashing:
+		current_velocity = dash_direction * (max_speed * DASH_SPEED_MULT)
+	# 1. Authoritative Knockback State from ServerState
 	elif _server_state and _server_state.knockback_remaining_time > 0:
 		current_velocity = _server_state.knockback_velocity
 		

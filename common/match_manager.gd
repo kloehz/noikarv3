@@ -26,10 +26,7 @@ var peer_data: Dictionary = {}
 var _pending_name: String = ""
 
 func _ready() -> void:
-	if GameManager._is_headless_environment():
-		print("[DEBUG] MatchManager: Headless mode detected. Stripping visual nodes from world.")
-		_strip_visual_nodes_recursive(get_tree().root)
-
+	add_to_group(&"match_manager")
 	EventBus.server_started.connect(_on_server_started)
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
@@ -212,9 +209,18 @@ func _setup_elite_logic(elite: Node3D) -> void:
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return
-	if not player.server_state or player.server_state.sync_souls <= 0: return
+	
+	if not player.server_state:
+		print("[SUMMON ERROR] Player %s has no ServerState!" % player.name)
+		return
+		
+	if player.server_state.sync_souls <= 0:
+		print("[SUMMON ERROR] Player %s has no souls! (Souls: %d)" % [player.name, player.server_state.sync_souls])
+		return
 	
 	var souls = player.server_state.sync_souls
+	print("[SUMMON REQUEST] Player %s requesting type %d with %d souls" % [player.name, type, souls])
+	
 	player.server_state.sync_souls = 0
 	
 	var totem = TOTEM_SCENE.instantiate()
@@ -224,6 +230,7 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	totem.global_position = player.global_position + (forward * 2.0)
 	
 	players_container.add_child(totem, true)
+	print("[SERVER] !!! SUMMONING TOTEM !!! at %s for player %s" % [totem.global_position, player.name])
 	totem.totem_type = type
 	totem.stored_souls = souls
 	
@@ -274,6 +281,32 @@ func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, souls: int) -> 
 	pet.set_multiplayer_authority(1)
 	
 	print("[MatchManager] Pet %s AI initialized for owner %d" % [pet.name, owner_id])
+
+@rpc("any_peer", "call_local", "reliable")
+func spawn_totem_rpc(type: int) -> void:
+	if not multiplayer.is_server(): return
+	
+	var sender_id = multiplayer.get_remote_sender_id()
+	# Handle Host/Singleplayer edge cases
+	if sender_id == 0 or sender_id == 1:
+		sender_id = 1
+	
+	print("[SERVER] Petición de invocación (Tipo %d) de Peer %d" % [type, sender_id])
+	
+	# Find player node (Try string first, then authority)
+	var player = players_container.get_node_or_null(str(sender_id)) as BaseEntity
+	if not player:
+		for child in players_container.get_children():
+			if child.get_multiplayer_authority() == sender_id:
+				player = child as BaseEntity
+				break
+	
+	if player:
+		var current_souls = player.server_state.sync_souls if player.server_state else 0
+		print("[SERVER] Validando player %s. Almas disponibles: %d" % [player.name, current_souls])
+		request_spawn_totem(player, type)
+	else:
+		print("[SERVER ERROR] ¡No se pudo encontrar al jugador %d para procesar el RPC!" % sender_id)
 
 func _spawn_player(peer_id: int) -> void:
 	# Check if already spawned

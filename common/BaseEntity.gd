@@ -181,6 +181,11 @@ func _setup_visuals() -> void:
 		$VisualComponent.entity = self
 		$VisualComponent.setup_with_actor(character_actor)
 		_update_visuals()
+		
+		# FORCE UI Update for health
+		var hc = get_node_or_null("HealthComponent")
+		if hc:
+			_on_sync_health_changed(hc.current_health, hc.max_health)
 	
 	var is_local_player = (name == str(multiplayer.get_unique_id()))
 	var camera = get_node_or_null("CameraPivot/Camera3D")

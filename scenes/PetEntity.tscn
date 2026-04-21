@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://common/PetEntity.gd" id="1_pet"]
 [ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
@@ -10,15 +10,31 @@
 [ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
 [ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
+[ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
 radius = 0.4
 height = 1.2
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_pet_atk"]
+radius = 1.5
+
+[sub_resource type="ViewportTexture" id="ViewportTexture_pet_health"]
+viewport_path = NodePath("HealthViewport")
+
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pet"]
 properties/0/path = NodePath(".:global_position")
 properties/0/spawn = true
 properties/0/replication_mode = 1
+properties/1/path = NodePath(".:owner_id")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+properties/2/path = NodePath(".:pet_type")
+properties/2/spawn = true
+properties/2/replication_mode = 1
+properties/3/path = NodePath(".:power_level")
+properties/3/spawn = true
+properties/3/replication_mode = 1
 
 [node name="PetEntity" type="CharacterBody3D"]
 collision_layer = 2
@@ -29,9 +45,19 @@ script = ExtResource("1_pet")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
 shape = SubResource("CapsuleShape3D_pet")
 
+[node name="ShapeCast3D" type="ShapeCast3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -1)
+shape = SubResource("SphereShape3D_pet_atk")
+target_position = Vector3(0, 0, 0)
+max_results = 8
+collide_with_areas = true
+
 [node name="LogicComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
 script = ExtResource("9_logic")
 entity = NodePath("..")
+
+[node name="CombatComponent" type="Node" parent="."]
+script = ExtResource("11_combat")
 
 [node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
 script = ExtResource("7_visual")
@@ -52,7 +78,7 @@ render_target_update_mode = 4
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 billboard = 1
 no_depth_test = true
-texture_filter = 0
+texture = SubResource("ViewportTexture_pet_health")
 
 [node name="NameLabel" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
@@ -81,7 +107,8 @@ properties = Array[String]([":sync_health", ":sync_is_dead", ":pet_type_sync", "
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity"])
+enable_prediction = true
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count", "LogicComponent:is_dashing", "LogicComponent:dash_direction"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]

@@ -42,13 +42,11 @@ var _state_timer: float = 0.0
 @export var active_time: float = 0.3   # Tiempo que dura la esfera visible
 @export var recovery_time: float = 0.3 # Cooldown
 
-func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
-	# Detect state change for visuals ONLY on fresh ticks
-	if is_fresh:
-		if current_attack_state == AttackState.STARTUP and _last_emitted_state != AttackState.STARTUP:
-			attack_started.emit()
-		_last_emitted_state = current_attack_state
+# Networked Visuals: Use a counter to trigger VFX reliably across the network
+@export var sync_attack_count: int = 0
+var _local_attack_count: int = 0
 
+func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if not is_fresh:
 		return
 	
@@ -83,6 +81,8 @@ func _update_attack_state(delta: float) -> void:
 func _start_attack() -> void:
 	current_attack_state = AttackState.STARTUP
 	_state_timer = startup_time
+	sync_attack_count += 1
+	attack_started.emit() # Local feedback
 
 func _on_attack_active() -> void:
 	# Damage is server-authoritative
@@ -101,21 +101,28 @@ func _on_attack_active() -> void:
 
 
 func _handle_hit(collider: Node) -> void:
-	print("[Combat] Server hit collider: ", collider.name)
-	
 	# Check for Hurtbox in the collider or its children
 	var hurtbox = collider as HurtboxComponent
 	if not hurtbox and collider.has_node("HurtboxComponent"):
 		hurtbox = collider.get_node("HurtboxComponent")
 		
 	if hurtbox:
-		# PROTECTION: Don't hit yourself!
-		if hurtbox.get_parent() == entity:
-			return
-			
 		var target = hurtbox.get_parent()
-		print("[Combat] Valid Hurtbox found on: ", target.name)
 		
+		# PROTECTION: Faction Check
+		if target == entity: return
+		
+		# If I am a pet, don't hit my owner
+		if entity.is_in_group(&"pets"):
+			var owner_id = entity.get("owner_id")
+			if str(owner_id) == target.name: return
+			# Don't hit other pets of the same owner
+			if target.is_in_group(&"pets") and target.get("owner_id") == owner_id: return
+			
+		# If I am a player, don't hit my own pets
+		if entity.name.is_valid_int():
+			if target.is_in_group(&"pets") and str(target.get("owner_id")) == entity.name: return
+
 		# APPLY DAMAGE
 		hurtbox.receive_hit_data(damage, entity)
 		

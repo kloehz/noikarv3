@@ -34,23 +34,28 @@ func _process(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if _is_collected: return
 	
-	# Check if it's a player (BaseEntity with a peer-based name)
-	if body is BaseEntity and body.name.is_valid_int():
-		_collect(body)
+	# Check if it's a player or a pet (base entities)
+	var entity = body as BaseEntity
+	if entity and (entity.is_in_group(&"players") or entity.name.is_valid_int()):
+		_collect(entity)
 
 func _on_area_entered(area: Area3D) -> void:
 	if _is_collected: return
 	
 	var parent = area.get_parent()
-	if parent is BaseEntity and parent.name.is_valid_int():
-		_collect(parent)
+	var entity = parent as BaseEntity
+	if entity and (entity.is_in_group(&"players") or entity.name.is_valid_int()):
+		_collect(entity)
 
 func _collect(player: BaseEntity) -> void:
 	_is_collected = true
-	print("[Soul] Collected by ", player.name)
+	print("[SERVER] Soul collected by %s" % player.name)
 	
 	if player.server_state:
 		player.server_state.sync_souls += 1
+		print("[SERVER] Player %s now has %d souls" % [player.name, player.server_state.sync_souls])
+	else:
+		print("[SERVER ERROR] Player %s has no ServerState to store souls!" % player.name)
 	
 	collected.emit(player)
 	queue_free()
