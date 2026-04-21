@@ -4,7 +4,7 @@ extends CharacterBody3D
 ## A destructible totem used to summon pets.
 ## Allies can contribute souls to increase the pet's power.
 
-signal summoned(type: String, souls: int)
+signal summoned(type: int, souls: int)
 signal destroyed
 
 enum TotemType { ATTACK, TANK, HEAL }
@@ -50,7 +50,8 @@ func add_souls(amount: int) -> void:
 func _complete_ritual() -> void:
 	_is_active = false
 	print("[Totem] Ritual Complete! Summoning pet with ", stored_souls, " souls")
-	summoned.emit(TotemType.keys()[totem_type], stored_souls)
+	# Emit type as integer to match MatchManager expectation
+	summoned.emit(int(totem_type), stored_souls)
 	queue_free()
 
 func _on_health_depleted() -> void:

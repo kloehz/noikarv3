@@ -151,8 +151,11 @@ func _submit_name_to_server(player_name: String) -> void:
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
 	
-	# If a non-player entity (dummy/mob) died, spawn a soul
-	if not entity.name.is_valid_int():
+	# Only mobs (Dummies, Elites) and NOT players or Pets spawn souls
+	var is_player = entity.name.is_valid_int()
+	var is_pet = entity.name.begins_with("PET")
+	
+	if not is_player and not is_pet:
 		_spawn_soul(entity.global_position)
 		
 	print("[MatchManager] Entity died: ", entity.name, ". Respawning in 3 seconds...")
@@ -224,26 +227,37 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	totem.totem_type = type
 	totem.stored_souls = souls
 	
-	totem.summoned.connect(func(p_type, p_souls): _on_totem_complete(player.name.to_int(), p_type, p_souls, totem.global_position))
+	totem.summoned.connect(func(p_type: int, p_souls: int): 
+		_on_totem_complete(player.name.to_int(), p_type, p_souls, totem.global_position)
+	)
 	print("[MatchManager] Totem requested by ", player.name, " in front at ", totem.global_position)
 
-func _on_totem_complete(owner_id: int, type: String, souls: int, pos: Vector3) -> void:
+func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) -> void:
 	var pet = PET_SCENE.instantiate()
-	pet.global_position = pos
 	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
+	pet.global_position = pos
 	
 	players_container.add_child(pet, true)
-	_setup_pet_logic.call_deferred(pet, owner_id, type, souls)
+	_setup_pet_logic.call_deferred(pet, owner_id, type_int, souls)
 
-func _setup_pet_logic(pet: Node3D, owner_id: int, type: String, souls: int) -> void:
+func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, souls: int) -> void:
 	if not is_instance_valid(pet): return
 	
+	var type_str = "ATTACK"
+	match type_int:
+		0: type_str = "ATTACK"
+		1: type_str = "TANK"
+		2: type_str = "HEAL"
+	
 	pet.owner_id = owner_id
-	pet.pet_type = type
+	pet.pet_type = type_str
 	pet.power_level = souls
 	
 	# Force apply stats based on power_level (souls)
-	var base_hp = 100 if type != "TANK" else 200
+	var base_hp = 100
+	if type_str == "TANK": base_hp = 250
+	elif type_str == "HEAL": base_hp = 80
+	
 	var multiplier = 1.0 + (souls * 0.1)
 	if pet.has_method("apply_stats"):
 		pet.apply_stats(int(base_hp * multiplier))
@@ -252,15 +266,22 @@ func _setup_pet_logic(pet: Node3D, owner_id: int, type: String, souls: int) -> v
 	var ai = AI_COMPONENT.new()
 	ai.name = "AIComponent"
 	pet.add_child(ai)
-	ai.state = 3 # State.FOLLOW_OWNER
+	
+	if type_str == "HEAL":
+		ai.state = 3 # State.FOLLOW_OWNER
+	else:
+		ai.state = 1 # State.CHASE (Will switch to follow if no targets, handled in AI)
 	
 	# Find owner node to follow
 	var owner_node = players_container.get_node_or_null(str(owner_id))
 	if owner_node:
 		ai.owner_node = owner_node
-		print("[MatchManager] Pet %s linked to owner %s" % [pet.name, owner_node.name])
+		print("[MatchManager] Pet %s (%s) linked to owner %s" % [pet.name, type_str, owner_node.name])
 	
-	print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.max_health])
+	# Ensure authority is correct for AI to run on server
+	pet.set_multiplayer_authority(1)
+	
+	print("[MatchManager] Pet %s fully initialized with %d HP" % [pet.name, pet.get("max_health") if pet.get("max_health") else 0])
 
 func _spawn_player(peer_id: int) -> void:
 	# Check if already spawned
@@ -272,7 +293,7 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Spawn at a safe position (away from dummies)
 	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
-	player.position = spawn_pos
+	player.global_position = spawn_pos
 	
 	players_container.add_child(player, true)
 	

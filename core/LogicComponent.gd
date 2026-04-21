@@ -13,6 +13,11 @@ extends Node
 @export var summon_type: int = -1 # 0: Attack, 1: Tank, 2: Heal
 @export var look_yaw: float = 0.0
 
+# Preview system variables
+var is_previewing: bool = false
+var preview_type: int = -1
+var preview_cancelled: bool = false
+
 var camera_pivot: Node3D
 var _server_state: Node
 @export var mouse_sensitivity: float = 0.005
@@ -39,11 +44,51 @@ func _ready() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not _is_local_authority(): return
-	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+			
+	# Camera movement (Continuous when mouse is captured)
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		look_yaw -= event.relative.x * mouse_sensitivity
 		if camera_pivot:
 			var new_rot_x = camera_pivot.rotation.x - event.relative.y * mouse_sensitivity
 			camera_pivot.rotation.x = clamp(new_rot_x, deg_to_rad(-60), deg_to_rad(30))
+
+	# Hold-to-Preview Logic
+	_handle_preview_input(event)
+
+func _handle_preview_input(event: InputEvent) -> void:
+	# Right click cancels preview
+	if is_previewing and event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			preview_cancelled = true
+			is_previewing = false
+			preview_type = -1
+			print("[Logic] Summon cancelled by right-click")
+
+	# Detect keys 1, 2, 3
+	var keys = {
+		KEY_1: 0,
+		KEY_2: 1,
+		KEY_3: 2
+	}
+	
+	for key in keys:
+		if event is InputEventKey and event.keycode == key:
+			if event.pressed and not is_previewing:
+				is_previewing = true
+				preview_type = keys[key]
+				preview_cancelled = false
+				print("[Logic] Previewing summon type: ", preview_type)
+			elif not event.pressed and is_previewing and preview_type == keys[key]:
+				# Key released, confirm summon if not cancelled
+				if not preview_cancelled:
+					summon_type = preview_type
+					print("[Logic] Summon confirmed: ", summon_type)
+					# Reset local state to prevent multiple triggers
+					is_previewing = false
+					preview_type = -1
+				else:
+					is_previewing = false
+					preview_type = -1
 
 func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
@@ -52,18 +97,23 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 	if not entity or entity.get("sync_is_dead"): 
 		input_axis = Vector2.ZERO
 		return
+	
+	# Handle Stun
+	if _server_state and _server_state.is_stunned:
+		input_axis = Vector2.ZERO
+		is_shooting = false
+		if multiplayer.is_server():
+			_server_state.stun_remaining_time -= delta
+			if _server_state.stun_remaining_time <= 0:
+				_server_state.is_stunned = false
+		_apply_movement(delta)
+		return
 		
 	var is_human = entity.name.is_valid_int()
 	
 	if is_human and _is_local_authority():
 		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 		is_shooting = Input.is_action_pressed("shoot")
-		
-		# Summon Inputs
-		if Input.is_key_pressed(KEY_1): summon_type = 0
-		elif Input.is_key_pressed(KEY_2): summon_type = 1
-		elif Input.is_key_pressed(KEY_3): summon_type = 2
-		else: summon_type = -1
 	elif not is_human and multiplayer.is_server():
 		# AI CONTROL: Only on server for non-humans
 		var ai = entity.get_node_or_null("AIComponent")
@@ -71,19 +121,25 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 			ai.tick(delta)
 
 	# Authoritative Summoning (Server only, for humans)
-	if is_human and multiplayer.is_server() and summon_type != -1:
-		var match_manager = get_tree().root.find_child("Main", true, false)
-		if match_manager and match_manager.has_method("request_spawn_totem"):
-			match_manager.request_spawn_totem(entity, summon_type)
-			summon_type = -1 # Consume input
+	if is_human and summon_type != -1:
+		if multiplayer.is_server():
+			var match_manager = get_tree().root.find_child("Main", true, false)
+			if match_manager and match_manager.has_method("request_spawn_totem"):
+				match_manager.request_spawn_totem(entity, summon_type)
+		
+		# CRITICAL: Reset summon_type on BOTH client and server 
+		# after it has been used/predicted for this tick.
+		summon_type = -1 
 	
 	_apply_movement(delta)
 
 func _apply_movement(delta: float) -> void:
 	if not entity: return
 	
+	if _server_state and _server_state.is_stunned:
+		current_velocity = current_velocity.move_toward(Vector3.ZERO, acceleration * 10.0 * delta)
 	# 0. Authoritative Knockback State from ServerState
-	if _server_state and _server_state.knockback_remaining_time > 0:
+	elif _server_state and _server_state.knockback_remaining_time > 0:
 		current_velocity = _server_state.knockback_velocity
 		
 		# Server manages the timer

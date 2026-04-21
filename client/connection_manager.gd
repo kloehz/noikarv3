@@ -35,6 +35,7 @@ func _ready() -> void:
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
 	
 	room_info_label.text = "Not Connected"
+	_show_menu() # Ensure mouse is visible and UI is shown at start
 
 func _on_host_pressed() -> void:
 	print("[DEBUG] Host button pressed")
@@ -208,11 +209,15 @@ func _on_connection_failed() -> void:
 
 func _hide_menu() -> void:
 	main_panel.visible = false
+	# Capture mouse when hiding menu, but only if we are connected or hosting
+	if multiplayer.multiplayer_peer and multiplayer.multiplayer_peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	# We don't disable process_mode anymore so we can still handle RoomInfo
 	# and toggle menu back with Input
 
 func _show_menu() -> void:
 	main_panel.visible = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func _input(event: InputEvent) -> void:
 	var toggle_pressed = event.is_action_pressed("ui_cancel")
@@ -221,10 +226,11 @@ func _input(event: InputEvent) -> void:
 		toggle_pressed = toggle_pressed or event.is_action_pressed("toggle_menu")
 
 	if toggle_pressed:
+		get_viewport().set_input_as_handled()
 		if main_panel.visible:
 			_hide_menu()
 		else:
-			_show_panel_manual() # Re-show panel
+			_show_menu() # Re-show panel via the proper method
 
 func _show_panel_manual() -> void:
 	main_panel.visible = true

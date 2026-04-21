@@ -12,6 +12,7 @@ extends Node
 ## Current active character actor (model + animations)
 var _actor: CharacterActor
 var _anim_lock_time: float = 0.0
+var _preview_mesh: MeshInstance3D
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -121,12 +122,43 @@ func _process(delta: float) -> void:
 	
 	# Handle Attack Debug visuals deterministically based on synchronized state
 	_handle_attack_debug_visuals()
+	_handle_summon_preview()
 	
 	if _anim_lock_time > 0:
 		_anim_lock_time -= delta
 		return
 		
 	_update_movement_animations()
+
+func _handle_summon_preview() -> void:
+	if not entity or not entity.is_multiplayer_authority(): return
+	
+	var logic = entity.get_node_or_null("LogicComponent")
+	if not logic or not logic.is_previewing:
+		if _preview_mesh: _preview_mesh.visible = false
+		return
+		
+	if not _preview_mesh:
+		_preview_mesh = MeshInstance3D.new()
+		var box = BoxMesh.new()
+		box.size = Vector3(0.8, 1.5, 0.8)
+		_preview_mesh.mesh = box
+		
+		var mat = StandardMaterial3D.new()
+		mat.transparency = StandardMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(0.0, 1.0, 1.0, 0.4) # Cyan ghost
+		mat.shading_mode = StandardMaterial3D.SHADING_MODE_UNSHADED
+		_preview_mesh.material_override = mat
+		
+		# Add as child of entity but we'll use global pos
+		entity.add_child(_preview_mesh)
+		
+	_preview_mesh.visible = true
+	
+	# Position 2 meters in front of player
+	var forward = -entity.global_transform.basis.z
+	_preview_mesh.global_position = entity.global_position + (forward * 2.0)
+	_preview_mesh.global_rotation = entity.global_rotation
 
 func _handle_attack_debug_visuals() -> void:
 	var debug_mesh = get_parent().get_node_or_null("AttackDebugMesh") as MeshInstance3D
