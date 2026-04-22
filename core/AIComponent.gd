@@ -201,6 +201,8 @@ func _find_nearest_target() -> void:
 	
 	# Determine which groups to search based on MY faction
 	var hostile_groups: Array[StringName] = []
+	var my_owner_id = entity.get("owner_id") if entity.has_method("get") else 0
+	
 	if _is_pet:
 		hostile_groups = [&"mobs"]
 	elif _is_mob:
@@ -217,6 +219,16 @@ func _find_nearest_target() -> void:
 			if not is_instance_valid(potential): continue
 			if potential.get("sync_is_dead"): continue
 			
+			# === ALLY EXCLUSION LOGIC ===
+			# Pets should never target their owner or other pets
+			if _is_pet:
+				if potential.name == str(my_owner_id): continue
+				if potential.is_in_group(&"pets"): continue
+				
+			# Mobs should never target other mobs
+			if _is_mob and potential.is_in_group(&"mobs"):
+				continue
+				
 			var d = entity.global_position.distance_to(potential.global_position)
 			if d < best_dist:
 				best_dist = d

@@ -27,6 +27,7 @@ viewport_path = NodePath("HealthViewport")
 
 [node name="TrainingDummy" type="CharacterBody3D" unique_id=152396552]
 script = ExtResource("1_base_entity")
+max_health = 70
 entity_name = "DUMMY"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1428761023]
