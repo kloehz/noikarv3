@@ -2,9 +2,10 @@
 class_name BaseEntity
 extends CharacterBody3D
 
-# regions
+#region
 @warning_ignore("unused_signal")
 signal health_changed(current: int, maximum: int)
+@warning_ignore("unused_signal")
 signal died
 #endregion
 
@@ -142,6 +143,31 @@ func _load_character_actor() -> void:
 		# Ensure authority matches
 		if is_instance_valid(character_actor):
 			character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
+		
+		# --- DATA-DRIVEN COMBAT CONFIGURATION ---
+		_configure_combat_from_actor(character_actor)
+		_configure_ai_from_actor(character_actor)
+
+## Read AttackDefinition exports from the Actor and configure CombatComponent.
+func _configure_combat_from_actor(actor: CharacterActor) -> void:
+	if not actor: return
+	var combat = get_node_or_null("CombatComponent")
+	if not combat: return
+	
+	if actor.primary_attack or actor.secondary_attack:
+		combat.configure(actor.primary_attack, actor.secondary_attack)
+		print("[BaseEntity] %s: Combat configured from actor (%s)" % [name, actor.name])
+
+## Read suggested ranges from the Actor and configure AIComponent.
+func _configure_ai_from_actor(actor: CharacterActor) -> void:
+	if not actor: return
+	var ai = get_node_or_null("AIComponent")
+	if not ai: return
+	
+	ai.attack_range = actor.suggested_attack_range
+	ai.detection_range = actor.suggested_detection_range
+	ai.follow_distance = actor.suggested_follow_distance
+	print("[BaseEntity] %s: AI configured from actor (atk_range=%.1f)" % [name, actor.suggested_attack_range])
 
 func _strip_visual_nodes(node: Node) -> void:
 	if not node: return

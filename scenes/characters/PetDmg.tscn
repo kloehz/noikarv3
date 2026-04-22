@@ -1,15 +1,30 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://ctlxp3fm188nk"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_4bs3f"]
+[ext_resource type="PackedScene" uid="uid://b3ms2o4mufeko" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="3_gcmxm"]
 
-[node name="PetDmg" type="Node3D"]
+[sub_resource type="Resource" id="Resource_8wvth"]
+script = ExtResource("3_gcmxm")
+metadata/_custom_type_script = "uid://dubhplo6iij4o"
+radius = 1.5
+offset = Vector3(0, 0.6, -1.0)
+
+[sub_resource type="Resource" id="Resource_j8txw"]
+script = ExtResource("2_4bs3f")
+shape_data = SubResource("Resource_8wvth")
+base_damage = 12.0
+cooldown = 0.8
+knockback_force = 8.0
+startup_time = 0.05
+active_time = 0.2
+recovery_time = 0.3
+metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
+
+[node name="PetDmg" type="Node3D" unique_id=1885021586]
 script = ExtResource("1_actor")
-anim_idle = "Idle_Base"
-anim_run = "Run"
-anim_attack = "Cast_Damage"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
+primary_attack = SubResource("Resource_j8txw")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=422167521 instance=ExtResource("2_model")]
 transform = Transform3D(0.006, 0, 0, 0, 0.006, 0, 0, 0, 0.006, 0, 0, 0)

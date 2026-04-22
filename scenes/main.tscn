@@ -1,6 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cwj4434m5oq88"]
 
-[ext_resource type="Script" path="res://common/match_manager.gd" id="1_match"]
+[ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
 [ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
 [ext_resource type="PackedScene" path="res://scenes/TrainingDummy.tscn" id="3_dummy"]
 
@@ -25,7 +25,7 @@ spawn_path = NodePath("../Players")
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=11221122]
 
-[node name="SoulCounter" type="Label" parent="HUD"]
+[node name="SoulCounter" type="Label" parent="HUD" unique_id=212813293]
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 150.0

@@ -56,6 +56,13 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 @export var suggested_detection_range: float = 15.0
 @export var suggested_follow_distance: float = 4.0
 
+# --- Attack Definitions (read by BaseEntity → CombatComponent.configure()) ---
+@export_group("Attacks")
+## Primary attack definition (left-click / main attack).
+@export var primary_attack: AttackDefinition
+## Secondary attack definition (right-click / alt attack). Optional.
+@export var secondary_attack: AttackDefinition
+
 ## Play an animation by standard name
 func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	if not animation_player:

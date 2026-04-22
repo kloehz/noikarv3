@@ -113,10 +113,10 @@ func play_shoot_effect() -> void:
 
 func _update_debug_pos(debug_mesh: MeshInstance3D) -> void:
 	var combat = entity.get_node_or_null("CombatComponent")
-	if not combat or not combat.shapecast: return
+	if not combat or not combat._melee_shapecast: return
 	
 	# Match exactly what the server is checking
-	debug_mesh.global_position = combat.shapecast.global_position
+	debug_mesh.global_position = combat._melee_shapecast.global_position
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
@@ -258,7 +258,6 @@ func play_death_effect() -> void:
 
 ## Play spawn/respawn visual effect.
 func play_spawn_effect() -> void:
-	print("[Visual] Play spawn effect for: ", entity.name if entity else "Unknown")
 	if _actor:
 		_actor.visible = true
 		_actor.play_animation("Idle")

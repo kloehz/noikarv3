@@ -91,11 +91,6 @@ func setup_pet(p_owner_id: int, p_type: String, p_souls: int) -> void:
 		server_state.power_level_sync = p_souls
 		_apply_power_scaling()
 		
-		# Configure CombatComponent for basic attacks
-		var combat = get_node_or_null("CombatComponent")
-		if combat:
-			combat.damage = BASE_DMG + (power_level * 1)
-			
 		print("[Pet] %s setup for %d | Power: %d" % [pet_type, owner_id, power_level])
 
 func _apply_actor_specs_to_ai() -> void:
@@ -141,22 +136,28 @@ func _execute_skill() -> void:
 
 func _skill_attack() -> void:
 	var ai = get_node_or_null("AIComponent")
-	if ai and ai.target:
-		# Trigger visual via Combat Component
+	if not ai or not ai.target: return
+	
+	var target = ai.target
+	
+	# High-tier AoE skill: bypass CombatComponent and hit all enemies in range
+	if power_level >= LVL_TIER_2 and randf() < 0.4:
+		var crit_chance = 0.2 if power_level >= LVL_TIER_3 else 0.0
+		var is_crit = randf() < crit_chance
+		var skill_damage = (BASE_DMG + (power_level * 2)) * (2.0 if is_crit else 1.0)
+		# Trigger visual
 		var combat = get_node_or_null("CombatComponent")
 		if combat:
 			combat.sync_attack_count += 1
 			combat.attack_started.emit()
-
-		var target = ai.target
-		var crit_chance = 0.2 if power_level >= LVL_TIER_3 else 0.0
-		var is_crit = randf() < crit_chance
-		var skill_damage = (BASE_DMG + (power_level * 2)) * (2.0 if is_crit else 1.0)
-
-		if power_level >= LVL_TIER_2 and randf() < 0.4:
-			_apply_aoe_damage(target.global_position, 4.0, int(skill_damage))
-		else:
-			_apply_damage_to(target, int(skill_damage))
+		_apply_aoe_damage(target.global_position, 4.0, int(skill_damage))
+		return
+	
+	# Normal attack: trigger CombatComponent via LogicComponent (uses AttackDefinition)
+	var logic = get_node_or_null("LogicComponent")
+	if logic:
+		logic.is_shooting = true
+		# Will be reset on next tick when AIComponent calls _stop_inputs() or CHASE
 
 func _skill_tank() -> void:
 	var combat = get_node_or_null("CombatComponent")

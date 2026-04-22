@@ -1,25 +1,33 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://davs13pw5ij65"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://b3ms2o4mufeko" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_ovqw5"]
+[ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="3_rw1vp"]
 
-[node name="Aatrox" type="Node3D"]
+[sub_resource type="Resource" id="Resource_x7733"]
+script = ExtResource("3_rw1vp")
+metadata/_custom_type_script = "uid://dubhplo6iij4o"
+
+[sub_resource type="Resource" id="Resource_626ej"]
+script = ExtResource("2_ovqw5")
+shape_data = SubResource("Resource_x7733")
+aoe_radius = 0.0
+metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
+
+[node name="Aatrox" type="Node3D" unique_id=884139682]
 script = ExtResource("1_actor")
-anim_idle = "Idle_Base"
-anim_run = "Run"
-anim_attack = "Cast_Damage"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
+primary_attack = SubResource("Resource_626ej")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=945301661 instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)
 
-[node name="Sockets" type="Node3D" parent="Model"]
+[node name="Sockets" type="Node3D" parent="Model" unique_id=1507552712]
 
-[node name="WeaponMain" type="Marker3D" parent="Model/Sockets"]
+[node name="WeaponMain" type="Marker3D" parent="Model/Sockets" unique_id=247360141]
 transform = Transform3D(1, 0, 1.4210855e-14, 0, 1, 0, -1.4210855e-14, 0, 1, 0, 50, 0)
 
-[node name="Chest" type="Marker3D" parent="Model/Sockets"]
+[node name="Chest" type="Marker3D" parent="Model/Sockets" unique_id=506649074]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
 
-[node name="Feet" type="Marker3D" parent="Model/Sockets"]
+[node name="Feet" type="Marker3D" parent="Model/Sockets" unique_id=1660683247]
