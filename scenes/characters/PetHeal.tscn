@@ -21,7 +21,6 @@ projectile_speed = 18.0
 base_damage = 8.0
 cooldown = 2.0
 knockback_force = 6.0
-startup_time = 0.1
 active_time = 0.15
 recovery_time = 0.2
 metadata/_custom_type_script = "uid://dc5gph2xvvn1b"

@@ -16,7 +16,7 @@ const AI_COMPONENT = preload("res://core/AIComponent.gd")
 @export var elite_hp_multiplier: float = 2.5
 @export var elite_damage_multiplier: float = 1.6
 # --- CONFIGURATION: SERVER AUTO-CLOSE ---
-@export var shutdown_delay: float = 30.0 # Wait 30s before closing empty room
+@export var shutdown_delay: float = 15.0 # Wait 30s before closing empty room
 # ---------------------------------
 
 var _shutdown_timer: SceneTreeTimer = null
@@ -160,22 +160,41 @@ func _submit_name_to_server(player_name: String) -> void:
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
 	
-	# Only mobs (Dummies, Elites) and NOT players or Pets spawn souls
 	var is_player = entity.name.is_valid_int()
 	var is_pet = entity.name.begins_with("PET")
+	var is_mob = entity.name.begins_with("MOB_") or entity.name.begins_with("Dummy") or entity.name.begins_with("ELITE")
 	
-	if not is_player and not is_pet:
+	# Mobs drop souls on death
+	if is_mob:
 		_spawn_soul(entity.global_position)
-		
-	print("[MatchManager] Entity died: ", entity.name, ". Respawning in 3 seconds...")
 	
-	# Wait for respawn (Normal respawn logic)
-	await get_tree().create_timer(3.0).timeout
+	# --- PETS: Die permanently (no respawn) ---
+	if is_pet:
+		print("[MatchManager] Pet %s died. Removing." % entity.name)
+		await get_tree().create_timer(2.0).timeout
+		if is_instance_valid(entity):
+			entity.queue_free()
+		return
 	
-	if is_instance_valid(entity) and entity.has_method("respawn"):
-		var random_pos = Vector3(randf_range(-10, 10), 0.1, randf_range(-10, 10))
-		print("[MatchManager] Respawning ", entity.name, " at ", random_pos)
-		entity.respawn(random_pos)
+	# --- MOBS: Respawn as new enemy after delay ---
+	if is_mob:
+		var old_pos = entity.global_position
+		print("[MatchManager] Mob %s died. Respawning in 5s." % entity.name)
+		await get_tree().create_timer(5.0).timeout
+		if is_instance_valid(entity):
+			entity.queue_free()
+		# Spawn a new enemy at a random position
+		var random_pos = Vector3(randf_range(-10, 10), 0, randf_range(-10, 10))
+		spawn_enemy("AATROX", random_pos)
+		return
+	
+	# --- PLAYERS: Respawn in place ---
+	if is_player:
+		print("[MatchManager] Player %s died. Respawning in 3s." % entity.name)
+		await get_tree().create_timer(3.0).timeout
+		if is_instance_valid(entity) and entity.has_method("respawn"):
+			var random_pos = Vector3(randf_range(-10, 10), 0.1, randf_range(-10, 10))
+			entity.respawn(random_pos)
 
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
