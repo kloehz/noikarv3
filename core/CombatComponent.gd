@@ -36,6 +36,9 @@ var _secondary_cooldown: float = 0.0
 # --- Networked Visuals ---
 ## Counter incremented on each attack start for rollback-safe VFX sync.
 @export var sync_attack_count: int = 0
+## Local counter used by VisualComponent to detect new attacks.
+## NOT a rollback state property — visual-only.
+var _local_attack_count: int = 0
 
 func _ready() -> void:
 	entity = get_parent() as BaseEntity

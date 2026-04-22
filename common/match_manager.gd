@@ -49,6 +49,7 @@ func _initialize_static_ai() -> void:
 			var ai = AI_COMPONENT.new()
 			ai.name = "AIComponent"
 			child.add_child(ai)
+			ai.refresh_faction()
 			ai.state = 1 # State.CHASE
 			print("[MatchManager] Static AI initialized for %s" % child.name)
 
@@ -263,12 +264,20 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, _souls: int) -> void:
 	if not is_instance_valid(pet): return
 
+	# Ensure authority is correct for AI to run on server FIRST
+	pet.set_multiplayer_authority(1)
+
 	# FIND EXISTING AI Brain (Now in .tscn)
 	var ai = pet.get_node_or_null("AIComponent")
 	if not ai:
 		ai = AI_COMPONENT.new()
 		ai.name = "AIComponent"
 		pet.add_child(ai)
+
+	# Force refresh faction cache — groups were assigned in BaseEntity._ready()
+	# but AIComponent._ready() ran before that.
+	if ai.has_method("refresh_faction"):
+		ai.refresh_faction()
 
 	if type_int == 2: # HEAL
 		ai.state = 3 # State.FOLLOW_OWNER
@@ -279,9 +288,6 @@ func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, _souls: int) ->
 	var owner_node = players_container.get_node_or_null(str(owner_id))
 	if owner_node:
 		ai.owner_node = owner_node
-
-	# Ensure authority is correct for AI to run on server
-	pet.set_multiplayer_authority(1)
 
 	print("[MatchManager] Pet %s AI configured for owner %d" % [pet.name, owner_id])
 

@@ -7,9 +7,11 @@
 
 [sub_resource type="Resource" id="Resource_8wvth"]
 script = ExtResource("3_gcmxm")
+shape_type = 1
+radius = 0.2
+length = 0.7
+offset = Vector3(0, 0.5, -1.5)
 metadata/_custom_type_script = "uid://dubhplo6iij4o"
-radius = 1.5
-offset = Vector3(0, 0.6, -1.0)
 
 [sub_resource type="Resource" id="Resource_j8txw"]
 script = ExtResource("2_4bs3f")
@@ -19,11 +21,11 @@ cooldown = 0.8
 knockback_force = 8.0
 startup_time = 0.05
 active_time = 0.2
-recovery_time = 0.3
 metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
 
 [node name="PetDmg" type="Node3D" unique_id=1885021586]
 script = ExtResource("1_actor")
+suggested_attack_range = 2.0
 primary_attack = SubResource("Resource_j8txw")
 
 [node name="Model" parent="." unique_id=422167521 instance=ExtResource("2_model")]

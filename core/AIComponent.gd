@@ -24,6 +24,7 @@ var _target_search_timer: float = 0.0
 var _target_search_interval: float = 0.2 # Search every 200ms
 var _is_mob: bool = false
 var _is_pet: bool = false
+var _faction_cached: bool = false
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -42,18 +43,29 @@ func _ready() -> void:
 	# Cache players node to avoid expensive root searches
 	_players_node = get_tree().root.find_child("Players", true, false)
 	
-	# Cache faction to avoid string comparisons every tick
-	_is_mob = entity.is_in_group(&"mobs")
-	_is_pet = entity.is_in_group(&"pets")
+	# NOTE: Faction cache is NOT set here — groups may not be assigned yet.
+	# It's lazily evaluated on tick() or forced via refresh_faction().
 	
-	print("[AI] Brain started for %s (Pet: %s, Mob: %s)" % [entity.name, _is_pet, _is_mob])
+	print("[AI] Brain started for %s" % entity.name)
 	# Disable normal process, LogicComponent will call tick()
 	set_process(false)
+
+## Force refresh the faction cache. Called by MatchManager after setup_pet().
+func refresh_faction() -> void:
+	if not entity: return
+	_is_mob = entity.is_in_group(&"mobs")
+	_is_pet = entity.is_in_group(&"pets")
+	_faction_cached = true
+	print("[AI] Faction refreshed for %s (Pet: %s, Mob: %s)" % [entity.name, _is_pet, _is_mob])
 
 func tick(delta: float) -> void:
 	if not entity or entity.get("sync_is_dead"):
 		if logic: _stop_inputs()
 		return
+	
+	# Lazy faction cache — ensures groups are assigned before we check
+	if not _faction_cached:
+		refresh_faction()
 	
 	if not logic:
 		logic = entity.get_node_or_null("LogicComponent")
@@ -189,27 +201,27 @@ func _find_nearest_target() -> void:
 	var best_dist = detection_range
 	var new_target = null
 	
-	if not _players_node: return
+	# Determine which groups to search based on MY faction
+	var hostile_groups: Array[StringName] = []
+	if _is_pet:
+		hostile_groups = [&"mobs"]
+	elif _is_mob:
+		hostile_groups = [&"players", &"pets"]
+	else:
+		# Unknown faction, can't find targets
+		target = new_target
+		return
 	
-	for potential in _players_node.get_children():
-		if potential == entity or potential.get("sync_is_dead"): continue
-		
-		# FACTION CHECK via Groups (Optimized)
-		var is_potential_mob = potential.is_in_group(&"mobs")
-		
-		# Pets target mobs, Mobs target humans/pets
-		var am_i_hostile_to_it = false
-		if _is_pet:
-			am_i_hostile_to_it = is_potential_mob
-		elif _is_mob:
-			am_i_hostile_to_it = potential.is_in_group(&"players") or potential.is_in_group(&"pets")
-		
-		if not am_i_hostile_to_it:
-			continue
-		
-		var d = entity.global_position.distance_to(potential.global_position)
-		if d < best_dist:
-			best_dist = d
-			new_target = potential
+	# Search ALL entities in hostile groups (not just Players container)
+	for group_name in hostile_groups:
+		for potential in get_tree().get_nodes_in_group(group_name):
+			if potential == entity: continue
+			if not is_instance_valid(potential): continue
+			if potential.get("sync_is_dead"): continue
 			
+			var d = entity.global_position.distance_to(potential.global_position)
+			if d < best_dist:
+				best_dist = d
+				new_target = potential
+	
 	target = new_target

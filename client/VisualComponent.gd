@@ -49,7 +49,11 @@ func _connect_signals() -> void:
 	var combat = entity.get_node_or_null("CombatComponent")
 	if combat:
 		print("[DEBUG] VisualComponent %s connected to CombatComponent" % entity.name)
-		combat.attack_started.connect(play_shoot_effect)
+		# NOTE: We do NOT connect attack_started here.
+		# Attack animations are driven by _handle_networked_attack_vfx()
+		# which is rollback-safe (uses sync_attack_count vs _local_attack_count).
+		# Connecting the signal directly would fire animations during rollback
+		# re-simulations, causing visual glitches.
 
 	var server_state = entity.get_node_or_null("ServerState")
 	if server_state:

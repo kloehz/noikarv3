@@ -53,6 +53,10 @@ func _ready() -> void:
 		print("[DEBUG] LogicComponent %s: ServerState linked" % entity_name)
 
 func _input(event: InputEvent) -> void:
+	# CRITICAL: Only human-controlled entities should process input.
+	# AI entities (pets, mobs) have authority=1 which matches the host's peer ID,
+	# so _is_local_authority() alone is NOT enough to filter them out.
+	if not entity or not entity.name.is_valid_int(): return
 	if not _is_local_authority(): return
 			
 	# Camera movement (Continuous when mouse is captured)
