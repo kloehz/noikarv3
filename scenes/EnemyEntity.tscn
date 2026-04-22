@@ -1,97 +1,96 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene format=3 uid="uid://dg7xnmokokkvl"]
 
-[ext_resource type="Script" path="res://common/EnemyEntity.gd" id="1_enemy"]
-[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
-[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
-[ext_resource type="Script" path="res://common/components/ServerState.gd" id="4_server_state"]
-[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
-[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" uid="uid://c3goa8tp8s75j" path="res://common/EnemyEntity.gd" id="1_enemy"]
+[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
+[ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="4_server_state"]
+[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
+[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
-[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
+[ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
-[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
+[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
 [ext_resource type="Script" path="res://core/AIComponent.gd" id="12_ai"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_enemy"]
-radius = 0.5
 height = 1.8
 
 [sub_resource type="ViewportTexture" id="ViewportTexture_enemy_health"]
 viewport_path = NodePath("HealthViewport")
 
-[node name="EnemyEntity" type="CharacterBody3D"]
+[node name="EnemyEntity" type="CharacterBody3D" unique_id=1256991762]
 collision_layer = 2
 collision_mask = 3
 script = ExtResource("1_enemy")
+max_health = 60
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1623028830]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_enemy")
 
-[node name="LogicComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+[node name="LogicComponent" type="Node" parent="." unique_id=1460874790 node_paths=PackedStringArray("entity")]
 script = ExtResource("9_logic")
 entity = NodePath("..")
 
-[node name="CombatComponent" type="Node" parent="."]
+[node name="CombatComponent" type="Node" parent="." unique_id=1344988219]
 script = ExtResource("11_combat")
+damage = 5
 
-[node name="AIComponent" type="Node" parent="."]
+[node name="AIComponent" type="Node" parent="." unique_id=1718352451]
 script = ExtResource("12_ai")
-detection_range = 15.0
-attack_range = 2.5
+attack_range = 2.0
 
-[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+[node name="VisualComponent" type="Node" parent="." unique_id=598100410 node_paths=PackedStringArray("entity")]
 script = ExtResource("7_visual")
 entity = NodePath("..")
 
-[node name="HealthComponent" type="Node3D" parent="."]
+[node name="HealthComponent" type="Node3D" parent="." unique_id=1563257727]
 script = ExtResource("2_health")
 
-[node name="HealthViewport" type="SubViewport" parent="."]
+[node name="HealthViewport" type="SubViewport" parent="." unique_id=405432674]
 transparent_bg = true
 handle_input_locally = false
 size = Vector2i(105, 14)
 render_target_update_mode = 4
 
-[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("8_health_bar")]
+[node name="HealthBar2D" parent="HealthViewport" unique_id=1124731622 instance=ExtResource("8_health_bar")]
 
-[node name="HealthBar3D" type="Sprite3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.0, 0)
+[node name="HealthBar3D" type="Sprite3D" parent="." unique_id=257149998]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
 billboard = 1
 no_depth_test = true
 texture = SubResource("ViewportTexture_enemy_health")
 
-[node name="NameLabel" type="Label3D" parent="."]
+[node name="NameLabel" type="Label3D" parent="." unique_id=2092030566]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.3, 0)
 billboard = 1
 no_depth_test = true
 text = "ENEMY"
 font_size = 28
-outline_size = 12
 
-[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+[node name="HurtboxComponent" type="Area3D" parent="." unique_id=600526532 node_paths=PackedStringArray("health_component")]
 script = ExtResource("3_hurtbox")
 health_component = NodePath("../HealthComponent")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent" unique_id=161616060]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_enemy")
 
-[node name="ServerState" type="Node" parent="."]
+[node name="ServerState" type="Node" parent="." unique_id=701567687]
 script = ExtResource("4_server_state")
 
-[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+[node name="StateSynchronizer" type="Node" parent="ServerState" unique_id=270941945 node_paths=PackedStringArray("root")]
 script = ExtResource("5_state_sync")
 root = NodePath("..")
 properties = Array[String]([":sync_health", ":sync_is_dead"])
 
-[node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+[node name="RollbackSynchronizer" type="Node" parent="." unique_id=1931327252 node_paths=PackedStringArray("root")]
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count"])
 
-[node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
+[node name="TickInterpolator" type="Node" parent="." unique_id=1174372783 node_paths=PackedStringArray("root")]
 script = ExtResource("10_interpolator")
 root = NodePath("..")
 properties = Array[String]([":global_position", ":quaternion"])

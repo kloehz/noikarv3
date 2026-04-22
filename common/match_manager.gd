@@ -37,7 +37,7 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	
 	# Spawn initial enemies if server
-	if multiplayer.is_server():
+	if multiplayer.is_server() and GameManager._is_headless_environment():
 		_spawn_initial_enemies.call_deferred()
 
 ## Spawn initial test enemies in the world.
@@ -47,6 +47,7 @@ func _spawn_initial_enemies() -> void:
 		{ "type": "AATROX", "pos": Vector3(-3, 0, -4) },
 		{ "type": "AATROX", "pos": Vector3(3, 0, -4) },
 	]
+	print("[MatchManager] se ejecuta dos veces")
 	for data in spawn_points:
 		spawn_enemy(data["type"], data["pos"])
 
@@ -60,7 +61,6 @@ func spawn_enemy(enemy_type: String, pos: Vector3) -> Node:
 	
 	if enemy.has_method("setup_enemy"):
 		enemy.setup_enemy(enemy_type, pos)
-	
 	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
 	return enemy
 

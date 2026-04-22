@@ -1,17 +1,17 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bvbjvutgbeanf"]
 
-[ext_resource type="Script" path="res://common/BaseEntity.gd" id="1_base_entity"]
+[ext_resource type="Script" uid="uid://bdfmixdkvrx7a" path="res://common/BaseEntity.gd" id="1_base_entity"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="3_visual_comp"]
-[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
-[ext_resource type="Script" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
-[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
-[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
-[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
+[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
+[ext_resource type="Script" uid="uid://dhsunkxq0v3wy" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
+[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
+[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
-[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
-[ext_resource type="Script" path="res://common/components/ServerState.gd" id="11_server_state"]
-[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
+[ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
+[ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
+[ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -83,6 +83,7 @@ entity = NodePath("..")
 
 [node name="CombatComponent" type="Node" parent="." unique_id=1122334455]
 script = ExtResource("9_combat")
+damage = 5
 
 [node name="AttackDebugMesh" type="MeshInstance3D" parent="." unique_id=777888999]
 visible = false
@@ -101,7 +102,7 @@ handle_input_locally = false
 size = Vector2i(105, 14)
 render_target_update_mode = 4
 
-[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("12_health_bar_2d")]
+[node name="HealthBar2D" parent="HealthViewport" unique_id=309968043 instance=ExtResource("12_health_bar_2d")]
 
 [node name="HealthBar3D" type="Sprite3D" parent="." unique_id=111222333]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
