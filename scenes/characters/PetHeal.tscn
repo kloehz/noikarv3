@@ -1,15 +1,37 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://dufjtrkqnpdx"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/enemies/chip/chip.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://1k1tg3c67006" path="res://assets/models/enemies/chip/chip.tscn" id="2_model"]
+[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="3_drxug"]
+[ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="4_73y5m"]
+[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="5_projectile"]
 
-[node name="PetHeal" type="Node3D"]
+[sub_resource type="Resource" id="Resource_ycqw4"]
+script = ExtResource("4_73y5m")
+radius = 0.3
+length = 0.3
+metadata/_custom_type_script = "uid://dubhplo6iij4o"
+
+[sub_resource type="Resource" id="Resource_ma8gr"]
+script = ExtResource("3_drxug")
+attack_type = 1
+shape_data = SubResource("Resource_ycqw4")
+projectile_scene = ExtResource("5_projectile")
+projectile_speed = 18.0
+base_damage = 8.0
+cooldown = 2.0
+knockback_force = 6.0
+startup_time = 0.1
+active_time = 0.15
+recovery_time = 0.2
+metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
+
+[node name="PetHeal" type="Node3D" unique_id=727927510]
 script = ExtResource("1_actor")
-anim_idle = "Idle_Base"
-anim_run = "Run"
-anim_attack = "Cast_Damage"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
+suggested_attack_range = 12.0
+suggested_detection_range = 18.0
+suggested_follow_distance = 6.0
+primary_attack = SubResource("Resource_ma8gr")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=130844904 instance=ExtResource("2_model")]
 transform = Transform3D(0.005, 0, 0, 0, 0.005, 0, 0, 0, 0.005, 0, 0, 0)

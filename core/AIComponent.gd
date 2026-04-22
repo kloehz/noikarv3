@@ -171,8 +171,6 @@ func _logic_follow() -> void:
 		_move_towards(owner_node.global_position)
 	else:
 		_stop_inputs()
-		# Smoothly face the same way as owner
-		logic.look_yaw = lerp_angle(logic.look_yaw, owner_node.rotation.y, 0.1)
 
 func _move_towards(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()

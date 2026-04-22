@@ -23,6 +23,12 @@ size = Vector3(100, 2, 100)
 _spawnable_scenes = PackedStringArray("res://scenes/BaseEntity.tscn", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "res://scenes/TrainingDummy.tscn")
 spawn_path = NodePath("../Players")
 
+[node name="Projectiles" type="Node3D" parent="."]
+
+[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
+_spawnable_scenes = PackedStringArray("res://scenes/ProjectileEntity.tscn")
+spawn_path = NodePath("../Projectiles")
+
 [node name="HUD" type="CanvasLayer" parent="." unique_id=11221122]
 
 [node name="SoulCounter" type="Label" parent="HUD" unique_id=212813293]
