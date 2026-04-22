@@ -57,10 +57,11 @@ func _ready() -> void:
 	# Set authority recursively
 	set_multiplayer_authority(peer_id, true)
 	
+	# ALWAYS load the actor because it contains logic specs (ranges, timings)
+	# BaseEntity's load_character_actor now handles headless stripping safely.
 	_load_character_actor()
 	
 	if server_state:
-		print("[DEBUG] BaseEntity %s configuring server_state" % name)
 		# Force server authority for the state container recursively
 		server_state.set_multiplayer_authority(1, true)
 		
@@ -71,26 +72,16 @@ func _ready() -> void:
 		if multiplayer.is_server():
 			server_state.max_health = max_health
 			server_state.sync_health = max_health
-	else:
-		print("[WARNING] BaseEntity %s: ServerState not found!" % name)
 
 	# Netfox requires re-processing settings if authority changes after entering tree
 	if has_node("RollbackSynchronizer"):
 		var rb = get_node("RollbackSynchronizer")
 		if rb and rb.has_method("process_settings"):
-			print("[DEBUG] BaseEntity %s processing RollbackSynchronizer settings" % name)
 			rb.process_settings()
 
 	_setup_visuals()
 	_setup_netfox()
 	_setup_health_component()
-	
-	# SECURITY & CRASH FIX: Strip visual nodes from BaseEntity itself in headless mode
-	if GameManager._is_headless_environment():
-		print("[DEBUG] Headless environment: Stripping visual nodes from BaseEntity root: %s" % name)
-		_strip_visual_nodes(self)
-	
-	print("[DEBUG] BaseEntity %s initialization complete" % name)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
 	# Update local max_health if server changed it
@@ -101,13 +92,6 @@ func _on_sync_health_changed(current: int, maximum: int) -> void:
 		hc.max_health = maximum
 		hc.current_health = current
 	
-	var old_health = hc.current_health if hc else 100
-	
-	if current < old_health:
-		print("[BaseEntity] %s took damage! %d -> %d" % [name, old_health, current])
-		EventBus.entity_damaged.emit(self, old_health - current, null)
-
-	if hc: hc.current_health = current
 	health_changed.emit(current, maximum)
 
 func _on_sync_death_changed(is_dead: bool) -> void:
@@ -115,7 +99,6 @@ func _on_sync_death_changed(is_dead: bool) -> void:
 		# DEATH PENALTY: Lose half of souls if it's a player
 		if multiplayer.is_server() and server_state and server_state.sync_souls > 0:
 			var lost_souls = server_state.sync_souls / 2
-			print("[BaseEntity] %s DIED - Losing %d souls" % [name, lost_souls])
 			server_state.sync_souls -= lost_souls
 		
 		if has_node("VisualComponent"): $VisualComponent.play_death_effect()
@@ -148,31 +131,28 @@ func _load_character_actor() -> void:
 		character_actor = scene.instantiate() as CharacterActor
 		
 		# SECURITY & CRASH FIX: If headless, strip all visual nodes immediately
+		# but keep the CharacterActor node alive to read combat specs!
 		if GameManager._is_headless_environment():
-			print("[DEBUG] Headless environment detected. Stripping visual nodes from %s" % name)
+			print("[DEBUG] Headless environment: Stripping visual nodes from actor %s" % name)
 			_strip_visual_nodes(character_actor)
 		
 		add_child(character_actor)
 		# Compensate for models imported with +Z as forward (Godot expects -Z)
 		character_actor.rotation.y = PI
 		# Ensure authority matches
-		character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
-		print("[BaseEntity] Character actor loaded: ", character_actor_path)
+		if is_instance_valid(character_actor):
+			character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
 
 func _strip_visual_nodes(node: Node) -> void:
 	if not node: return
-	
-	# Create a list of children to remove to avoid modifying the collection while iterating
 	var to_remove = []
 	for child in node.get_children():
-		if child is MeshInstance3D or child is Sprite3D or child is Decal or child is GPUParticles3D or child is CPUParticles3D:
+		if child is MeshInstance3D or child is Sprite3D or child is Decal or child is GPUParticles3D or child is CPUParticles3D or child is Label3D:
 			to_remove.append(child)
 		else:
 			_strip_visual_nodes(child)
-	
 	for child in to_remove:
-		print("[DEBUG] Removing visual node immediately: %s" % child.name)
-		child.free() # Immediate removal to prevent any engine processing
+		child.queue_free()
 
 func _setup_visuals() -> void:
 	if GameManager._is_headless_environment(): return
@@ -206,13 +186,11 @@ func _setup_health_component() -> void:
 	if hc:
 		hc.health_changed.connect(func(c, m): 
 			if multiplayer.is_server() and server_state:
-				print("[BaseEntity] Server updating sync_health for %s to %d" % [name, c])
 				server_state.sync_health = c
 			health_changed.emit(c, m)
 		)
 		hc.died.connect(func(): 
 			if multiplayer.is_server() and server_state:
-				print("[BaseEntity] Server detected death for %s" % name)
 				server_state.sync_is_dead = true
 		)
 
@@ -223,7 +201,6 @@ func respawn(new_position: Vector3) -> void:
 		server_state.sync_is_dead = false
 		server_state.sync_health = max_health
 
-## Apply new base stats from the server
 func apply_stats(new_hp: int) -> void:
 	max_health = new_hp
 	if server_state:
@@ -234,8 +211,6 @@ func apply_stats(new_hp: int) -> void:
 	if hc:
 		hc.max_health = new_hp
 		hc.reset_health()
-	
-	print("[BaseEntity] Stats applied to %s: HP %d" % [name, new_hp])
 
 func _update_visuals() -> void:
 	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)

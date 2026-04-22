@@ -1,0 +1,11 @@
+func _handle_networked_attack_vfx() -> void:
+	var combat = entity.get_node_or_null("CombatComponent")
+	if not combat: return
+	
+	# DIRECT ACCESS: Avoid using .get() for private variables to prevent null crashes
+	var sync_count = combat.sync_attack_count
+	var local_count = combat._local_attack_count
+	
+	if sync_count > local_count:
+		combat._local_attack_count = sync_count
+		play_shoot_effect()

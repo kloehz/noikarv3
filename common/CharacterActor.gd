@@ -50,6 +50,12 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 @export var anim_death: String = "Death"
 @export var anim_hit: String = "Damage_Hurt"
 
+# --- New: Combat Hints for Logic ---
+@export_group("Combat Specs")
+@export var suggested_attack_range: float = 2.5
+@export var suggested_detection_range: float = 15.0
+@export var suggested_follow_distance: float = 4.0
+
 ## Play an animation by standard name
 func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	if not animation_player:

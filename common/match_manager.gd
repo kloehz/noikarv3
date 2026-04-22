@@ -199,13 +199,16 @@ func _setup_elite_logic(elite: Node3D) -> void:
 	if elite.has_node("CombatComponent"):
 		elite.get_node("CombatComponent").damage = int(15 * elite_damage_multiplier)
 	
-	# ADD AI Brain
-	var ai = AI_COMPONENT.new()
-	ai.name = "AIComponent"
-	elite.add_child(ai)
+	# FIND EXISTING AI Brain
+	var ai = elite.get_node_or_null("AIComponent")
+	if not ai:
+		ai = AI_COMPONENT.new()
+		ai.name = "AIComponent"
+		elite.add_child(ai)
+		
 	ai.state = 1 # State.CHASE
 	
-	print("[MatchManager] Elite Mob %s initialized with %d HP" % [elite.name, elite_hp])
+	print("[MatchManager] Elite Mob %s AI configured with %d HP" % [elite.name, elite_hp])
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return
@@ -257,30 +260,30 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	
 	_setup_pet_logic.call_deferred(pet, owner_id, type_int, souls)
 
-func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, souls: int) -> void:
+func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, _souls: int) -> void:
 	if not is_instance_valid(pet): return
-	
-	# (pet_type and power_level already set by setup_pet)
-	
-	# ADD AI Brain for Pet
-	var ai = AI_COMPONENT.new()
-	ai.name = "AIComponent"
-	pet.add_child(ai)
-	
+
+	# FIND EXISTING AI Brain (Now in .tscn)
+	var ai = pet.get_node_or_null("AIComponent")
+	if not ai:
+		ai = AI_COMPONENT.new()
+		ai.name = "AIComponent"
+		pet.add_child(ai)
+
 	if type_int == 2: # HEAL
 		ai.state = 3 # State.FOLLOW_OWNER
 	else:
 		ai.state = 1 # State.CHASE
-	
+
 	# Find owner node to follow
 	var owner_node = players_container.get_node_or_null(str(owner_id))
 	if owner_node:
 		ai.owner_node = owner_node
-	
+
 	# Ensure authority is correct for AI to run on server
 	pet.set_multiplayer_authority(1)
-	
-	print("[MatchManager] Pet %s AI initialized for owner %d" % [pet.name, owner_id])
+
+	print("[MatchManager] Pet %s AI configured for owner %d" % [pet.name, owner_id])
 
 @rpc("any_peer", "call_local", "reliable")
 func spawn_totem_rpc(type: int) -> void:

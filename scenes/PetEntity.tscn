@@ -7,10 +7,11 @@
 [ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
-[ext_resource type="PackedScene" uid="uid://c6f3r5u8y2k1" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
+[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
 [ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
+[ext_resource type="Script" path="res://core/AIComponent.gd" id="12_ai"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
 radius = 0.4
@@ -58,6 +59,12 @@ entity = NodePath("..")
 
 [node name="CombatComponent" type="Node" parent="."]
 script = ExtResource("11_combat")
+
+[node name="AIComponent" type="Node" parent="."]
+script = ExtResource("12_ai")
+detection_range = 15.0
+attack_range = 2.5
+follow_distance = 4.0
 
 [node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
 script = ExtResource("7_visual")
