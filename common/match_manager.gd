@@ -6,7 +6,7 @@ const PLAYER_SCENE = preload("res://scenes/BaseEntity.tscn")
 const SOUL_SCENE = preload("res://scenes/SoulEntity.tscn")
 const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
 const PET_SCENE = preload("res://scenes/PetEntity.tscn")
-const DUMMY_SCENE = preload("res://scenes/TrainingDummy.tscn")
+const ENEMY_SCENE = preload("res://scenes/EnemyEntity.tscn")
 const AI_COMPONENT = preload("res://core/AIComponent.gd")
 
 @onready var players_container: Node3D = $Players
@@ -36,22 +36,33 @@ func _ready() -> void:
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	
-	# INITIAL AI: Give brains to static dummies if server
+	# Spawn initial enemies if server
 	if multiplayer.is_server():
-		_initialize_static_ai.call_deferred()
+		_spawn_initial_enemies.call_deferred()
 
-func _initialize_static_ai() -> void:
-	var root = get_tree().root.find_child("Main", true, false)
-	if not root: return
+## Spawn initial test enemies in the world.
+func _spawn_initial_enemies() -> void:
+	var spawn_points := [
+		{ "type": "AATROX", "pos": Vector3(0, 0, -5) },
+		{ "type": "AATROX", "pos": Vector3(-3, 0, -4) },
+		{ "type": "AATROX", "pos": Vector3(3, 0, -4) },
+	]
+	for data in spawn_points:
+		spawn_enemy(data["type"], data["pos"])
+
+## Spawn a single enemy of the given type at the given position.
+## This is the public API for spawning enemies dynamically.
+func spawn_enemy(enemy_type: String, pos: Vector3) -> Node:
+	var enemy = ENEMY_SCENE.instantiate()
+	enemy.name = "MOB_" + str(randi() % 10000)
 	
-	for child in root.get_children():
-		if child is BaseEntity and child.name.begins_with("Dummy"):
-			var ai = AI_COMPONENT.new()
-			ai.name = "AIComponent"
-			child.add_child(ai)
-			ai.refresh_faction()
-			ai.state = 1 # State.CHASE
-			print("[MatchManager] Static AI initialized for %s" % child.name)
+	players_container.add_child(enemy, true)
+	
+	if enemy.has_method("setup_enemy"):
+		enemy.setup_enemy(enemy_type, pos)
+	
+	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
+	return enemy
 
 func _strip_visual_nodes_recursive(node: Node) -> void:
 	if not node: return
@@ -180,36 +191,31 @@ func _on_soul_expired(pos: Vector3) -> void:
 		_spawn_elite_mob(pos)
 
 func _spawn_elite_mob(pos: Vector3) -> void:
-	var elite = DUMMY_SCENE.instantiate()
-	
+	var elite = ENEMY_SCENE.instantiate()
 	elite.name = "ELITE_" + str(randi() % 1000)
-	elite.global_position = pos
 	
 	players_container.add_child(elite, true)
 	
-	# INITIALIZE AI AND STATS (Deferred to ensure _ready is done)
+	if elite.has_method("setup_enemy"):
+		elite.setup_enemy("AATROX", pos)
+	
+	# Apply elite stat scaling (deferred to ensure setup is complete)
 	_setup_elite_logic.call_deferred(elite)
 
 func _setup_elite_logic(elite: Node3D) -> void:
 	if not is_instance_valid(elite): return
 	
+	# Scale HP
 	var elite_hp = int(100 * elite_hp_multiplier)
-	if elite.has_method("apply_stats"):
-		elite.apply_stats(elite_hp)
+	var health = elite.get_node_or_null("HealthComponent")
+	if health:
+		elite.max_health = elite_hp
+		var server_state = elite.get_node_or_null("ServerState")
+		if server_state:
+			server_state.max_health = elite_hp
+			server_state.sync_health = elite_hp
 	
-	if elite.has_node("CombatComponent"):
-		elite.get_node("CombatComponent").damage = int(15 * elite_damage_multiplier)
-	
-	# FIND EXISTING AI Brain
-	var ai = elite.get_node_or_null("AIComponent")
-	if not ai:
-		ai = AI_COMPONENT.new()
-		ai.name = "AIComponent"
-		elite.add_child(ai)
-		
-	ai.state = 1 # State.CHASE
-	
-	print("[MatchManager] Elite Mob %s AI configured with %d HP" % [elite.name, elite_hp])
+	print("[MatchManager] Elite Mob %s configured with %d HP" % [elite.name, elite_hp])
 
 func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	if not multiplayer.is_server(): return

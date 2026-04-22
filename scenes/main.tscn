@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
 [ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
-[ext_resource type="PackedScene" path="res://scenes/TrainingDummy.tscn" id="3_dummy"]
 
 [node name="Main" type="Node3D" unique_id=824153153]
 script = ExtResource("1_match")
@@ -20,7 +19,7 @@ use_collision = true
 size = Vector3(100, 2, 100)
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=342014473]
-_spawnable_scenes = PackedStringArray("res://scenes/BaseEntity.tscn", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "res://scenes/TrainingDummy.tscn")
+_spawnable_scenes = PackedStringArray("res://scenes/BaseEntity.tscn", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "res://scenes/EnemyEntity.tscn")
 spawn_path = NodePath("../Players")
 
 [node name="Projectiles" type="Node3D" parent="."]
@@ -42,12 +41,3 @@ theme_override_font_sizes/font_size = 24
 text = "Almas: 0"
 
 [node name="ConnectionMenu" parent="." unique_id=2043948072 instance=ExtResource("2_conn")]
-
-[node name="Dummy1" parent="." unique_id=1707868863 instance=ExtResource("3_dummy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -5)
-
-[node name="Dummy2" parent="." unique_id=880816058 instance=ExtResource("3_dummy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0, -4)
-
-[node name="Dummy3" parent="." unique_id=1522873644 instance=ExtResource("3_dummy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3, 0, -4)

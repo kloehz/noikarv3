@@ -329,11 +329,14 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 		# Don't hit yourself
 		if target == entity: return
 		
-		# If I am a pet, don't hit my owner or sibling pets
+		# Mobs don't hit other mobs
+		if entity.is_in_group(&"mobs") and target.is_in_group(&"mobs"): return
+		
+		# If I am a pet, don't hit my owner, sibling pets, or other pets
 		if entity.is_in_group(&"pets"):
 			var my_owner_id = entity.get("owner_id")
 			if str(my_owner_id) == target.name: return
-			if target.is_in_group(&"pets") and target.get("owner_id") == my_owner_id: return
+			if target.is_in_group(&"pets"): return  # Pets never hit any pet
 		
 		# If I am a player, don't hit my own pets
 		if entity.name.is_valid_int():
