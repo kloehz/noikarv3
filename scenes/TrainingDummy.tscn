@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
 [ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
 [ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
+[ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -73,7 +74,7 @@ full_state_interval = 8
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("8_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count"])
 
 [node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("10_interpolator")
@@ -91,6 +92,9 @@ outline_size = 12
 [node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
 script = ExtResource("3_hurtbox")
 health_component = NodePath("../HealthComponent")
+
+[node name="CombatComponent" type="Node" parent="."]
+script = ExtResource("11_combat")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
