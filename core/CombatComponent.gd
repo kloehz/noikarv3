@@ -33,6 +33,9 @@ var _state_timer: float = 0.0
 var _primary_cooldown: float = 0.0
 var _secondary_cooldown: float = 0.0
 
+# --- Hit deduplication: prevents multiple collisions hitting the same target ---
+var _hit_entities_this_attack: Array[Node] = []
+
 # --- Networked Visuals ---
 ## Counter incremented on each attack start for rollback-safe VFX sync.
 @export var sync_attack_count: int = 0
@@ -127,7 +130,9 @@ func _configure_shapecast_from_data(cast: ShapeCast3D, data: AttackShapeData) ->
 	cast.transform.origin = data.offset
 	cast.target_position = Vector3.ZERO  # Instant cast, no sweep
 	cast.max_results = 8
+	cast.collision_mask = 8       # Layer 8 = Hurtboxes ONLY
 	cast.collide_with_areas = true
+	cast.collide_with_bodies = false  # Never hit CharacterBody3D directly
 	cast.add_exception(get_parent())
 
 # ============================================================
@@ -164,12 +169,14 @@ func _update_attack_state(delta: float) -> void:
 			AttackState.STARTUP:
 				current_attack_state = AttackState.ACTIVE
 				_state_timer = _active_attack.active_time if _active_attack else 0.3
+				_hit_entities_this_attack.clear()  # Reset hit list for this attack
 				_on_attack_active()
 			AttackState.ACTIVE:
 				current_attack_state = AttackState.RECOVERY
 				_state_timer = _active_attack.recovery_time if _active_attack else 0.3
 			AttackState.RECOVERY:
 				current_attack_state = AttackState.READY
+				_hit_entities_this_attack.clear()
 				_active_attack = null
 
 # ============================================================
@@ -325,6 +332,9 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 	if hurtbox:
 		var target = hurtbox.get_parent()
 		
+		# === DEDUPLICATION: prevent double-hit from multiple collision shapes ===
+		if target in _hit_entities_this_attack: return
+		
 		# === FACTION CHECKS ===
 		# Don't hit yourself
 		if target == entity: return
@@ -341,6 +351,9 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 		# If I am a player, don't hit my own pets
 		if entity.name.is_valid_int():
 			if target.is_in_group(&"pets") and str(target.get("owner_id")) == entity.name: return
+		
+		# === REGISTER HIT (before applying, to prevent re-entry) ===
+		_hit_entities_this_attack.append(target)
 		
 		# === APPLY DAMAGE ===
 		hurtbox.receive_hit_data(hit_damage, entity)

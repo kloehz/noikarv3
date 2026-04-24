@@ -19,7 +19,7 @@ height = 0.3
 
 [node name="ProjectileEntity" type="CharacterBody3D"]
 collision_layer = 4
-collision_mask = 1
+collision_mask = 3
 script = ExtResource("1_projectile")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

@@ -13,6 +13,8 @@ metadata/_custom_type_script = "uid://dubhplo6iij4o"
 script = ExtResource("2_ovqw5")
 shape_data = SubResource("Resource_x7733")
 aoe_radius = 0.0
+base_damage = 5.0
+knockback_force = 0.0
 metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
 
 [node name="Aatrox" type="Node3D" unique_id=884139682]
