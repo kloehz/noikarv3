@@ -1,92 +1,232 @@
-[gd_scene format=3]
+[gd_scene load_steps=6 format=3 uid="uid://cwj4434m5oq88"]
 
 [ext_resource type="Script" path="res://client/connection_manager.gd" id="1_conn"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_glass"]
+bg_color = Color(0.12, 0.12, 0.18, 0.85)
+corner_radius_top_left = 15
+corner_radius_top_right = 15
+corner_radius_bottom_right = 15
+corner_radius_bottom_left = 15
+shadow_color = Color(0, 0, 0, 0.3)
+shadow_size = 10
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
+bg_color = Color(0.2, 0.4, 0.8, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input"]
+bg_color = Color(0.05, 0.05, 0.1, 0.5)
+border_width_bottom = 2
+border_color = Color(0.3, 0.5, 1, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status"]
+bg_color = Color(0.1, 0.1, 0.2, 0.9)
+border_width_top = 2
+border_color = Color(0, 0.8, 1, 1)
 
 [node name="ConnectionMenu" type="CanvasLayer"]
 script = ExtResource("1_conn")
 
-[node name="Panel" type="Panel" parent="."]
+[node name="Background" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.101961, 0.101961, 0.180392, 1)
+
+[node name="LoginPanel" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="LoginPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -150.0
+offset_top = -100.0
+offset_right = 150.0
+offset_bottom = 100.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="Title" type="Label" parent="LoginPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "NOIKARV"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="LoginPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.8, 1)
+text = "Battle & Summon"
+horizontal_alignment = 1
+
+[node name="NameEdit" type="LineEdit" parent="LoginPanel/VBox"]
+custom_minimum_size = Vector2(0, 45)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "Ingresa tu Nickname..."
+alignment = 1
+
+[node name="EnterButton" type="Button" parent="LoginPanel/VBox"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+text = "ENTRAR AL LOBBY"
+
+[node name="LobbyPanel" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="LobbyPanel"]
+layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -200.0
-offset_top = -150.0
+offset_top = -180.0
 offset_right = 200.0
-offset_bottom = 150.0
+offset_bottom = 180.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/separation = 20
 
-[node name="VBox" type="VBoxContainer" parent="Panel"]
+[node name="HostBox" type="PanelContainer" parent="LobbyPanel/VBox"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_glass")
+
+[node name="VBox" type="VBoxContainer" parent="LobbyPanel/VBox/HostBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="Label" type="Label" parent="LobbyPanel/VBox/HostBox/VBox"]
+layout_mode = 2
+text = "Nueva Aventura"
+horizontal_alignment = 1
+
+[node name="HostButton" type="Button" parent="LobbyPanel/VBox/HostBox/VBox"]
+custom_minimum_size = Vector2(150, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+text = "CREAR SALA"
+
+[node name="JoinBox" type="PanelContainer" parent="LobbyPanel/VBox"]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_glass")
+
+[node name="VBox" type="VBoxContainer" parent="LobbyPanel/VBox/JoinBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="Label" type="Label" parent="LobbyPanel/VBox/JoinBox/VBox"]
+layout_mode = 2
+text = "Unirse a una Sala"
+horizontal_alignment = 1
+
+[node name="RoomIDEdit" type="LineEdit" parent="LobbyPanel/VBox/JoinBox/VBox"]
+custom_minimum_size = Vector2(250, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "Código de Sala..."
+alignment = 1
+
+[node name="JoinButton" type="Button" parent="LobbyPanel/VBox/JoinBox/VBox"]
+custom_minimum_size = Vector2(150, 40)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+text = "CONECTAR"
+
+[node name="SettingsBox" type="VBoxContainer" parent="LobbyPanel/VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="LobbyPanel/VBox/SettingsBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "Noray Server IP:"
+horizontal_alignment = 1
+
+[node name="AddressEdit" type="LineEdit" parent="LobbyPanel/VBox/SettingsBox"]
+custom_minimum_size = Vector2(150, 30)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+text = "127.0.0.1"
+alignment = 1
+
+[node name="ConnectingPanel" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -60.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+
+[node name="VBox" type="VBoxContainer" parent="ConnectingPanel"]
+layout_mode = 2
+alignment = 1
+
+[node name="StatusLabel" type="Label" parent="ConnectingPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0.8, 1, 1)
+text = "Conectando..."
+horizontal_alignment = 1
+
+[node name="HUD" type="Control" parent="."]
+layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = 20.0
-offset_right = -20.0
-offset_bottom = -20.0
 grow_horizontal = 2
 grow_vertical = 2
+mouse_filter = 2
 
-[node name="Title" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = "Noikarv-3"
-horizontal_alignment = 1
-
-[node name="HSeparator" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="NameLabel" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = "Player Name:"
-
-[node name="NameEdit" type="LineEdit" parent="Panel/VBox"]
-layout_mode = 2
-placeholder_text = "Enter Name..."
-
-[node name="HostButton" type="Button" parent="Panel/VBox"]
-layout_mode = 2
-text = "Host Game"
-
-[node name="HSeparator2" type="HSeparator" parent="Panel/VBox"]
-layout_mode = 2
-
-[node name="AddressLabel" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = "Noray Server:"
-
-[node name="AddressEdit" type="LineEdit" parent="Panel/VBox"]
-layout_mode = 2
-text = "127.0.0.1"
-
-[node name="OidLabel" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = "Room ID (Leave blank to Host):"
-
-[node name="OidEdit" type="LineEdit" parent="Panel/VBox"]
-layout_mode = 2
-placeholder_text = "Paste Room ID here..."
-
-[node name="ConnectButton" type="Button" parent="Panel/VBox"]
-layout_mode = 2
-text = "Connect"
-
-[node name="StatusLabel" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-text = ""
-horizontal_alignment = 1
-
-[node name="RoomInfo" type="Label" parent="."]
+[node name="RoomInfo" type="Label" parent="HUD"]
+layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -250.0
+offset_left = -300.0
 offset_top = 20.0
 offset_right = -20.0
-offset_bottom = 43.0
+offset_bottom = 50.0
 grow_horizontal = 0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 4
-text = "Not Connected"
+theme_override_constants/outline_size = 5
+text = "SALA: ---"
 horizontal_alignment = 2
+
+[connection signal="pressed" from="LoginPanel/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
+[connection signal="pressed" from="LobbyPanel/VBox/HostBox/VBox/HostButton" to="." method="_on_host_pressed"]
+[connection signal="pressed" from="LobbyPanel/VBox/JoinBox/VBox/JoinButton" to="." method="_on_join_pressed"]
