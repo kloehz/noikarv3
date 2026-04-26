@@ -56,9 +56,12 @@ func _spawn_initial_enemies() -> void:
 func spawn_enemy(enemy_type: String, pos: Vector3) -> Node:
 	var enemy = ENEMY_SCENE.instantiate()
 	enemy.name = "MOB_" + str(randi() % 10000)
-	
+
+	# SET POSITION BEFORE ADD_CHILD to avoid interpolation jump on clients
+	enemy.global_position = pos
+
 	players_container.add_child(enemy, true)
-	
+
 	if enemy.has_method("setup_enemy"):
 		enemy.setup_enemy(enemy_type, pos)
 	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
@@ -183,9 +186,8 @@ func _on_entity_died(entity: Node3D) -> void:
 		await get_tree().create_timer(5.0).timeout
 		if is_instance_valid(entity):
 			entity.queue_free()
-		# Spawn a new enemy at a random position
-		var random_pos = Vector3(randf_range(-10, 10), 0, randf_range(-10, 10))
-		spawn_enemy("AATROX", random_pos)
+		# Spawn a new enemy at the death position (where soul dropped)
+		spawn_enemy("AATROX", old_pos)
 		return
 	
 	# --- PLAYERS: Respawn in place ---
@@ -212,12 +214,15 @@ func _on_soul_expired(pos: Vector3) -> void:
 func _spawn_elite_mob(pos: Vector3) -> void:
 	var elite = ENEMY_SCENE.instantiate()
 	elite.name = "ELITE_" + str(randi() % 1000)
-	
+
+	# SET POSITION BEFORE ADD_CHILD to avoid interpolation jump on clients
+	elite.global_position = pos
+
 	players_container.add_child(elite, true)
-	
+
 	if elite.has_method("setup_enemy"):
 		elite.setup_enemy("AATROX", pos)
-	
+
 	# Apply elite stat scaling (deferred to ensure setup is complete)
 	_setup_elite_logic.call_deferred(elite)
 

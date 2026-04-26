@@ -144,21 +144,27 @@ func _configure_shapecast_from_data(cast: ShapeCast3D, data: AttackShapeData) ->
 func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if not is_fresh:
 		return
-	
+
+	if entity and entity.get("sync_is_dead"):
+		# Dead entities cannot attack. Reset any active attack state.
+		current_attack_state = AttackState.READY
+		_active_attack = null
+		return
+
 	# Tick cooldowns
 	if _primary_cooldown > 0: _primary_cooldown -= delta
 	if _secondary_cooldown > 0: _secondary_cooldown -= delta
-	
+
 	_update_attack_state(delta)
-	
+
 	# Only owner or server can start attacks
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
 	var is_owner = (multiplayer.get_unique_id() == owner_id)
-	
+
 	if (multiplayer.is_server() or is_owner) and current_attack_state == AttackState.READY:
 		if logic and logic.get("is_shooting"):
 			_try_start_attack(_primary, true)
-		# TODO: secondary trigger (e.g. right-click, separate input)
+			# TODO: secondary trigger (e.g. right-click, separate input)
 
 func _update_attack_state(delta: float) -> void:
 	if current_attack_state == AttackState.READY:
