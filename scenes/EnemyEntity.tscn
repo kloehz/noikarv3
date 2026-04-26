@@ -19,6 +19,14 @@ height = 1.8
 [sub_resource type="ViewportTexture" id="ViewportTexture_enemy_health"]
 viewport_path = NodePath("HealthViewport")
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_enemy"]
+properties/0/path = NodePath(".:global_position")
+properties/0/spawn = true
+properties/0/replication_mode = 1
+properties/1/path = NodePath(".:spawn_grace_duration")
+properties/1/spawn = true
+properties/1/replication_mode = 1
+
 [node name="EnemyEntity" type="CharacterBody3D" unique_id=1256991762]
 collision_layer = 2
 collision_mask = 3
@@ -100,3 +108,6 @@ input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:i
 script = ExtResource("10_interpolator")
 root = NodePath("..")
 properties = Array[String]([":global_position", ":quaternion"])
+
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_enemy")

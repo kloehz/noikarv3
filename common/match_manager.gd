@@ -8,6 +8,8 @@ const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
 const PET_SCENE = preload("res://scenes/PetEntity.tscn")
 const ENEMY_SCENE = preload("res://scenes/EnemyEntity.tscn")
 const AI_COMPONENT = preload("res://core/AIComponent.gd")
+const MOB_RESPAWN_DELAY: float = 3.0
+const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 
 @onready var players_container: Node3D = $Players
 
@@ -53,19 +55,30 @@ func _spawn_initial_enemies() -> void:
 
 ## Spawn a single enemy of the given type at the given position.
 ## This is the public API for spawning enemies dynamically.
-func spawn_enemy(enemy_type: String, pos: Vector3) -> Node:
+func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float = 0.0) -> Node:
 	var enemy = ENEMY_SCENE.instantiate()
 	enemy.name = "MOB_" + str(randi() % 10000)
+	enemy.spawn_grace_duration = spawn_grace_duration
 
-	# SET POSITION BEFORE ADD_CHILD to avoid interpolation jump on clients
-	enemy.global_position = pos
+	_prepare_spawn_position(enemy, pos)
 
 	players_container.add_child(enemy, true)
+	_finalize_spawn_position(enemy, pos)
 
 	if enemy.has_method("setup_enemy"):
 		enemy.setup_enemy(enemy_type, pos)
 	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
 	return enemy
+
+func _prepare_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
+	entity.position = players_container.to_local(global_pos)
+
+func _finalize_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
+	entity.global_position = global_pos
+	entity.force_update_transform()
+	var interpolator = entity.get_node_or_null("TickInterpolator")
+	if interpolator and interpolator.has_method("teleport"):
+		interpolator.teleport()
 
 func _strip_visual_nodes_recursive(node: Node) -> void:
 	if not node: return
@@ -182,12 +195,14 @@ func _on_entity_died(entity: Node3D) -> void:
 	# --- MOBS: Respawn as new enemy after delay ---
 	if is_mob:
 		var old_pos = entity.global_position
-		print("[MatchManager] Mob %s died. Respawning in 5s." % entity.name)
-		await get_tree().create_timer(5.0).timeout
+		var settle_time = min(NETWORK_SPAWN_SETTLE_TIME, MOB_RESPAWN_DELAY)
+		var hidden_spawn_delay = max(MOB_RESPAWN_DELAY - settle_time, 0.0)
+		print("[MatchManager] Mob %s died. Hidden respawn in %.1fs, visible in %.1fs." % [entity.name, hidden_spawn_delay, MOB_RESPAWN_DELAY])
+		await get_tree().create_timer(hidden_spawn_delay).timeout
 		if is_instance_valid(entity):
 			entity.queue_free()
-		# Spawn a new enemy at the death position (where soul dropped)
-		spawn_enemy("AATROX", old_pos)
+		# Spawn hidden and inactive first so networking has time to settle position.
+		spawn_enemy("AATROX", old_pos, settle_time)
 		return
 	
 	# --- PLAYERS: Respawn in place ---
@@ -200,9 +215,9 @@ func _on_entity_died(entity: Node3D) -> void:
 
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
-	# SET POSITION BEFORE ADD_CHILD
-	soul.global_position = pos 
+	_prepare_spawn_position(soul, pos)
 	players_container.add_child(soul, true)
+	_finalize_spawn_position(soul, pos)
 	
 	soul.expired.connect(func(): _on_soul_expired(pos))
 
@@ -215,10 +230,10 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 	var elite = ENEMY_SCENE.instantiate()
 	elite.name = "ELITE_" + str(randi() % 1000)
 
-	# SET POSITION BEFORE ADD_CHILD to avoid interpolation jump on clients
-	elite.global_position = pos
+	_prepare_spawn_position(elite, pos)
 
 	players_container.add_child(elite, true)
+	_finalize_spawn_position(elite, pos)
 
 	if elite.has_method("setup_enemy"):
 		elite.setup_enemy("AATROX", pos)
@@ -261,12 +276,14 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	
 	# Calculate position in front of player
 	var forward = -player.global_transform.basis.z
-	totem.global_position = player.global_position + (forward * 2.0)
-	
-	players_container.add_child(totem, true)
-	print("[SERVER] !!! SUMMONING TOTEM !!! at %s for player %s" % [totem.global_position, player.name])
+	var totem_pos = player.global_position + (forward * 2.0)
 	totem.totem_type = type
 	totem.stored_souls = souls
+	_prepare_spawn_position(totem, totem_pos)
+	
+	players_container.add_child(totem, true)
+	_finalize_spawn_position(totem, totem_pos)
+	print("[SERVER] !!! SUMMONING TOTEM !!! at %s for player %s" % [totem.global_position, player.name])
 	
 	totem.summoned.connect(func(p_type: int, p_souls: int): 
 		_on_totem_complete(player.name.to_int(), p_type, p_souls, totem.global_position)
@@ -274,18 +291,27 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	print("[MatchManager] Totem requested by ", player.name, " in front at ", totem.global_position)
 
 func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) -> void:
-	var pet = PET_SCENE.instantiate()
-	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
-	pet.global_position = pos
-	
-	players_container.add_child(pet, true)
-	
-	# Initial pet setup on server
 	var type_str = "ATTACK"
 	match type_int:
 		1: type_str = "TANK"
 		2: type_str = "HEAL"
-		
+
+	var pet = PET_SCENE.instantiate()
+	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
+	pet.owner_id = owner_id
+	pet.pet_type = type_str
+	pet.power_level = souls
+	_prepare_spawn_position(pet, pos)
+
+	var server_state = pet.get_node_or_null("ServerState")
+	if server_state:
+		server_state.pet_type_sync = type_str
+		server_state.power_level_sync = souls
+	
+	players_container.add_child(pet, true)
+	_finalize_spawn_position(pet, pos)
+	
+	# Initial pet setup on server
 	if pet.has_method("setup_pet"):
 		pet.setup_pet(owner_id, type_str, souls)
 	
@@ -357,9 +383,10 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Spawn at a safe position (away from dummies)
 	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
-	player.global_position = spawn_pos
+	_prepare_spawn_position(player, spawn_pos)
 	
 	players_container.add_child(player, true)
+	_finalize_spawn_position(player, spawn_pos)
 	
 	# Initial server-side state setup
 	if multiplayer.is_server():

@@ -19,14 +19,20 @@ const SKILL_COOLDOWN: float = 4.0
 @export var owner_id: int = 1
 @export var pet_type: String = "ATTACK"
 @export var power_level: int = 0
+@export var spawn_grace_duration: float = 1.0
 
 # Skill Timers
 var skill_timer: float = 0.0
 var skill_interval: float = SKILL_COOLDOWN
 
 var _has_setup: bool = false
+var _spawn_grace_active: bool = false
+var _saved_collision_layer: int = 0
+var _saved_collision_mask: int = 0
 
 func _ready() -> void:
+	_begin_spawn_grace()
+
 	# BaseEntity handles authority, server_state link, and initial loading
 	super._ready()
 	
@@ -39,6 +45,43 @@ func _ready() -> void:
 			# Initial check in case it's already there
 			if not server_state.pet_type_sync.is_empty():
 				_check_delayed_setup.call_deferred()
+
+	_set_spawn_visibility(false)
+	_finish_spawn_grace.call_deferred()
+
+func _begin_spawn_grace() -> void:
+	_spawn_grace_active = true
+	_saved_collision_layer = collision_layer
+	_saved_collision_mask = collision_mask
+	collision_layer = 0
+	collision_mask = 0
+	_set_hurtbox_enabled(false)
+	_set_spawn_visibility(false)
+
+func _finish_spawn_grace() -> void:
+	if spawn_grace_duration > 0.0:
+		await get_tree().create_timer(spawn_grace_duration).timeout
+	if not is_instance_valid(self):
+		return
+	_spawn_grace_active = false
+	collision_layer = _saved_collision_layer
+	collision_mask = _saved_collision_mask
+	_set_hurtbox_enabled(true)
+	_set_spawn_visibility(true)
+	if has_node("VisualComponent"):
+		$VisualComponent.play_spawn_effect()
+
+func _set_spawn_visibility(is_visible: bool) -> void:
+	visible = is_visible
+
+func _set_hurtbox_enabled(is_enabled: bool) -> void:
+	var hurtbox = get_node_or_null("HurtboxComponent")
+	if hurtbox:
+		hurtbox.monitorable = is_enabled
+		hurtbox.monitoring = is_enabled
+
+func is_spawn_grace_active() -> bool:
+	return _spawn_grace_active
 
 func _check_delayed_setup() -> void:
 	if server_state and not server_state.pet_type_sync.is_empty():
@@ -81,10 +124,12 @@ func setup_pet(p_owner_id: int, p_type: String, p_souls: int) -> void:
 		vis.setup_with_actor(character_actor)
 		vis.update_name(pet_type)
 		# Force initial visual refresh
-		vis.play_spawn_effect()
+		if not _spawn_grace_active:
+			vis.play_spawn_effect()
 	
 	# APPLY SPECS FROM ACTOR TO AI
 	_apply_actor_specs_to_ai()
+	_set_spawn_visibility(not _spawn_grace_active)
 	
 	if multiplayer.is_server() and server_state:
 		server_state.pet_type_sync = p_type
@@ -116,6 +161,14 @@ func _apply_power_scaling() -> void:
 	scale = Vector3.ONE * (1.0 + (power_level * 0.02))
 
 func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	if _spawn_grace_active:
+		var logic = get_node_or_null("LogicComponent")
+		if logic:
+			logic.input_axis = Vector2.ZERO
+			logic.is_shooting = false
+			logic.current_velocity = Vector3.ZERO
+		return
+
 	# 1. Physics/Movement (Inherited logic from BaseEntity -> LogicComponent)
 	super._rollback_tick(delta, tick, is_fresh)
 	
