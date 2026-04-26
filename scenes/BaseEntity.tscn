@@ -84,7 +84,7 @@ entity = NodePath("..")
 
 [node name="CombatComponent" type="Node" parent="." unique_id=1122334455]
 script = ExtResource("9_combat")
-damage = 5
+damage = 90
 
 [node name="AttackDebugMesh" type="MeshInstance3D" parent="." unique_id=777888999]
 visible = false

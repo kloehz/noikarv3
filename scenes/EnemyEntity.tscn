@@ -93,6 +93,8 @@ properties = Array[String]([":sync_health", ":sync_is_dead"])
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count"])
+enable_prediction = true
+input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1174372783 node_paths=PackedStringArray("root")]
 script = ExtResource("10_interpolator")
