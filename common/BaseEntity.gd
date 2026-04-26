@@ -12,7 +12,11 @@ signal died
 #region Exports
 @export var max_health: int = 100
 @export var entity_name: String = "Entity"
-@export var character_actor_path: String = "res://scenes/characters/Aatrox.tscn"
+## Path to the CharacterActor scene for this entity.
+## IMPORTANT: Player entities default to PlayerHero.tscn (high base_damage).
+## Mob entities use Aatrox.tscn (low base_damage) via EnemyEntity.ENEMY_ACTORS mapping.
+## Pets use PetDmg.tscn / PetTank.tscn / PetHeal.tscn via PetEntity setup.
+@export var character_actor_path: String = "res://scenes/characters/PlayerHero.tscn"
 #endregion
 
 var character_actor: CharacterActor

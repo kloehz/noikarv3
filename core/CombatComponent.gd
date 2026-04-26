@@ -16,7 +16,9 @@ var _secondary: AttackDefinition
 var _active_attack: AttackDefinition  # Currently executing attack
 
 # --- Fallback defaults (used if no AttackDefinition is configured) ---
-@export var damage: int = 15
+## If set > 0, this overrides the actor's AttackDefinition base_damage.
+## If 0 (default), the actor's base_damage is used.
+@export var damage: int = 0
 @export var knockback_force: float = 12.0
 
 # --- Node references ---
@@ -242,10 +244,12 @@ func _execute_melee_hitscan(attack_def: AttackDefinition) -> void:
 		return
 	
 	_melee_shapecast.force_shapecast_update()
-	
+
 	if _melee_shapecast.is_colliding():
 		var hit_count = _melee_shapecast.get_collision_count()
 		var final_damage = attack_def.base_damage
+		if damage > 0:
+			final_damage = damage
 		if attack_def.shape_data:
 			final_damage *= attack_def.shape_data.damage_multiplier
 		
@@ -284,7 +288,6 @@ func _execute_projectile(attack_def: AttackDefinition) -> void:
 	var projectile = attack_def.projectile_scene.instantiate()
 	projectile.global_position = spawn_pos
 	
-	# Owner ID for faction check
 	var owner_id: int
 	if entity.name.is_valid_int():
 		owner_id = entity.name.to_int()
@@ -292,17 +295,21 @@ func _execute_projectile(attack_def: AttackDefinition) -> void:
 		owner_id = entity.get("owner_id")
 	else:
 		owner_id = 1
-	
+
+	var projectile_damage = attack_def.base_damage
+	if damage > 0:
+		projectile_damage = damage
+
 	# Initialize projectile
 	if projectile.has_method("initialize"):
 		projectile.initialize(
 			direction,
 			attack_def.projectile_speed,
-			attack_def.base_damage,
+			projectile_damage,
 			owner_id,
 			attack_def.knockback_force
 		)
-	
+
 	# Add to scene tree — MultiplayerSpawner handles replication
 	var projectiles_container = get_tree().root.find_child("Projectiles", true, false)
 	if projectiles_container:
@@ -314,9 +321,9 @@ func _execute_projectile(attack_def: AttackDefinition) -> void:
 			players.get_parent().add_child(projectile, true)
 		else:
 			get_tree().root.add_child(projectile, true)
-	
+
 	print("[CombatComponent] %s fired projectile (dmg=%.0f, speed=%.0f)" % [
-		entity.name, attack_def.base_damage, attack_def.projectile_speed
+		entity.name, projectile_damage, attack_def.projectile_speed
 	])
 
 # ============================================================
