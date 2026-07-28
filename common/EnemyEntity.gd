@@ -118,6 +118,11 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 	
 	# Ensure server authority
 	set_multiplayer_authority(1)
+	# Project rule: any authority change after _ready() MUST be followed by
+	# process_settings() so netfox rebuilds property configs per authority.
+	var rb = get_node_or_null("RollbackSynchronizer")
+	if rb and rb.has_method("process_settings"):
+		rb.process_settings()
 	
 	print("[Enemy] %s spawned at %s (type: %s)" % [name, global_position, enemy_type])
 

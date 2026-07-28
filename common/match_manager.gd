@@ -23,6 +23,18 @@ const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 
 var _shutdown_timer: SceneTreeTimer = null
 
+# --- STABLE SPAWN IDs ---
+## Server-assigned, deterministic per match. Format: {PREFIX}_{seed_hex}_{seq}.
+## match_seed is 0 until Stage 2 introduces real match seeding.
+var match_seed: int = 0
+var _spawn_counters: Dictionary = {}
+
+## Generate the next stable spawn ID for a prefix (MOB_/ELITE_/PET_/SOUL_/TOTEM_).
+## Example: MOB_00_0007. Prefixes keep group detection in BaseEntity._ready().
+func _next_spawn_id(prefix: String) -> String:
+	_spawn_counters[prefix] = _spawn_counters.get(prefix, 0) + 1
+	return "%s_%02X_%04d" % [prefix.trim_suffix("_"), match_seed, _spawn_counters[prefix]]
+
 ## Store peer data like names.
 var peer_data: Dictionary = {}
 var _pending_name: String = ""
@@ -57,7 +69,7 @@ func _spawn_initial_enemies() -> void:
 ## This is the public API for spawning enemies dynamically.
 func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float = 0.0) -> Node:
 	var enemy = ENEMY_SCENE.instantiate()
-	enemy.name = "MOB_" + str(randi() % 10000)
+	enemy.name = _next_spawn_id("MOB_")
 	enemy.spawn_grace_duration = spawn_grace_duration
 
 	_prepare_spawn_position(enemy, pos)
@@ -215,6 +227,7 @@ func _on_entity_died(entity: Node3D) -> void:
 
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
+	soul.name = _next_spawn_id("SOUL_")
 	_prepare_spawn_position(soul, pos)
 	players_container.add_child(soul, true)
 	_finalize_spawn_position(soul, pos)
@@ -228,7 +241,7 @@ func _on_soul_expired(pos: Vector3) -> void:
 
 func _spawn_elite_mob(pos: Vector3) -> void:
 	var elite = ENEMY_SCENE.instantiate()
-	elite.name = "ELITE_" + str(randi() % 1000)
+	elite.name = _next_spawn_id("ELITE_")
 
 	_prepare_spawn_position(elite, pos)
 
@@ -273,6 +286,7 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	player.server_state.sync_souls = 0
 	
 	var totem = TOTEM_SCENE.instantiate()
+	totem.name = _next_spawn_id("TOTEM_")
 	
 	# Calculate position in front of player
 	var forward = -player.global_transform.basis.z
@@ -297,7 +311,7 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 		2: type_str = "HEAL"
 
 	var pet = PET_SCENE.instantiate()
-	pet.name = "PET_" + str(randi() % 1000) # Give it a name to distinguish it
+	pet.name = _next_spawn_id("PET_") # Stable spawn ID, replicated by the spawner
 	pet.owner_id = owner_id
 	pet.pet_type = type_str
 	pet.power_level = souls
@@ -322,6 +336,11 @@ func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, _souls: int) ->
 
 	# Ensure authority is correct for AI to run on server FIRST
 	pet.set_multiplayer_authority(1)
+	# Project rule: any authority change after _ready() MUST be followed by
+	# process_settings() so netfox rebuilds property configs per authority.
+	var pet_rb = pet.get_node_or_null("RollbackSynchronizer")
+	if pet_rb and pet_rb.has_method("process_settings"):
+		pet_rb.process_settings()
 
 	# FIND EXISTING AI Brain (Now in .tscn)
 	var ai = pet.get_node_or_null("AIComponent")
