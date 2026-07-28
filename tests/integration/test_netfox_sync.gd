@@ -1,8 +1,10 @@
 # tests/integration/test_netfox_sync.gd
 extends GutTest
 
-## Integration tests for BaseEntity position replication via MultiplayerSynchronizer.
-## Verifies that server authority and client sync work correctly.
+## Integration tests for BaseEntity replication via netfox synchronizers.
+## BaseEntity.tscn has no MultiplayerSynchronizer; replication goes through
+## RollbackSynchronizer (state/input properties) and StateSynchronizer (server
+## state deltas). Verifies those nodes exist and are configured correctly.
 
 const TEST_PORT = 9999
 var _server_peer: ENetMultiplayerPeer
@@ -34,27 +36,24 @@ func test_base_entity_scene_instantiation() -> void:
 	assert_not_null(entity, "BaseEntity should instantiate")
 	entity.queue_free()
 
-## Test: BaseEntity has MultiplayerSynchronizer child
-func test_base_entity_has_multiplayer_synchronizer() -> void:
+## Test: BaseEntity has netfox synchronizers
+func test_base_entity_has_netfox_synchronizers() -> void:
 	var entity = _base_entity_scene.instantiate()
-	var sync = entity.get_node_or_null("MultiplayerSynchronizer")
-	assert_not_null(sync, "BaseEntity should have MultiplayerSynchronizer")
-	assert_true(sync is MultiplayerSynchronizer, "Sync node should be MultiplayerSynchronizer")
+	var rollback_sync = entity.get_node_or_null("RollbackSynchronizer")
+	assert_not_null(rollback_sync, "BaseEntity should have RollbackSynchronizer")
+	var state_sync = entity.get_node_or_null("ServerState/StateSynchronizer")
+	assert_not_null(state_sync, "BaseEntity should have ServerState/StateSynchronizer")
 	entity.queue_free()
 
-## Test: MultiplayerSynchronizer is configured for global_position
-func test_multiplayer_synchronizer_syncs_position() -> void:
+## Test: RollbackSynchronizer is configured for global_position state
+func test_rollback_synchronizer_syncs_position() -> void:
 	var entity = _base_entity_scene.instantiate()
-	var sync = entity.get_node_or_null("MultiplayerSynchronizer")
-	
-	# Check that global_position is in the sync paths
-	var sync_root: Node = entity
-	if sync and sync.get_node(".") == sync:
-		# MultiplayerSynchronizer typically syncs its parent
-		sync_root = entity
-	
-	# This test verifies the synchronizer exists and targets the entity
-	assert_not_null(entity, "Entity should exist for sync test")
+	var rollback_sync = entity.get_node_or_null("RollbackSynchronizer")
+	if assert_not_null(rollback_sync, "RollbackSynchronizer should exist"):
+		var state_props: Array = rollback_sync.get("state_properties")
+		assert_true(state_props.has(":global_position"), "RollbackSynchronizer should track :global_position as state")
+		var input_props: Array = rollback_sync.get("input_properties")
+		assert_true(input_props.has("LogicComponent:input_axis"), "RollbackSynchronizer should record LogicComponent:input_axis as input")
 	entity.queue_free()
 
 ## Test: LogicComponent exists in core folder
@@ -73,20 +72,20 @@ func test_base_entity_extends_character_body() -> void:
 	assert_not_null(BaseEntity, "BaseEntity script should load")
 	
 	# Verify it's a CharacterBody3D subclass
-    var entity_instance = _base_entity_scene.instantiate()
-    assert_true(entity_instance is CharacterBody3D, "BaseEntity should extend CharacterBody3D")
-    entity_instance.queue_free()
+	var entity_instance = _base_entity_scene.instantiate()
+	assert_true(entity_instance is CharacterBody3D, "BaseEntity should extend CharacterBody3D")
+	entity_instance.queue_free()
 
 ## Test: Server can spawn BaseEntity
 func test_server_can_spawn_entity() -> void:
-    # This would require actual multiplayer setup
-    # For now, verify the scene structure supports it
-    var entity = _base_entity_scene.instantiate()
-    assert_not_null(entity, "Should be able to spawn entity")
-    
-    # Verify it has required components
-    assert_not_null(entity.get_node_or_null("LogicComponent"), "Entity should have LogicComponent child")
-    entity.queue_free()
+	# This would require actual multiplayer setup
+	# For now, verify the scene structure supports it
+	var entity = _base_entity_scene.instantiate()
+	assert_not_null(entity, "Should be able to spawn entity")
+
+	# Verify it has required components
+	assert_not_null(entity.get_node_or_null("LogicComponent"), "Entity should have LogicComponent child")
+	entity.queue_free()
 
 ## Test: No client folder files leak into server context
 func test_no_client_leakage_in_server_folder() -> void:

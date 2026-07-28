@@ -17,8 +17,8 @@ context: |
 
 testing:
   runner: gut
-  runner_installed: false
-  runner_note: "GUT tests exist but addons/gut is missing; GDScript tests cannot execute until installed."
+  runner_installed: true
+  runner_note: "GUT 9.7.1 (Godot 4.7 compatible) vendored in addons/gut; editor plugin not enabled (gut_cmdln only)."
   unit_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit"
   integration_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit"
   smoke_export_isolation: "python3 tests/verify_export_isolation.py"
