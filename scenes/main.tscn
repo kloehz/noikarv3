@@ -2,6 +2,10 @@
 
 [ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
 [ext_resource type="PackedScene" uid="uid://b8n4vxtkpq2ra" path="res://scenes/connection_menu.tscn" id="2_conn"]
+[ext_resource type="Script" path="res://common/match_state.gd" id="3_mstate"]
+[ext_resource type="Script" path="res://common/match_director.gd" id="4_mdirector"]
+[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_statesync"]
+[ext_resource type="Resource" path="res://common/resources/default_match_rules.tres" id="6_rules"]
 
 [node name="Main" type="Node3D" unique_id=824153153]
 script = ExtResource("1_match")
@@ -12,6 +16,17 @@ transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 10, 0)
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1807173868]
 
 [node name="Players" type="Node3D" parent="." unique_id=382746215]
+
+[node name="MatchState" type="Node" parent="." unique_id=572193841]
+script = ExtResource("3_mstate")
+
+[node name="StateSynchronizer" type="Node" parent="MatchState" unique_id=904152637 node_paths=PackedStringArray("root")]
+script = ExtResource("5_statesync")
+root = NodePath("..")
+
+[node name="MatchDirector" type="Node" parent="." unique_id=317745902]
+script = ExtResource("4_mdirector")
+rules = ExtResource("6_rules")
 
 [node name="Floor" type="CSGBox3D" parent="." unique_id=344842379]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)

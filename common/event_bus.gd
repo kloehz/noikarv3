@@ -21,6 +21,10 @@ signal player_name_submitted(name: String)
 signal match_started
 @warning_ignore("unused_signal")
 signal match_ended(winner_id: int)
+@warning_ignore("unused_signal")
+signal phase_changed(phase: int)  # MatchState.Phase; every effective phase entry
+@warning_ignore("unused_signal")
+signal team_assigned  # LOBBY team assignment completed (server)
 
 # Entity signals
 @warning_ignore("unused_signal")
