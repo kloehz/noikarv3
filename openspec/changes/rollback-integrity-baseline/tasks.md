@@ -25,17 +25,17 @@ Chain strategy: pending
 
 ## Phase 1: Baseline Branch & Inventory
 
-- [ ] 1.1 Create initiative branch from `feature/pets`; inventory uncommitted changes (`scenes/main.tscn`, `scenes/connection_menu.tscn`, `.import`, `.atl/`) and commit/stash before edits.
-- [ ] 1.2 Record pre-change state: run `python3 tests/verify_export_isolation.py` and `python3 tests/verify_headless_server.py --quick`; capture results.
+- [x] 1.1 Create initiative branch from `feature/pets`; inventory uncommitted changes (`scenes/main.tscn`, `scenes/connection_menu.tscn`, `.import`, `.atl/`) and commit/stash before edits.
+- [x] 1.2 Record pre-change state: run `python3 tests/verify_export_isolation.py` and `python3 tests/verify_headless_server.py --quick`; capture results.
 
 ## Phase 2: Config & Test Harness (Etapa 0)
 
-- [ ] 2.1 Add `"dedicated_server"` to `config/features` in `project.godot`.
-- [ ] 2.2 Harden `GameManager._is_headless_environment()` in `common/game_manager.gd`: editor runs check `DisplayServer.get_name() == "headless"` only.
-- [ ] 2.3 Install pinned GUT 9.x (GitHub `bitwes/Gut` release, Godot 4.7 support) into `addons/gut/`; do NOT enable editor plugin; record version.
-- [ ] 2.4 Append `res://addons/gut/,res://addons/gut/*,res://tests/,res://tests/*` to client preset `exclude_filter` in `export_presets.cfg`.
-- [ ] 2.5 Fix `tests/integration/test_netfox_sync.gd`: tabs not spaces (lines 76-78, 82-87); retarget assertions to `RollbackSynchronizer`/`StateSynchronizer`.
-- [ ] 2.6 Set `testing.runner_installed: true` in `openspec/config.yaml`; verify both smoke scripts + GUT unit/integration suites run.
+- [x] 2.1 Add `"dedicated_server"` to `config/features` in `project.godot`.
+- [x] 2.2 Harden `GameManager._is_headless_environment()` in `common/game_manager.gd`: editor runs check `DisplayServer.get_name() == "headless"` only.
+- [x] 2.3 Install pinned GUT 9.x (GitHub `bitwes/Gut` release, Godot 4.7 support) into `addons/gut/`; do NOT enable editor plugin; record version.
+- [x] 2.4 Append `res://addons/gut/,res://addons/gut/*,res://tests/,res://tests/*` to client preset `exclude_filter` in `export_presets.cfg`.
+- [x] 2.5 Fix `tests/integration/test_netfox_sync.gd`: tabs not spaces (lines 76-78, 82-87); retarget assertions to `RollbackSynchronizer`/`StateSynchronizer`.
+- [x] 2.6 Set `testing.runner_installed: true` in `openspec/config.yaml`; verify both smoke scripts + GUT unit/integration suites run.
 
 ## Phase 3: Rollback Integrity Fix (Etapa 1)
 
