@@ -52,6 +52,6 @@ Chain strategy: pending
 
 ## Phase 5: Verification & Baseline Record
 
-- [ ] 5.1 Re-run both smoke scripts and GUT suites; verify one input → exactly one movement/attack per tick (headless server + 2 clients, before/after). — Automated layers DONE (smoke PASS, GUT 7/7 + 9/9); interactive 2-client check still pending.
+- [x] 5.1 Re-run both smoke scripts and GUT suites; verify one input → exactly one movement/attack per tick (headless server + 2 clients, before/after). — DONE with runtime A/B evidence: scripted client (`tests/manual/runtime_movement_test.gd`) against headless server measured steady-state speed **8.0 m/s on `dd0de46~1` (pre-fix) vs 4.0 m/s post-fix** — exactly 2x, confirming the double-tick existed and is removed. Smoke PASS, GUT 7/7 + 9/9.
 - [x] 5.2 Grep rollback paths for `randi|randf|SceneTreeTimer|Time\.` — confirm only documented server-gated exceptions remain.
 - [x] 5.3 Write `openspec/changes/rollback-integrity-baseline/baseline.md`: branch, smoke results, GUT version, netfox client-exclusion open question, spawn ID strategy.

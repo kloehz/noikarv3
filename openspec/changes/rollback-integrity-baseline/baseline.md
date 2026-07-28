@@ -76,11 +76,22 @@ Removed manual `LogicComponent._rollback_tick()` forwarding from `BaseEntity.gd`
 | Totem | `global_position`, +`totem_type`, +`stored_souls` |
 | Projectile | none (Stage 2: direction/owner via custom spawn) |
 
+## Runtime verification (task 5.1) — DONE
+
+Scripted A/B test (`tests/manual/runtime_movement_test.gd`): headless server + scripted ENet client, constant forward input facing away from mob spawn, per-tick displacement sampling (p75).
+
+| Version | Measured speed |
+|-------|----------------|
+| `dd0de46~1` (pre-fix, manual forwarding alive) | **8.0 m/s** |
+| `4214a8e` (post-fix) | **4.0 m/s** |
+
+Exactly 2x — the double-tick existed and the fix removes it. Uniform percentiles (p50=p75=p90) confirm clean per-tick movement with no duplication bursts.
+
+## New finding: tickrate negotiation + speed calibration (follow-up change)
+
+During the runtime test, the netfox tickrate handshake reported `Received tickrate 30 from peer 1` despite `tickrate=60` in `project.godot`, and steady-state player speed measures **4.0 m/s** instead of the designed `max_speed = 10.0` (`LogicComponent.gd:7`). `NetworkTime.physics_factor` is not used anywhere in `core/` or `common/`; the documented netfox pattern wraps `move_and_slide()` with it (`velocity *= NetworkTime.physics_factor` / `/=`), and `_apply_movement` does not. Speed ratio 0.4 ≈ tickrate mismatch/physics-factor territory. This predates the double-tick fix (pre-fix measured 8.0 = 2x of the same wrong baseline) and is out of scope for this change — needs its own change: why tickrate negotiates to 30, and whether `_apply_movement` must use `physics_factor`.
+
 ## Open questions (carried from design)
 
 - Client export preset excludes `res://addons/netfox/` (`export_presets.cfg:10`) — that strips rollback/prediction code from clients. Likely a latent bug; out of scope here. Confirm intent before Stage 8 headless export work.
 - `BaseEntity.tscn` has no `MultiplayerSynchronizer` — player spawn data relies on `StateSynchronizer` deltas only. Acceptable now; consider a minimal `SceneReplicationConfig` (position) in Stage 2.
-
-## Pending manual verification
-
-- One input → exactly one movement/attack per rollback tick (headless server + 2 clients, before/after `dd0de46`). Automated layers pass; interactive check still pending.
