@@ -160,7 +160,7 @@ func _apply_power_scaling() -> void:
 	# Visual scaling
 	scale = Vector3.ONE * (1.0 + (power_level * 0.02))
 
-func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if _spawn_grace_active:
 		var logic = get_node_or_null("LogicComponent")
 		if logic:
@@ -169,17 +169,24 @@ func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
 			logic.current_velocity = Vector3.ZERO
 		return
 
-	# 1. Physics/Movement (Inherited logic from BaseEntity -> LogicComponent)
-	super._rollback_tick(delta, tick, is_fresh)
-	
-	# 2. Skill execution logic (Server only)
+	# No super call: RollbackSynchronizer auto-discovers and ticks every
+	# rollback-aware node under its root (LogicComponent included). Manually
+	# forwarding from here would double-tick LogicComponent.
+
+	# Skill execution logic (Server only)
 	if not is_fresh or not multiplayer.is_server(): return
-	
+
 	# Skill execution logic
 	skill_timer += delta
 	if skill_timer >= skill_interval:
 		_execute_skill()
 		skill_timer = 0.0
+
+# NOTE: Skill randf() rolls are server-gated (is_fresh && is_server); outcomes
+# replicate to clients via ServerState/HealthComponent/StateSynchronizer, so
+# client determinism is not affected.
+# TODO(Stage 2): seed a RewindableRandomNumberGenerator (netfox.extras) with
+# the spawn_id so pet prediction can roll identical skills.
 
 func _execute_skill() -> void:
 	match pet_type:

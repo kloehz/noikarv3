@@ -121,7 +121,7 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 	
 	print("[Enemy] %s spawned at %s (type: %s)" % [name, global_position, enemy_type])
 
-func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+func _rollback_tick(_delta: float, _tick: int, _is_fresh: bool) -> void:
 	if _spawn_grace_active:
 		var logic = get_node_or_null("LogicComponent")
 		if logic:
@@ -130,7 +130,9 @@ func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
 			logic.current_velocity = Vector3.ZERO
 		return
 
-	super._rollback_tick(delta, tick, is_fresh)
+	# No super call: RollbackSynchronizer auto-discovers and ticks every
+	# rollback-aware node under its root (LogicComponent included). Manually
+	# forwarding from here would double-tick LogicComponent.
 
 func _apply_actor_specs_to_ai() -> void:
 	if not is_instance_valid(character_actor): return
