@@ -1,0 +1,56 @@
+# openspec/config.yaml
+schema: spec-driven
+
+strict_tdd: false
+
+context: |
+  Tech stack: Godot 4.7 (Mobile renderer), GDScript, Jolt Physics, Netfox v2.x (rollback netcode) + netfox.noray (Noray NAT traversal).
+  Architecture: Server-authority PvPvE brawler. Authority split: LogicComponent/RollbackSynchronizer player-owned,
+  ServerState/StateSynchronizer server-owned. BaseEntity.gd acts as proxy between network variables and local components.
+  Layout: common/ (shared entities, components, autoloads: EventBus, GameManager, MatchManager),
+  core/ (server-only: AIComponent, CombatComponent, LogicComponent — excluded from client export),
+  client/ (client-only UI/resources), scenes/ (.tscn), addons/ (netfox*).
+  Testing: GUT tests authored (tests/unit, tests/integration) but GUT addon NOT installed — cannot run.
+  Python smoke scripts: tests/verify_export_isolation.py (passes), tests/verify_headless_server.py (fails:
+  missing 'dedicated_server' feature tag in project.godot).
+  Style: Static-typed GDScript, tickrate 60, Rakion-style camera, volumetric melee via ShapeCast3D.
+
+testing:
+  runner: gut
+  runner_installed: false
+  runner_note: "GUT tests exist but addons/gut is missing; GDScript tests cannot execute until installed."
+  unit_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit"
+  integration_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit"
+  smoke_export_isolation: "python3 tests/verify_export_isolation.py"
+  smoke_headless_server: "python3 tests/verify_headless_server.py --quick"
+  coverage: ""
+  linter: ""
+  type_checker: "godot --headless --check-only (built-in script check)"
+  formatter: ""
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Respect the authority split: player-owned LogicComponent vs server-owned ServerState
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - State which side (server/client) owns each new behavior
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+    - Server-dictated state goes in ServerState.gd and StateSynchronizer property list
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns (Netfox authority split, component composition)
+    - Never remove the ServerState node from entities; it is the authoritative data bridge
+    tdd: false
+    test_command: "python3 tests/verify_export_isolation.py"
+  verify:
+    test_command: "python3 tests/verify_export_isolation.py && python3 tests/verify_headless_server.py --quick"
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
