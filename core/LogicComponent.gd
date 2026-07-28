@@ -230,17 +230,22 @@ func _apply_movement(delta: float) -> void:
 		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
 	
 	# APPLY MOVEMENT (Refactored to move_and_slide)
+	# Wrap with NetworkTime.physics_factor: netfox ticks run from _process
+	# (sync_to_physics=false), so move_and_slide() integrates over the RENDER
+	# frame delta. Scaling velocity by physics_factor converts per-frame
+	# integration into per-tick integration, making real-world speed
+	# framerate-independent on clients and on the uncapped-FPS headless server.
 	var old_pos = entity.global_position
-	entity.velocity = current_velocity
+	entity.velocity = current_velocity * NetworkTime.physics_factor
 	entity.move_and_slide()
-	
+
 	# CRITICAL FOR NETFOX: Force transform update so rollback captures the new position
 	# Optimization: Only force update if position actually changed or if it's the server
 	if old_pos.distance_squared_to(entity.global_position) > 0.0001 or multiplayer.is_server():
 		entity.force_update_transform()
-	
+
 	# Sync back velocity for next frame (handles collisions stopping movement)
-	current_velocity = entity.velocity
+	current_velocity = entity.velocity / NetworkTime.physics_factor
 
 # Removed _clear_server_impulse as it's no longer needed with time-based state
 
