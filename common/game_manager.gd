@@ -12,7 +12,12 @@ func _ready() -> void:
 		_start_as_client()
 
 ## Detect if running as a dedicated server or headless.
+## Project feature tags apply to editor runs too, so the "dedicated_server"
+## tag alone would make every editor run self-detect as a server. Guard editor
+## runs to only honor an actually headless display server.
 func _is_headless_environment() -> bool:
+	if OS.has_feature("editor"):
+		return DisplayServer.get_name() == "headless"
 	return OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless"
 
 func _start_as_server() -> void:
