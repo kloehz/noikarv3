@@ -32,13 +32,13 @@ Standard mode (strict_tdd: false): tests ship with the code they verify.
 
 ## Phase 2: MatchState + MatchDirector (PR2)
 
-- [ ] 2.1 Create `common/match_state.gd`: authority 1, nested `enum Phase` (9, LOBBY=0); replicated `phase`, `phase_entered_tick`, `match_seed`, score stubs, `winner`; setter value-guards + `_signals_armed` (one-shot `NetworkTime.after_tick_loop` on non-authority).
-- [ ] 2.2 Create `common/match_director.gd`: pure `tick_update(tick)`; timers 180t/180t/600t via MatchRules; stubs `request_match_start()`/`request_boss_lock()`/`request_boss_a1_end()`; `match_seed = seed_base + match_index` at ROUND_SETUP; LOBBY assignment (sorted peers, alternate, full recompute); POST_MATCH→LOBBY reset.
-- [ ] 2.3 Add MatchState + StateSynchronizer + MatchDirector to `scenes/main.tscn` under Main; `match_director` group; server-only `NetworkTime.after_tick` hookup.
-- [ ] 2.4 Extend `common/event_bus.gd`: `phase_changed(phase: int)`, `team_assigned`; `match_started` once at PVE_RACE, `match_ended(NONE)` once at RESULT.
-- [ ] 2.5 GUT unit `tests/unit/test_match_state.gd`: setter guards; armed-signal suppresses catch-up burst (late-join silent).
-- [ ] 2.6 GUT integration `tests/integration/test_match_director_phases.gd`: `OfflineMultiplayerPeer` + synthetic ticks + injected roster; 2-team walk LOBBY→POST_MATCH in exact order; two runs → identical (phase, tick) logs; silent late-join (no spurious `phase_changed`).
-- [ ] 2.7 Gate: all GUT suites green; determinism proven; no director code reachable from `_rollback_tick`.
+- [x] 2.1 Create `common/match_state.gd`: authority 1, nested `enum Phase` (9, LOBBY=0); replicated `phase`, `phase_entered_tick`, `match_seed`, score stubs, `winner`; setter value-guards + `_signals_armed` (one-shot `NetworkTime.after_tick_loop` on non-authority).
+- [x] 2.2 Create `common/match_director.gd`: pure `tick_update(tick)`; timers 180t/180t/600t via MatchRules; stubs `request_match_start()`/`request_boss_lock()`/`request_boss_a1_end()`; `match_seed = seed_base + match_index` at ROUND_SETUP; LOBBY assignment (sorted peers, alternate, full recompute); POST_MATCH→LOBBY reset.
+- [x] 2.3 Add MatchState + StateSynchronizer + MatchDirector to `scenes/main.tscn` under Main; `match_director` group; server-only `NetworkTime.after_tick` hookup.
+- [x] 2.4 Extend `common/event_bus.gd`: `phase_changed(phase: int)`, `team_assigned`; `match_started` once at PVE_RACE, `match_ended(NONE)` once at RESULT.
+- [x] 2.5 GUT unit `tests/unit/test_match_state.gd`: setter guards; armed-signal suppresses catch-up burst (late-join silent).
+- [x] 2.6 GUT integration `tests/integration/test_match_director_phases.gd`: `OfflineMultiplayerPeer` + synthetic ticks + injected roster; 2-team walk LOBBY→POST_MATCH in exact order; two runs → identical (phase, tick) logs; silent late-join (no spurious `phase_changed`).
+- [x] 2.7 Gate: all GUT suites green; determinism proven; no director code reachable from `_rollback_tick`.
 
 ## Phase 3: Spawn Routing + Team Wiring (PR3)
 
