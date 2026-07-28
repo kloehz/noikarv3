@@ -6,6 +6,7 @@ signal health_changed(current: int, maximum: int)
 signal death_changed(is_dead: bool)
 signal name_changed(new_name: String)
 signal souls_changed(amount: int)
+signal team_changed(new_team: int)
 signal pet_data_received(type: String, level: int)
 
 @export var max_health: int = 100:
@@ -37,6 +38,14 @@ signal pet_data_received(type: String, level: int)
 		if sync_souls == v: return
 		sync_souls = v
 		souls_changed.emit(sync_souls)
+
+## Replicated per-entity team identity (int-serialized TeamId).
+## Server-written only; stays NONE until roster assignment (Roadmap Stage 2 PR3).
+@export var team_id: int = TeamId.NONE:
+	set(v):
+		if team_id == v: return
+		team_id = v
+		team_changed.emit(team_id)
 
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
@@ -71,6 +80,7 @@ func _ready() -> void:
 		sync.add_state(self, "sync_is_dead")
 		sync.add_state(self, "player_name")
 		sync.add_state(self, "sync_souls")
+		sync.add_state(self, "team_id")
 		sync.add_state(self, "knockback_velocity")
 		sync.add_state(self, "knockback_remaining_time")
 		sync.add_state(self, "is_stunned")
