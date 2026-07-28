@@ -80,7 +80,6 @@ func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	
 	if animation_player.has_animation(actual_anim):
 		if animation_player.current_animation != actual_anim:
-			print("[CharacterActor] %s playing animation: %s" % [name, actual_anim])
 			animation_player.play(actual_anim, blend)
 
 ## Check if a specific animation or any one-shot is playing

@@ -23,6 +23,9 @@ extends BaseEntity
 # --- Actor scene mapping ---
 const ENEMY_ACTORS := {
 	"AATROX": "res://scenes/characters/Aatrox.tscn",
+	"HECARIM_TANK": "res://scenes/characters/HecarimTank.tscn",
+	"IVERN_HEAL": "res://scenes/characters/IvernHeal.tscn",
+	"KOGMAW_DMG": "res://scenes/characters/KogMawDmg.tscn",
 	# Add new enemy types here:
 	# "GOBLIN": "res://scenes/characters/MobGoblin.tscn",
 	# "DRAGON": "res://scenes/characters/MobDragon.tscn",

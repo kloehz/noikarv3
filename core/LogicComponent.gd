@@ -155,16 +155,16 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 		input_axis = Vector2.ZERO
 		return
 	
-	# Handle Stun
-	if _server_state and _server_state.is_stunned:
-		input_axis = Vector2.ZERO
-		is_shooting = false
-		if multiplayer.is_server():
-			_server_state.stun_remaining_time -= delta
-			if _server_state.stun_remaining_time <= 0:
-				_server_state.is_stunned = false
-		_apply_movement(delta)
-		return
+	# Handle Stun — temporarily disabled for playtesting (re-enable when wanted)
+	# if _server_state and _server_state.is_stunned:
+	# 	input_axis = Vector2.ZERO
+	# 	is_shooting = false
+	# 	if multiplayer.is_server():
+	# 		_server_state.stun_remaining_time -= delta
+	# 		if _server_state.stun_remaining_time <= 0:
+	# 			_server_state.is_stunned = false
+	# 	_apply_movement(delta)
+	# 	return
 		
 	var is_human = entity.name.is_valid_int()
 
@@ -199,20 +199,18 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 func _apply_movement(delta: float) -> void:
 	if not entity: return
 	
-	if _server_state and _server_state.is_stunned:
-		current_velocity = current_velocity.move_toward(Vector3.ZERO, acceleration * 10.0 * delta)
 	# 0. DASH Logic (Predictive)
-	elif is_dashing:
+	if is_dashing:
 		current_velocity = dash_direction * (max_speed * DASH_SPEED_MULT)
-	# 1. Authoritative Knockback State from ServerState
-	elif _server_state and _server_state.knockback_remaining_time > 0:
-		current_velocity = _server_state.knockback_velocity
-		
-		# Server manages the timer
-		if multiplayer.is_server():
-			_server_state.knockback_remaining_time -= delta
-			if _server_state.knockback_remaining_time <= 0:
-				_server_state.knockback_velocity = Vector3.ZERO
+	# 1. Authoritative Knockback State from ServerState — temporarily disabled for playtesting
+	# elif _server_state and _server_state.knockback_remaining_time > 0:
+	# 	current_velocity = _server_state.knockback_velocity
+	#
+	# 	# Server manages the timer
+	# 	if multiplayer.is_server():
+	# 		_server_state.knockback_remaining_time -= delta
+	# 		if _server_state.knockback_remaining_time <= 0:
+	# 			_server_state.knockback_velocity = Vector3.ZERO
 	else:
 		# Normal Input-based movement
 		# Rotation

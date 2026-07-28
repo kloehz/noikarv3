@@ -370,11 +370,11 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 		
 		# === APPLY DAMAGE ===
 		hurtbox.receive_hit_data(hit_damage, entity)
-		
-		# === APPLY KNOCKBACK via ServerState ===
-		if target.has_node("ServerState"):
-			var target_state = target.get_node("ServerState")
-			var kb_dir = (target.global_position - entity.global_position).normalized()
-			kb_dir.y = 0  # Keep horizontal
-			target_state.knockback_velocity = kb_dir * hit_knockback
-			target_state.knockback_remaining_time = 0.25
+
+		# === APPLY KNOCKBACK via ServerState — temporarily disabled for playtesting ===
+		# if target.has_node("ServerState"):
+		# 	var target_state = target.get_node("ServerState")
+		# 	var kb_dir = (target.global_position - entity.global_position).normalized()
+		# 	kb_dir.y = 0  # Keep horizontal
+		# 	target_state.knockback_velocity = kb_dir * hit_knockback
+		# 	target_state.knockback_remaining_time = 0.25

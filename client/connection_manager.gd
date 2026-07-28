@@ -27,6 +27,10 @@ enum State { LOGIN, LOBBY, CONNECTING, IN_GAME }
 var current_state: State = State.LOGIN
 
 func _ready() -> void:
+	# Force cursor visible at startup (Godot 4.7 on macOS sometimes keeps the
+	# cursor hidden if the window loses focus before _switch_state runs).
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 	# Signal connections
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
