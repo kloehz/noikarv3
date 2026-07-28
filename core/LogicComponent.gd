@@ -46,11 +46,46 @@ func _ready() -> void:
 	
 	camera_pivot = get_parent().get_node_or_null("CameraPivot")
 	_server_state = get_parent().get_node_or_null("ServerState")
-	
+
 	if not _server_state:
 		print("[WARNING] LogicComponent %s: ServerState not found!" % entity_name)
 	else:
 		print("[DEBUG] LogicComponent %s: ServerState linked" % entity_name)
+
+	# Live input is sampled once per tick loop, before ticks run. Rollback
+	# ticks must only read the recorded input properties (netfox restores
+	# them during resimulations), never Input.* directly.
+	NetworkTime.before_tick_loop.connect(_gather_input)
+
+## Sample live Input for the owning human player, once per tick loop.
+## RollbackSynchronizer records input_axis/is_shooting/look_yaw and restores
+## them for resimulation ticks, so _rollback_tick reads properties only.
+func _gather_input() -> void:
+	if Engine.is_editor_hint() or not entity: return
+	if not entity.name.is_valid_int() or not _is_local_authority(): return
+
+	input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
+	is_shooting = Input.is_action_pressed("shoot")
+
+	# Dash trigger (prediction handled by netfox)
+	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0 and not is_dashing:
+		_start_dash()
+
+func _start_dash() -> void:
+	is_dashing = true
+	dash_timer = DASH_DURATION
+	dash_cooldown = DASH_COOLDOWN_TIME
+
+	# Dash in movement direction, or forward if standing still
+	var move_dir = Vector3.ZERO
+	if input_axis.length() > 0:
+		var forward = -entity.global_transform.basis.z
+		var right = entity.global_transform.basis.x
+		move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+	else:
+		move_dir = -entity.global_transform.basis.z
+
+	dash_direction = move_dir
 
 func _input(event: InputEvent) -> void:
 	# CRITICAL: Only human-controlled entities should process input.
@@ -132,29 +167,11 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 		return
 		
 	var is_human = entity.name.is_valid_int()
-	
-	if is_human and _is_local_authority():
-		input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
-		is_shooting = Input.is_action_pressed("shoot")
-		
-		# Dash trigger (Prediction handled by Netfox)
-		if Input.is_action_just_pressed("dash") and dash_cooldown <= 0 and not is_dashing:
-			is_dashing = true
-			dash_timer = DASH_DURATION
-			dash_cooldown = DASH_COOLDOWN_TIME
-			
-			# Dash in movement direction, or forward if standing still
-			var move_dir = Vector3.ZERO
-			if input_axis.length() > 0:
-				var forward = -entity.global_transform.basis.z
-				var right = entity.global_transform.basis.x
-				move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
-			else:
-				move_dir = -entity.global_transform.basis.z
-			
-			dash_direction = move_dir
 
-	elif not is_human and multiplayer.is_server():
+	# Live Input sampling happens in _gather_input() (before_tick_loop).
+	# Here we only read input_axis/is_shooting/look_yaw, which netfox records
+	# and restores for resimulation ticks.
+	if not is_human and multiplayer.is_server():
 		# AI CONTROL: Only on server for non-humans
 		var ai = entity.get_node_or_null("AIComponent")
 		if ai and ai.has_method("tick"):
