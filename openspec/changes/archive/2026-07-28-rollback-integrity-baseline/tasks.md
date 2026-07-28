@@ -39,19 +39,19 @@ Chain strategy: pending
 
 ## Phase 3: Rollback Integrity Fix (Etapa 1)
 
-- [ ] 3.1 Delete `_rollback_tick` (lines 248-250) from `common/BaseEntity.gd` — isolated commit.
-- [ ] 3.2 Delete `super._rollback_tick(...)` at `common/EnemyEntity.gd:133`; keep grace guard.
-- [ ] 3.3 Delete `super._rollback_tick(...)` at `common/PetEntity.gd:173`; keep skill block; add comment that `randf()` skills are server-gated and replicate via ServerState (Stage 2: seed `RewindableRandomNumberGenerator`).
-- [ ] 3.4 Move live `Input` sampling out of `core/LogicComponent.gd` `_rollback_tick` into `_gather_input()` connected to `NetworkTime.before_tick_loop` (authority-only, humans only); extract dash trigger; rollback tick reads properties only.
+- [x] 3.1 Delete `_rollback_tick` (lines 248-250) from `common/BaseEntity.gd` — isolated commit.
+- [x] 3.2 Delete `super._rollback_tick(...)` at `common/EnemyEntity.gd:133`; keep grace guard.
+- [x] 3.3 Delete `super._rollback_tick(...)` at `common/PetEntity.gd:173`; keep skill block; add comment that `randf()` skills are server-gated and replicate via ServerState (Stage 2: seed `RewindableRandomNumberGenerator`).
+- [x] 3.4 Move live `Input` sampling out of `core/LogicComponent.gd` `_rollback_tick` into `_gather_input()` connected to `NetworkTime.before_tick_loop` (authority-only, humans only); extract dash trigger; rollback tick reads properties only.
 
 ## Phase 4: Spawn IDs & Replication Metadata (Etapa 1)
 
-- [ ] 4.1 Add `match_seed` (0), `_spawn_counters`, `_next_spawn_id(prefix)` to `common/match_manager.gd` per design contract; replace `randi()` names at all spawn sites (MOB_/ELITE_/PET_/SOUL_/TOTEM_ prefixes).
-- [ ] 4.2 Add `process_settings()` calls after post-`_ready` authority changes: `match_manager.gd:_setup_pet_logic` (line 324), `EnemyEntity.setup_enemy` (line 120).
-- [ ] 4.3 Extend `SceneReplicationConfig` spawn props (spawn=true, mode=1): Enemy +`enemy_type`,`difficulty`; Pet +`owner_id`,`pet_type`,`power_level`; Soul +`original_mob_scene_path`; Totem +`totem_type`,`stored_souls`.
+- [x] 4.1 Add `match_seed` (0), `_spawn_counters`, `_next_spawn_id(prefix)` to `common/match_manager.gd` per design contract; replace `randi()` names at all spawn sites (MOB_/ELITE_/PET_/SOUL_/TOTEM_ prefixes).
+- [x] 4.2 Add `process_settings()` calls after post-`_ready` authority changes: `match_manager.gd:_setup_pet_logic` (line 324), `EnemyEntity.setup_enemy` (line 120).
+- [x] 4.3 Extend `SceneReplicationConfig` spawn props (spawn=true, mode=1): Enemy +`enemy_type`,`difficulty`; Pet +`owner_id`,`pet_type`,`power_level`; Soul +`original_mob_scene_path`; Totem +`totem_type`,`stored_souls`.
 
 ## Phase 5: Verification & Baseline Record
 
-- [ ] 5.1 Re-run both smoke scripts and GUT suites; verify one input → exactly one movement/attack per tick (headless server + 2 clients, before/after).
-- [ ] 5.2 Grep rollback paths for `randi|randf|SceneTreeTimer|Time\.` — confirm only documented server-gated exceptions remain.
-- [ ] 5.3 Write `openspec/changes/rollback-integrity-baseline/baseline.md`: branch, smoke results, GUT version, netfox client-exclusion open question, spawn ID strategy.
+- [x] 5.1 Re-run both smoke scripts and GUT suites; verify one input → exactly one movement/attack per tick (headless server + 2 clients, before/after). — DONE with runtime A/B evidence: scripted client (`tests/manual/runtime_movement_test.gd`) against headless server measured steady-state speed **8.0 m/s on `dd0de46~1` (pre-fix) vs 4.0 m/s post-fix** — exactly 2x, confirming the double-tick existed and is removed. Smoke PASS, GUT 7/7 + 9/9.
+- [x] 5.2 Grep rollback paths for `randi|randf|SceneTreeTimer|Time\.` — confirm only documented server-gated exceptions remain.
+- [x] 5.3 Write `openspec/changes/rollback-integrity-baseline/baseline.md`: branch, smoke results, GUT version, netfox client-exclusion open question, spawn ID strategy.
