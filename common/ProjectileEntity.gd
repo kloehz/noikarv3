@@ -45,8 +45,12 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 		return
 	
 	# --- MOVEMENT ---
-	velocity = _direction * speed
+	# Same NetworkTime.physics_factor wrap as LogicComponent: move_and_slide()
+	# integrates over the render frame delta, so scale velocity into per-tick
+	# displacement to keep projectile speed framerate-independent.
+	velocity = _direction * speed * NetworkTime.physics_factor
 	move_and_slide()
+	velocity /= NetworkTime.physics_factor
 	
 	# --- LIFETIME ---
 	_lifetime_remaining -= delta

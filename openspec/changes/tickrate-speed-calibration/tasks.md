@@ -32,10 +32,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Movement Wrap + Test Update (Work Unit 2)
 
-- [ ] 2.1 In `core/LogicComponent.gd:229-235` (`_apply_movement`): multiply velocity by `NetworkTime.physics_factor` before `move_and_slide()`, divide the read-back velocity after it.
-- [ ] 2.2 In `common/ProjectileEntity.gd:48-49` (`_rollback_tick`): apply the identical multiply/divide wrap.
-- [ ] 2.3 In `tests/manual/runtime_movement_test.gd`: replace PASS band p75 ∈ [3.0, 15.0] with measured/max_speed ratio ∈ [0.9, 1.1].
-- [ ] 2.4 Add desynced-FPS coverage to the runtime test: runs at `Engine.max_fps` 40 and 144 asserting the same ratio band (MANDATORY — defeats the tickrate==fps masking coincidence).
+- [x] 2.1 In `core/LogicComponent.gd:229-235` (`_apply_movement`): multiply velocity by `NetworkTime.physics_factor` before `move_and_slide()`, divide the read-back velocity after it.
+- [x] 2.2 In `common/ProjectileEntity.gd:48-49` (`_rollback_tick`): apply the identical multiply/divide wrap.
+- [x] 2.3 In `tests/manual/runtime_movement_test.gd`: replace PASS band p75 ∈ [3.0, 15.0] with measured/max_speed ratio ∈ [0.9, 1.1].
+- [x] 2.4 Add desynced-FPS coverage to the runtime test: runs at `Engine.max_fps` 40 and 144 asserting the same ratio band (MANDATORY — defeats the tickrate==fps masking coincidence).
 
 ## Phase 3: Verification (Work Unit 3)
 
