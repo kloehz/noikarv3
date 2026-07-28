@@ -9,7 +9,7 @@ extends BaseEntity
 ##
 ## Usage:
 ##   var enemy = ENEMY_SCENE.instantiate()
-##   enemy.name = "MOB_" + str(randi() % 10000)
+##   enemy.name = match_manager._next_spawn_id("MOB_")
 ##   players_container.add_child(enemy, true)
 ##   enemy.setup_enemy("AATROX", Vector3(0, 0, -5))
 
