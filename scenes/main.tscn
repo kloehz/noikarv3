@@ -17,6 +17,38 @@ transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 10, 0)
 
 [node name="Players" type="Node3D" parent="." unique_id=382746215]
 
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="." unique_id=342014473]
+_spawnable_scenes = PackedStringArray("uid://bvbjvutgbeanf")
+spawn_path = NodePath("../Players")
+
+[node name="Mobs" type="Node3D" parent="." unique_id=601337824]
+
+[node name="MobSpawner" type="MultiplayerSpawner" parent="." unique_id=2094506118]
+_spawnable_scenes = PackedStringArray("uid://dg7xnmokokkvl")
+spawn_path = NodePath("../Mobs")
+
+[node name="Souls" type="Node3D" parent="." unique_id=1683442590]
+
+[node name="SoulSpawner" type="MultiplayerSpawner" parent="." unique_id=1327615084]
+_spawnable_scenes = PackedStringArray("res://scenes/SoulEntity.tscn")
+spawn_path = NodePath("../Souls")
+
+[node name="Totems" type="Node3D" parent="." unique_id=984126730]
+
+[node name="TotemSpawner" type="MultiplayerSpawner" parent="." unique_id=756209311]
+_spawnable_scenes = PackedStringArray("res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn")
+spawn_path = NodePath("../Totems")
+
+[node name="Minions" type="Node3D" parent="." unique_id=1459872033]
+
+[node name="MinionSpawner" type="MultiplayerSpawner" parent="." unique_id=1147309265]
+spawn_path = NodePath("../Minions")
+
+[node name="Boss" type="Node3D" parent="." unique_id=1893447512]
+
+[node name="BossSpawner" type="MultiplayerSpawner" parent="." unique_id=674820159]
+spawn_path = NodePath("../Boss")
+
 [node name="MatchState" type="Node" parent="." unique_id=572193841]
 script = ExtResource("3_mstate")
 
@@ -32,10 +64,6 @@ rules = ExtResource("6_rules")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
 use_collision = true
 size = Vector3(100, 2, 100)
-
-[node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=342014473]
-_spawnable_scenes = PackedStringArray("uid://bvbjvutgbeanf", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "uid://dg7xnmokokkvl")
-spawn_path = NodePath("../Players")
 
 [node name="Projectiles" type="Node3D" parent="." unique_id=491856876]
 

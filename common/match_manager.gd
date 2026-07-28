@@ -12,6 +12,10 @@ const MOB_RESPAWN_DELAY: float = 3.0
 const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 
 @onready var players_container: Node3D = $Players
+@onready var mobs_container: Node3D = $Mobs
+@onready var souls_container: Node3D = $Souls
+## Totems AND pets spawn under this container (keeps Players human-only).
+@onready var totems_container: Node3D = $Totems
 
 # --- CONFIGURATION: ELITE MOBS ---
 @export var elite_respawn_chance: float = 0.4
@@ -72,9 +76,9 @@ func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float =
 	enemy.name = _next_spawn_id("MOB_")
 	enemy.spawn_grace_duration = spawn_grace_duration
 
-	_prepare_spawn_position(enemy, pos)
+	_prepare_spawn_position(enemy, pos, mobs_container)
 
-	players_container.add_child(enemy, true)
+	mobs_container.add_child(enemy, true)
 	_finalize_spawn_position(enemy, pos)
 
 	if enemy.has_method("setup_enemy"):
@@ -82,8 +86,8 @@ func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float =
 	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
 	return enemy
 
-func _prepare_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
-	entity.position = players_container.to_local(global_pos)
+func _prepare_spawn_position(entity: Node3D, global_pos: Vector3, container: Node3D) -> void:
+	entity.position = container.to_local(global_pos)
 
 func _finalize_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
 	entity.global_position = global_pos
@@ -228,8 +232,8 @@ func _on_entity_died(entity: Node3D) -> void:
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
 	soul.name = _next_spawn_id("SOUL_")
-	_prepare_spawn_position(soul, pos)
-	players_container.add_child(soul, true)
+	_prepare_spawn_position(soul, pos, souls_container)
+	souls_container.add_child(soul, true)
 	_finalize_spawn_position(soul, pos)
 	
 	soul.expired.connect(func(): _on_soul_expired(pos))
@@ -243,9 +247,9 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 	var elite = ENEMY_SCENE.instantiate()
 	elite.name = _next_spawn_id("ELITE_")
 
-	_prepare_spawn_position(elite, pos)
+	_prepare_spawn_position(elite, pos, mobs_container)
 
-	players_container.add_child(elite, true)
+	mobs_container.add_child(elite, true)
 	_finalize_spawn_position(elite, pos)
 
 	if elite.has_method("setup_enemy"):
@@ -293,9 +297,9 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	var totem_pos = player.global_position + (forward * 2.0)
 	totem.totem_type = type
 	totem.stored_souls = souls
-	_prepare_spawn_position(totem, totem_pos)
-	
-	players_container.add_child(totem, true)
+	_prepare_spawn_position(totem, totem_pos, totems_container)
+
+	totems_container.add_child(totem, true)
 	_finalize_spawn_position(totem, totem_pos)
 	print("[SERVER] !!! SUMMONING TOTEM !!! at %s for player %s" % [totem.global_position, player.name])
 	
@@ -315,14 +319,14 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	pet.owner_id = owner_id
 	pet.pet_type = type_str
 	pet.power_level = souls
-	_prepare_spawn_position(pet, pos)
+	_prepare_spawn_position(pet, pos, totems_container)
 
 	var server_state = pet.get_node_or_null("ServerState")
 	if server_state:
 		server_state.pet_type_sync = type_str
 		server_state.power_level_sync = souls
-	
-	players_container.add_child(pet, true)
+
+	totems_container.add_child(pet, true)
 	_finalize_spawn_position(pet, pos)
 	
 	# Initial pet setup on server
@@ -402,7 +406,7 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Spawn at a safe position (away from dummies)
 	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
-	_prepare_spawn_position(player, spawn_pos)
+	_prepare_spawn_position(player, spawn_pos, players_container)
 	
 	players_container.add_child(player, true)
 	_finalize_spawn_position(player, spawn_pos)
