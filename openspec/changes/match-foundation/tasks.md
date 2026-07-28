@@ -42,9 +42,9 @@ Standard mode (strict_tdd: false): tests ship with the code they verify.
 
 ## Phase 3: Spawn Routing + Team Wiring (PR3)
 
-- [ ] 3.1 `scenes/main.tscn`: containers Mobs/Souls/Totems (spawnable Totem+Pet) + stub Minions/Boss (empty Node3D + spawner, empty `_spawnable_scenes`); one MultiplayerSpawner each; verify spawn-property configs.
-- [ ] 3.2 Refactor `common/match_manager.gd` spawn routing into typed containers — name prefixes identical (MOB_/ELITE_/PET_/SOUL_/TOTEM_, int peer names); behavior-preserving.
-- [ ] 3.3 Add `set_match_seed` to MatchManager; wire ROUND_SETUP seed into `_next_spawn_id`; set `team_id` on `_spawn_player` from roster.
-- [ ] 3.4 Add spawn-sequence-ordered team registry to `common/match_director.gd` (`register_to_team`/`unregister_from_team`, no caps); MatchManager uses group lookup + `has_method` guard.
-- [ ] 3.5 GUT integration `tests/integration/test_spawn_routing.gd`: typed containers; BaseEntity name-prefix groups match pre-change; team_id replicates to clients; deterministic registry order; solo/free play unchanged.
-- [ ] 3.6 Gate: all GUT suites green; `tests/verify_headless_server.py --quick` green.
+- [x] 3.1 `scenes/main.tscn`: containers Mobs/Souls/Totems (spawnable Totem+Pet) + stub Minions/Boss (empty Node3D + spawner, empty `_spawnable_scenes`); one MultiplayerSpawner each; verify spawn-property configs.
+- [x] 3.2 Refactor `common/match_manager.gd` spawn routing into typed containers — name prefixes identical (MOB_/ELITE_/PET_/SOUL_/TOTEM_, int peer names); behavior-preserving.
+- [x] 3.3 Add `set_match_seed` to MatchManager; wire ROUND_SETUP seed into `_next_spawn_id`; set `team_id` on `_spawn_player` from roster.
+- [x] 3.4 Add spawn-sequence-ordered team registry to `common/match_director.gd` (`register_to_team`/`unregister_from_team`, no caps); MatchManager uses group lookup + `has_method` guard.
+- [x] 3.5 GUT integration `tests/integration/test_spawn_routing.gd`: typed containers; BaseEntity name-prefix groups match pre-change; team_id replicates to clients; deterministic registry order; solo/free play unchanged.
+- [x] 3.6 Gate: all GUT suites green; `tests/verify_headless_server.py --quick` green.
