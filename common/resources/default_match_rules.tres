@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="MatchRules" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://common/resources/match_rules.gd" id="1_match_rules"]
+
+[resource]
+script = ExtResource("1_match_rules")
+boss_max_hp = 10000
+boss_damage_threshold = 6000
+souls_per_mob_drop = 2
+reward_choice_window_sec = 1.5
+minion_cap_per_team = 3
+minion_cap_per_type = 1
+totem_soul_cost = 4
+totem_cap_per_team = 2
+totem_cap_per_player = 1
+totem_cooldown_sec = 8.0
+totem_lifetime_sec = 30.0
+totem_min_separation_m = 6.0
+max_players_per_team = 3
+countdown_sec = 3.0
+boss_deploy_countdown_sec = 3.0
+result_display_sec = 10.0
+forfeit_disconnect_sec = 30.0
