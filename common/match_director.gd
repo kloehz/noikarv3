@@ -127,6 +127,34 @@ func _recompute_teams() -> void:
 		_roster[ids[i]] = TeamId.RED if i % 2 == 0 else TeamId.BLUE
 	EventBus.team_assigned.emit()
 
+## --- Team registry (spawn-sequence ordered, server-only) --------------------
+
+## Per-team registries of stable spawn ids in deterministic spawn-sequence
+## order (Array append order — never dictionary iteration order). Stage 2
+## enforces no caps; MatchManager registers every typed spawn and unregisters
+## despawned players.
+var _team_registry: Dictionary = {
+	TeamId.NONE: [] as Array[StringName],
+	TeamId.RED: [] as Array[StringName],
+	TeamId.BLUE: [] as Array[StringName],
+}
+
+## Registers a spawn id under a team, preserving spawn-sequence order.
+func register_to_team(team: TeamId.Value, spawn_id: StringName) -> void:
+	if not _team_registry.has(team):
+		_team_registry[team] = [] as Array[StringName]
+	_team_registry[team].append(spawn_id)
+
+## Removes a spawn id from a team registry. Order of the remaining ids is
+## preserved; unknown ids are ignored.
+func unregister_from_team(team: TeamId.Value, spawn_id: StringName) -> void:
+	if _team_registry.has(team):
+		_team_registry[team].erase(spawn_id)
+
+## Consultation path: spawn ids registered for a team, in spawn order.
+func get_team_registry(team: TeamId.Value) -> Array[StringName]:
+	return _team_registry.get(team, [] as Array[StringName])
+
 ## --- Transitions ------------------------------------------------------------
 
 ## ROUND_SETUP: assign the deterministic match seed, then complete setup.
