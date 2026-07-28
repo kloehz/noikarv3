@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cwj4434m5oq88"]
 
 [ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
-[ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
+[ext_resource type="PackedScene" uid="uid://b8n4vxtkpq2ra" path="res://scenes/connection_menu.tscn" id="2_conn"]
 
 [node name="Main" type="Node3D" unique_id=824153153]
 script = ExtResource("1_match")
@@ -19,12 +19,12 @@ use_collision = true
 size = Vector3(100, 2, 100)
 
 [node name="MultiplayerSpawner" type="MultiplayerSpawner" parent="." unique_id=342014473]
-_spawnable_scenes = PackedStringArray("res://scenes/BaseEntity.tscn", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "res://scenes/EnemyEntity.tscn")
+_spawnable_scenes = PackedStringArray("uid://bvbjvutgbeanf", "res://scenes/SoulEntity.tscn", "res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn", "uid://dg7xnmokokkvl")
 spawn_path = NodePath("../Players")
 
-[node name="Projectiles" type="Node3D" parent="."]
+[node name="Projectiles" type="Node3D" parent="." unique_id=491856876]
 
-[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
+[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="." unique_id=1467262890]
 _spawnable_scenes = PackedStringArray("res://scenes/ProjectileEntity.tscn")
 spawn_path = NodePath("../Projectiles")
 
