@@ -39,7 +39,7 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Verification (Work Unit 3)
 
-- [ ] 3.1 Run runtime test at 40/60/75/144 fps: ratio ≈ 1.0 (band [0.9, 1.1]) in all runs; record p50/p75/p90 as PR evidence.
-- [ ] 3.2 Run two peers; confirm handshake log shows tickrate 60 on both with no mismatch warning.
-- [ ] 3.3 Run GUT suites: unit 7/7 and integration 9/9 green; headless server boot check green; server-side entities move at full design speed.
-- [ ] 3.4 Confirm the 4.0 → 10.0 m/s jump (players, dash, knockback, server AI) is documented in the PR body as the expected correction per spec.
+- [x] 3.1 Run runtime test at 40/60/75/144 fps: ratio ≈ 1.0 (band [0.9, 1.1]) in all runs; record p50/p75/p90 as PR evidence.
+- [x] 3.2 Run two peers; confirm handshake log shows tickrate 60 on both with no mismatch warning.
+- [x] 3.3 Run GUT suites: unit 7/7 and integration 9/9 green; headless server boot check green; server-side entities move at full design speed.
+- [x] 3.4 Confirm the 4.0 → 10.0 m/s jump (players, dash, knockback, server AI) is documented in the PR body as the expected correction per spec.
