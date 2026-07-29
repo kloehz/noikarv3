@@ -16,6 +16,10 @@ signal client_disconnected(peer_id: int)
 @warning_ignore("unused_signal")
 signal player_name_submitted(name: String)
 @warning_ignore("unused_signal")
+signal player_auth_token_submitted(token: String)
+@warning_ignore("unused_signal")
+signal game_server_authenticated(username: String)
+@warning_ignore("unused_signal")
 signal player_character_selected(character_id: String)
 
 # Match signals

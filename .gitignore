@@ -1,3 +1,11 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Local backend configuration and database credentials.
+.env
+.env.*
+!.env.example
+
+# Local Go build output.
+/backend/server

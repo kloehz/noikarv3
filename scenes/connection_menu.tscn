@@ -76,11 +76,19 @@ theme_override_colors/font_color = Color(0.6, 0.6, 0.8, 1)
 text = "Battle & Summon"
 horizontal_alignment = 1
 
-[node name="NameEdit" type="LineEdit" parent="LoginPanel/VBox"]
+[node name="AccountEdit" type="LineEdit" parent="LoginPanel/VBox"]
 custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
 theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-placeholder_text = "Ingresa tu Nickname..."
+placeholder_text = "Cuenta"
+alignment = 1
+
+[node name="PasswordEdit" type="LineEdit" parent="LoginPanel/VBox"]
+custom_minimum_size = Vector2(0, 45)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+placeholder_text = "Contraseña"
+secret = true
 alignment = 1
 
 [node name="CharacterSelect" type="OptionButton" parent="LoginPanel/VBox"]
@@ -99,6 +107,18 @@ custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
 theme_override_styles/normal = SubResource("StyleBoxFlat_button")
 text = "ENTRAR AL LOBBY"
+
+[node name="RegisterButton" type="Button" parent="LoginPanel/VBox"]
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_button")
+text = "CREAR CUENTA"
+
+[node name="LoginStatus" type="Label" parent="LoginPanel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.45, 0.4, 1)
+horizontal_alignment = 1
+autowrap_mode = 2
 
 [node name="LobbyPanel" type="Control" parent="."]
 visible = false
@@ -239,5 +259,6 @@ text = "SALA: ---"
 horizontal_alignment = 2
 
 [connection signal="pressed" from="LoginPanel/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
+[connection signal="pressed" from="LoginPanel/VBox/RegisterButton" to="." method="_on_register_pressed"]
 [connection signal="pressed" from="LobbyPanel/VBox/HostBox/VBox/HostButton" to="." method="_on_host_pressed"]
 [connection signal="pressed" from="LobbyPanel/VBox/JoinBox/VBox/JoinButton" to="." method="_on_join_pressed"]

@@ -11,7 +11,9 @@ const DEFAULT_PORT = 7777
 @onready var connecting_panel: Control = $ConnectingPanel
 @onready var bg_rect: ColorRect = $Background
 
-@onready var name_edit: LineEdit = $LoginPanel/VBox/NameEdit
+@onready var account_edit: LineEdit = $LoginPanel/VBox/AccountEdit
+@onready var password_edit: LineEdit = $LoginPanel/VBox/PasswordEdit
+@onready var login_status: Label = $LoginPanel/VBox/LoginStatus
 @onready var character_select: OptionButton = $LoginPanel/VBox/CharacterSelect
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
 @onready var room_id_edit: LineEdit = $LobbyPanel/VBox/JoinBox/VBox/RoomIDEdit
@@ -40,6 +42,7 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	EventBus.phase_changed.connect(_on_match_phase_changed)
+	EventBus.game_server_authenticated.connect(_on_game_server_authenticated)
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
 
@@ -50,7 +53,6 @@ func _ready() -> void:
 	get_tree().set_auto_accept_quit(false)
 	
 	# Initial Setup
-	name_edit.text = "Player_" + str(randi() % 1000)
 	_switch_state(State.LOGIN)
 	
 	# Background animation (Subtle pulse)
@@ -89,8 +91,25 @@ func _switch_state(new_state: State) -> void:
 # --- UI Actions ---
 
 func _on_enter_lobby_pressed() -> void:
-	player_name = name_edit.text.strip_edges()
-	if player_name.is_empty(): player_name = "Player"
+	var result: Dictionary = await AuthService.login(account_edit.text, password_edit.text)
+	if not result.get("accepted", false):
+		login_status.text = str(result.get("reason", "Could not sign in"))
+		return
+	player_name = AuthService.username
+	password_edit.clear()
+	login_status.text = ""
+	character_id = "warrior" if character_select.selected == 0 else "ivern_ranger"
+	EventBus.player_character_selected.emit(character_id)
+	_switch_state(State.LOBBY)
+
+func _on_register_pressed() -> void:
+	var result: Dictionary = await AuthService.register(account_edit.text, password_edit.text)
+	if not result.get("accepted", false):
+		login_status.text = str(result.get("reason", "Could not create account"))
+		return
+	player_name = AuthService.username
+	password_edit.clear()
+	login_status.text = ""
 	character_id = "warrior" if character_select.selected == 0 else "ivern_ranger"
 	EventBus.player_character_selected.emit(character_id)
 	_switch_state(State.LOBBY)
@@ -184,15 +203,20 @@ func _connect_to_peer(address: String, port: int) -> void:
 	multiplayer.multiplayer_peer = _active_peer
 	PacketHandshake.over_enet_peer(_active_peer, address, port)
 	
-	# Emit name to server
-	EventBus.player_name_submitted.emit(player_name)
+	# The server derives the displayed name from the validated account token.
 
 # --- Multiplayer Callbacks ---
 
 func _on_connected_to_server() -> void:
+	status_label.text = "Validando cuenta..."
+	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
+	EventBus.client_connected.emit(multiplayer.get_unique_id())
+
+func _on_game_server_authenticated(_username: String) -> void:
+	if current_state != State.CONNECTING:
+		return
 	_switch_state(State.IN_GAME)
 	room_info.text = "SALA: " + _current_oid
-	EventBus.client_connected.emit(multiplayer.get_unique_id())
 
 func _on_connection_failed() -> void:
 	_fail_connection("Conexión al servidor fallida")

@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: noikar
+      POSTGRES_PASSWORD: noikar_dev_password
+      POSTGRES_DB: noikar
+    ports:
+      - "5432:5432"
+    volumes:
+      - noikar_pgdata:/var/lib/postgresql/data
+
+volumes:
+  noikar_pgdata:

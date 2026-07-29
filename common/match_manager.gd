@@ -120,6 +120,7 @@ func _next_spawn_id(prefix: String) -> String:
 
 ## Store peer data like names.
 var peer_data: Dictionary = {}
+var _authenticating_peers: Dictionary = {}
 var _pending_name: String = ""
 var _pending_character_id: String = "warrior"
 
@@ -129,6 +130,7 @@ func _ready() -> void:
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
+	EventBus.player_auth_token_submitted.connect(_on_player_auth_token_submitted)
 	EventBus.player_character_selected.connect(_on_player_character_selected)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.phase_changed.connect(_on_phase_changed)
@@ -266,7 +268,8 @@ func _on_client_connected(peer_id: int) -> void:
 		return
 	
 	print("[MatchManager] Client connected: ", peer_id)
-	_spawn_player(peer_id)
+	# ENet proves transport connectivity, not account identity. Spawn only after
+	# the backend validated the JWT submitted by this peer.
 	_shutdown_timer = null # Reset timer on join
 
 func _on_client_disconnected(peer_id: int) -> void:
@@ -322,6 +325,38 @@ func _on_player_name_submitted(player_name: String) -> void:
 	_pending_name = player_name
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
 		_submit_name_to_server.rpc_id(1, player_name)
+
+func _on_player_auth_token_submitted(token: String) -> void:
+	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
+		_submit_auth_token_to_server.rpc_id(1, token)
+
+@rpc("any_peer", "reliable")
+func _submit_auth_token_to_server(token: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var peer_id := multiplayer.get_remote_sender_id()
+	if peer_id <= 0 or _authenticating_peers.has(peer_id) or peer_data.has(peer_id):
+		return
+	_authenticating_peers[peer_id] = true
+	_authenticate_peer(peer_id, token)
+
+func _authenticate_peer(peer_id: int, token: String) -> void:
+	var identity: Dictionary = await AuthService.validate_access_token(token)
+	_authenticating_peers.erase(peer_id)
+	if not identity.get("accepted", false) or not multiplayer.get_peers().has(peer_id):
+		multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+		return
+	peer_data[peer_id] = {
+		"account_id": identity.account_id,
+		"name": identity.username,
+		"character_id": "warrior",
+	}
+	_spawn_player(peer_id)
+	_auth_accepted.rpc_id(peer_id, str(identity.username))
+
+@rpc("authority", "reliable")
+func _auth_accepted(authenticated_username: String) -> void:
+	EventBus.game_server_authenticated.emit(authenticated_username)
 
 func _on_player_character_selected(character_id: String) -> void:
 	_pending_character_id = character_id
