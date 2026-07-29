@@ -67,9 +67,9 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	if not animation_player:
 		_find_animation_player()
-	
+
 	if not animation_player: return
-	
+
 	var actual_anim = anim_name
 	match anim_name:
 		"Idle": actual_anim = anim_idle
@@ -77,10 +77,18 @@ func play_animation(anim_name: String, blend: float = 0.2) -> void:
 		"Attack": actual_anim = anim_attack
 		"Death": actual_anim = anim_death
 		"Hit": actual_anim = anim_hit
-	
+
 	if animation_player.has_animation(actual_anim):
 		if animation_player.current_animation != actual_anim:
 			animation_player.play(actual_anim, blend)
+	else:
+		# Fallback: try to find the animation across all libraries by suffix.
+		# Some importers nest animations under a library ("library/Idle").
+		for lib_name in animation_player.get_animation_library_list():
+			var lib = animation_player.get_animation_library(lib_name)
+			if lib and lib.has_animation(actual_anim):
+				animation_player.play("%s/%s" % [lib_name, actual_anim], blend)
+				break
 
 ## Check if a specific animation or any one-shot is playing
 func is_playing(anim_name: String) -> bool:
@@ -91,6 +99,8 @@ func is_playing(anim_name: String) -> bool:
 		"Run": actual_anim = anim_run
 		"Attack": actual_anim = anim_attack
 		"Death": actual_anim = anim_death
+	if animation_player.current_animation == "":
+		return false
 	return animation_player.is_playing() and animation_player.current_animation == actual_anim
 
 func get_current_animation() -> String:

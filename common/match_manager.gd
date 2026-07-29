@@ -8,6 +8,25 @@ const TOTEM_SCENE = preload("res://scenes/TotemEntity.tscn")
 const PET_SCENE = preload("res://scenes/PetEntity.tscn")
 const ENEMY_SCENE = preload("res://scenes/EnemyEntity.tscn")
 const AI_COMPONENT = preload("res://core/AIComponent.gd")
+
+# --- MOB STAGE CONFIG (PR5 placeholder: single team, no mirror) ---
+const STAGE_COUNT: int = 3
+const MOBS_PER_STAGE: int = 10
+const STAGE_ROW_SPACING: float = 6.0
+const STAGE_COL_SPACING: float = 4.0
+const STAGE_COLS: int = 5
+const STAGE_BOSS_Z: float = -140.0
+const BOSS_SCALE: float = 2.0
+const BOSS_HP_MULTIPLIER: float = 2.0
+
+const STAGE_DEFINITIONS: Array = [
+	{ "type": "HECARIM_TANK", "z": 90.0, "prefix": "MOB_" },
+	{ "type": "IVERN_HEAL",   "z": 30.0, "prefix": "MOB_" },
+	{ "type": "KOGMAW_DMG",   "z": -40.0, "prefix": "MOB_" },
+]
+const BOSS_DEFINITION := { "type": "AATROX", "z": STAGE_BOSS_Z, "prefix": "BOSS_" }
+
+# Kept for backwards compatibility with anything that still imports the constant.
 const MOB_RESPAWN_DELAY: float = 3.0
 const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 
@@ -32,6 +51,14 @@ var _shutdown_timer: SceneTreeTimer = null
 ## match_seed is 0 until the MatchDirector assigns the ROUND_SETUP seed.
 var match_seed: int = 0
 var _spawn_counters: Dictionary = {}
+
+# --- MOB STAGE STATE (PR5 single-team placeholder) ---
+## Index of the next stage to spawn. -1 means the boss has already spawned and
+## the progression is finished. Each call to _spawn_next_stage advances the wave.
+var _next_stage_index: int = 0
+## Number of mobs alive in the current wave. Drives progression: when it
+## reaches 0, the server spawns the next stage (or the boss, or stops).
+var _wave_alive: int = 0
 
 ## Sets the deterministic match seed that feeds _next_spawn_id and resets the
 ## per-prefix counters so spawn ids stay deterministic within a match.
@@ -110,20 +137,81 @@ func _ready() -> void:
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	
-	# Spawn initial enemies if server
-	if multiplayer.is_server() and GameManager._is_headless_environment():
-		_spawn_initial_enemies.call_deferred()
+	# Spawn initial stage if server (single-team placeholder, no mirror yet)
+	if multiplayer.is_server():
+		_begin_stage_progression.call_deferred()
 
-## Spawn initial test enemies in the world.
-func _spawn_initial_enemies() -> void:
-	var spawn_points := [
-		{ "type": "AATROX", "pos": Vector3(0, 0, -5) },
-		{ "type": "AATROX", "pos": Vector3(-3, 0, -4) },
-		{ "type": "AATROX", "pos": Vector3(3, 0, -4) },
-	]
-	print("[MatchManager] se ejecuta dos veces")
-	for data in spawn_points:
-		spawn_enemy(data["type"], data["pos"])
+## Reset and start the single-team stage progression. Idempotent so callers
+## can invoke it again after a full reset (e.g. between matches).
+func _begin_stage_progression() -> void:
+	if not multiplayer.is_server(): return
+	_next_stage_index = 0
+	_wave_alive = 0
+	_spawn_next_stage()
+
+## Spawn the next stage or the boss if every prior stage is cleared.
+## No-op once the boss has been spawned — mobs and the boss do not respawn.
+func _spawn_next_stage() -> void:
+	if not multiplayer.is_server(): return
+	if _next_stage_index < 0: return
+	if _next_stage_index >= STAGE_DEFINITIONS.size():
+		_spawn_boss()
+		return
+	var def: Dictionary = STAGE_DEFINITIONS[_next_stage_index]
+	var spawn_prefix: String = def.get("prefix", "MOB_")
+	_spawn_stage_row(def["type"], float(def["z"]), spawn_prefix)
+	_next_stage_index += 1
+
+## Spawn a single 5x2 row of MOBS_PER_STAGE enemies at the given Z line.
+## Lives in Mobs container; counted toward _wave_alive for progression.
+func _spawn_stage_row(enemy_type: String, z: float, prefix: String) -> void:
+	var half: float = (STAGE_COLS - 1) * 0.5
+	for i in MOBS_PER_STAGE:
+		var col: int = i % STAGE_COLS
+		var row: int = i / STAGE_COLS
+		var x: float = (col - half) * STAGE_COL_SPACING
+		var pos := Vector3(x, 0, z + row * STAGE_ROW_SPACING)
+		var mob := _spawn_named_enemy(enemy_type, pos, prefix)
+		if mob:
+			_wave_alive += 1
+
+## Spawn the boss (AATROX at the far edge) with HP + visual scaling.
+func _spawn_boss() -> void:
+	if not multiplayer.is_server(): return
+	var boss := _spawn_named_enemy(BOSS_DEFINITION["type"], Vector3(0, 0, STAGE_BOSS_Z), BOSS_DEFINITION["prefix"])
+	if boss == null:
+		return
+	_apply_boss_scaling(boss)
+	_wave_alive = 1
+	_next_stage_index = -1
+
+## Instantiates an EnemyEntity under Mobs with a stable id derived from prefix.
+## Returns null when the scene cannot be instantiated.
+func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String) -> Node:
+	var enemy = ENEMY_SCENE.instantiate()
+	enemy.name = _next_spawn_id(prefix)
+
+	_prepare_spawn_position(enemy, pos, mobs_container)
+	mobs_container.add_child(enemy, true)
+	_finalize_spawn_position(enemy, pos)
+
+	if enemy.has_method("setup_enemy"):
+		enemy.setup_enemy(enemy_type, pos)
+	_register_spawn(enemy)
+	print("[MatchManager] %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
+	return enemy
+
+## Scale the boss model and HP for the placeholder progression. The visual
+## scale propagates through the actor, while HP is written into ServerState so
+## clients see the right max health via the existing state synchronizer.
+func _apply_boss_scaling(boss: Node) -> void:
+	if not is_instance_valid(boss): return
+	var actor: Node = boss.get("character_actor")
+	if is_instance_valid(actor):
+		actor.scale = Vector3.ONE * BOSS_SCALE
+	var boss_max_hp: int = int(boss.max_health * BOSS_HP_MULTIPLIER)
+	boss.apply_stats(boss_max_hp)
+	print("[MatchManager] Boss %s scaled x%.1f (%d HP)" % [boss.name, BOSS_SCALE, boss_max_hp])
 
 ## Spawn a single enemy of the given type at the given position.
 ## This is the public API for spawning enemies dynamically.
@@ -268,38 +356,48 @@ func _submit_character_to_server(character_id: String) -> void:
 	peer_data[peer_id] = data
 	player.select_character(selected_id)
 
+## Defers the queue_free so visuals/VFX have time to play their death effect.
+## Pulled out so the wave counter can progress synchronously before the cleanup.
+func _schedule_entity_cleanup(entity: Node) -> void:
+	if not is_instance_valid(entity): return
+	await get_tree().create_timer(2.0).timeout
+	if is_instance_valid(entity):
+		entity.queue_free()
+
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
-	
+
 	var is_player = entity.name.is_valid_int()
 	var is_pet = entity.name.begins_with("PET")
 	var is_mob = entity.name.begins_with("MOB_") or entity.name.begins_with("Dummy") or entity.name.begins_with("ELITE")
-	
-	# Mobs drop souls on death
-	if is_mob:
+	var is_boss = entity.name.begins_with("BOSS_")
+
+	# Mobs and bosses drop souls on death
+	if is_mob or is_boss:
 		_spawn_soul(entity.global_position)
-	
+
 	# --- PETS: Die permanently (no respawn) ---
 	if is_pet:
 		print("[MatchManager] Pet %s died. Removing." % entity.name)
-		await get_tree().create_timer(2.0).timeout
-		if is_instance_valid(entity):
-			entity.queue_free()
+		_schedule_entity_cleanup(entity)
 		return
-	
-	# --- MOBS: Respawn as new enemy after delay ---
+
+	# --- BOSS: One-shot, progression ends here ---
+	if is_boss:
+		print("[MatchManager] Boss %s died. Progression complete." % entity.name)
+		_wave_alive = max(_wave_alive - 1, 0)
+		_schedule_entity_cleanup(entity)
+		return
+
+	# --- MOBS: no individual respawn; advance stage when the wave is cleared ---
 	if is_mob:
-		var old_pos = entity.global_position
-		var settle_time = min(NETWORK_SPAWN_SETTLE_TIME, MOB_RESPAWN_DELAY)
-		var hidden_spawn_delay = max(MOB_RESPAWN_DELAY - settle_time, 0.0)
-		print("[MatchManager] Mob %s died. Hidden respawn in %.1fs, visible in %.1fs." % [entity.name, hidden_spawn_delay, MOB_RESPAWN_DELAY])
-		await get_tree().create_timer(hidden_spawn_delay).timeout
-		if is_instance_valid(entity):
-			entity.queue_free()
-		# Spawn hidden and inactive first so networking has time to settle position.
-		spawn_enemy("AATROX", old_pos, settle_time)
+		print("[MatchManager] Mob %s died. Wave remaining: %d" % [entity.name, _wave_alive - 1])
+		_wave_alive = max(_wave_alive - 1, 0)
+		_schedule_entity_cleanup(entity)
+		if _wave_alive == 0:
+			_spawn_next_stage()
 		return
-	
+
 	# --- PLAYERS: Respawn in place ---
 	if is_player:
 		print("[MatchManager] Player %s died. Respawning in 3s." % entity.name)
@@ -391,67 +489,53 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	print("[MatchManager] Totem requested by ", player.name, " in front at ", totem.global_position)
 
 func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) -> void:
-	var type_str = "ATTACK"
+	var pet_type := "ATTACK"
 	match type_int:
-		1: type_str = "TANK"
-		2: type_str = "HEAL"
+		1: pet_type = "TANK"
+		2: pet_type = "HEAL"
 
 	var pet = PET_SCENE.instantiate()
-	pet.name = _next_spawn_id("PET_") # Stable spawn ID, replicated by the spawner
+	pet.name = _next_spawn_id("PET_")
 	pet.owner_id = owner_id
-	pet.pet_type = type_str
+	pet.pet_type = pet_type
 	pet.power_level = souls
+	# The charge VFX already provides the spawn delay; do not hide the pet again.
+	pet.spawn_grace_duration = 0.0
 	_prepare_spawn_position(pet, pos, totems_container)
 
 	var server_state = pet.get_node_or_null("ServerState")
 	if server_state:
-		server_state.pet_type_sync = type_str
+		server_state.pet_type_sync = pet_type
 		server_state.power_level_sync = souls
 
 	totems_container.add_child(pet, true)
 	_finalize_spawn_position(pet, pos)
 	_register_spawn(pet)
-	
-	# Initial pet setup on server
-	if pet.has_method("setup_pet"):
-		pet.setup_pet(owner_id, type_str, souls)
-	
-	_setup_pet_logic.call_deferred(pet, owner_id, type_int, souls)
 
-func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int, _souls: int) -> void:
+	if pet.has_method("setup_pet"):
+		pet.setup_pet(owner_id, pet_type, souls)
+
+	_setup_pet_logic.call_deferred(pet, owner_id, type_int)
+
+func _setup_pet_logic(pet: Node3D, owner_id: int, type_int: int) -> void:
 	if not is_instance_valid(pet): return
 
-	# Ensure authority is correct for AI to run on server FIRST
 	pet.set_multiplayer_authority(1)
-	# Project rule: any authority change after _ready() MUST be followed by
-	# process_settings() so netfox rebuilds property configs per authority.
 	var pet_rb = pet.get_node_or_null("RollbackSynchronizer")
 	if pet_rb and pet_rb.has_method("process_settings"):
 		pet_rb.process_settings()
 
-	# FIND EXISTING AI Brain (Now in .tscn)
 	var ai = pet.get_node_or_null("AIComponent")
 	if not ai:
 		ai = AI_COMPONENT.new()
 		ai.name = "AIComponent"
 		pet.add_child(ai)
 
-	# Force refresh faction cache — groups were assigned in BaseEntity._ready()
-	# but AIComponent._ready() ran before that.
 	if ai.has_method("refresh_faction"):
 		ai.refresh_faction()
 
-	if type_int == 2: # HEAL
-		ai.state = 3 # State.FOLLOW_OWNER
-	else:
-		ai.state = 1 # State.CHASE
-
-	# Find owner node to follow
-	var owner_node = players_container.get_node_or_null(str(owner_id))
-	if owner_node:
-		ai.owner_node = owner_node
-
-	print("[MatchManager] Pet %s AI configured for owner %d" % [pet.name, owner_id])
+	ai.state = AI_COMPONENT.State.FOLLOW_OWNER if type_int == 2 else AI_COMPONENT.State.CHASE
+	ai.owner_node = players_container.get_node_or_null(str(owner_id))
 
 @rpc("any_peer", "call_local", "reliable")
 func spawn_totem_rpc(type: int) -> void:
@@ -483,12 +567,12 @@ func _spawn_player(peer_id: int) -> void:
 	# Check if already spawned
 	if players_container.has_node(str(peer_id)):
 		return
-		
+
 	var player = PLAYER_SCENE.instantiate()
 	player.name = str(peer_id)
-	
-	# Spawn at a safe position (away from dummies)
-	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
+
+	# Spawn at the fixed player spawn (world (0, 0.5, 140) — Lorencia PlayerSpawn marker).
+	var spawn_pos = Vector3(0, 0.5, 140)
 	_prepare_spawn_position(player, spawn_pos, players_container)
 	
 	players_container.add_child(player, true)

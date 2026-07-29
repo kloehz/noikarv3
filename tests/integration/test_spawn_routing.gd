@@ -138,12 +138,12 @@ func test_main_scene_typed_containers_and_spawners() -> void:
 	assert_eq(spawnable_by_spawner["./PlayerSpawner"], PackedStringArray(["uid://bvbjvutgbeanf"]),
 		"PlayerSpawner spawns BaseEntity only")
 
-## Test: the deferred initial-enemy flow still spawns the 3 test mobs, now
-## routed under Mobs with MOB_ prefixes; Players/Souls/Totems stay empty.
+## Test: the deferred initial-enemy flow spawns the first stage of 10 Hecarim
+## mobs under Mobs with MOB_ prefixes; Players/Souls/Totems stay empty.
 func test_initial_spawn_flow_routes_mobs() -> void:
 	_make_main()
 	await _settle()
-	assert_eq(_mobs().get_child_count(), 3, "Initial flow must spawn 3 mobs")
+	assert_eq(_mobs().get_child_count(), 10, "Initial flow must spawn 10 mobs (stage 0)")
 	for child in _mobs().get_children():
 		assert_string_starts_with(child.name, "MOB_", "Initial mobs keep the MOB_ prefix")
 	assert_eq(_players().get_child_count(), 0, "No players in the initial flow")
@@ -258,8 +258,8 @@ func test_registry_spawn_sequence_order() -> void:
 
 	# MatchManager wiring: initial mobs registered under NONE in spawn order.
 	var none_registry := _director.get_team_registry(TeamId.NONE)
-	assert_eq(none_registry.size(), 3, "Initial mobs register under NONE")
-	for i in 3:
+	assert_eq(none_registry.size(), 10, "Initial stage spawns 10 mobs under NONE")
+	for i in 10:
 		assert_string_starts_with(String(none_registry[i]), "MOB_")
 
 	_main._spawn_player(1)

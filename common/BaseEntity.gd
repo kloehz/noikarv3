@@ -246,6 +246,11 @@ func _setup_health_component() -> void:
 				server_state.sync_health = c
 			health_changed.emit(c, m)
 		)
+		hc.healed.connect(func(amount):
+			if multiplayer.is_server() and server_state:
+				server_state.sync_heal_amount = amount
+				server_state.sync_heal_sequence += 1
+		)
 		hc.died.connect(func(): 
 			if multiplayer.is_server() and server_state:
 				server_state.sync_is_dead = true

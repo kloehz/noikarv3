@@ -1,0 +1,140 @@
+[gd_scene format=3 uid="uid://brji7ckctpjtk"]
+
+[ext_resource type="Script" uid="uid://suk3mt3k1k4o" path="res://assets/BinbunVFX_Vol2/BattleFX/script/VFXBattleSwingBB.gd" id="1_gvyho"]
+[ext_resource type="Shader" uid="uid://byjvx1ou3adqr" path="res://assets/BinbunVFX_Vol2/BattleFX/shader/swing.gdshader" id="2_aobbs"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_epw6m"]
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_2abg5"]
+generate_mipmaps = false
+noise = SubResource("FastNoiseLite_epw6m")
+seamless = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_tjsii"]
+render_priority = 0
+shader = ExtResource("2_aobbs")
+shader_parameter/primary_color = Color(1, 1, 1, 1)
+shader_parameter/secondary_color = Color(0.36862746, 0.36862746, 0.36862746, 1)
+shader_parameter/tertiary_color = Color(0.078431375, 0.078431375, 0.078431375, 1)
+shader_parameter/emission = 2.0
+shader_parameter/noise_texture = SubResource("NoiseTexture2D_2abg5")
+shader_parameter/noise_scale = Vector2(1, 1)
+shader_parameter/noise_scroll = Vector2(1, 0)
+shader_parameter/noise_shape = 1.0
+shader_parameter/swing_center = 0.9
+shader_parameter/edge_position = 0.05
+shader_parameter/edge_hardness = 0.8
+shader_parameter/swing_factor = 0.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_nsa8b"]
+size = Vector2(3, 3)
+
+[sub_resource type="Animation" id="Animation_nc3hy"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Swing:material_override:shader_parameter/swing_factor")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AudioStreamPlayer3D:playing")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_2yv60"]
+resource_name = "main"
+length = 0.5
+step = 0.1
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Swing:material_override:shader_parameter/swing_factor")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.5),
+"transitions": PackedFloat32Array(0.5, 1),
+"update": 0,
+"values": [0.0, 0.999999977648]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AudioStreamPlayer3D:playing")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+
+[sub_resource type="Animation" id="Animation_phqmv"]
+resource_name = "stop"
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Swing:material_override:shader_parameter/swing_factor")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("AudioStreamPlayer3D:playing")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_gjg00"]
+_data = {
+&"RESET": SubResource("Animation_nc3hy"),
+&"main": SubResource("Animation_2yv60"),
+&"stop": SubResource("Animation_phqmv")
+}
+
+[node name="VFXBlankSwing" type="Node3D" unique_id=1170959781]
+script = ExtResource("1_gvyho")
+primary_color = Color(1, 1, 1, 1)
+secondary_color = Color(0.36862746, 0.36862746, 0.36862746, 1)
+tertiary_color = Color(0.078431375, 0.078431375, 0.078431375, 1)
+emission = 2.0
+noise_texture = SubResource("NoiseTexture2D_2abg5")
+edge_hardness = 0.8
+
+[node name="Swing" type="MeshInstance3D" parent="." unique_id=14211358]
+material_override = SubResource("ShaderMaterial_tjsii")
+mesh = SubResource("PlaneMesh_nsa8b")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=496253290]
+libraries/ = SubResource("AnimationLibrary_gjg00")
+
+[node name="AudioStreamPlayer3D" type="AudioStreamPlayer3D" parent="." unique_id=1535444835]
+max_distance = 3.0

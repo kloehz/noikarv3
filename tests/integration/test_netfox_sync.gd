@@ -106,3 +106,20 @@ func test_netfox_nodes_check() -> void:
 	var has_netfox = DirAccess.dir_exists_absolute("res://addons/netfox")
 	# This is informational - Netfox may not be installed yet
 	print("Netfox available: ", has_netfox)
+
+## Test: a replicated heal event fires only when the server increments its
+## sequence, not when an entity receives its initial synchronized health.
+func test_server_state_emits_only_explicit_heal_events() -> void:
+	var state := ServerState.new()
+	var received: Array[int] = []
+	state.heal_received.connect(func(amount: int): received.append(amount))
+
+	state.sync_health = 100
+	assert_eq(received.size(), 0, "Health synchronization alone must not emit a heal VFX event")
+
+	state.sync_heal_amount = 12
+	state.sync_heal_sequence = 1
+	assert_eq(received, [12], "Incrementing the sequence emits the synced heal amount")
+
+	state.sync_heal_sequence = 1
+	assert_eq(received.size(), 1, "Repeating the same sequence must not duplicate the VFX event")

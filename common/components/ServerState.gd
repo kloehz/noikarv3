@@ -9,6 +9,7 @@ signal character_changed(character_id: String)
 signal souls_changed(amount: int)
 signal team_changed(new_team: int)
 signal pet_data_received(type: String, level: int)
+signal heal_received(amount: int)
 
 @export var max_health: int = 100:
 	set(v):
@@ -64,6 +65,16 @@ signal pet_data_received(type: String, level: int)
 
 @export var sync_is_dashing: bool = false
 
+## Server-authored heal event. The amount is written first, then incrementing
+## the sequence replicates one visual event to every peer.
+@export var sync_heal_amount: int = 0
+@export var sync_heal_sequence: int = 0:
+	set(v):
+		if sync_heal_sequence == v: return
+		sync_heal_sequence = v
+		if sync_heal_sequence > 0 and sync_heal_amount > 0:
+			heal_received.emit(sync_heal_amount)
+
 @export var pet_type_sync: String = "":
 	set(v):
 		if pet_type_sync == v: return
@@ -96,6 +107,8 @@ func _ready() -> void:
 		sync.add_state(self, "is_stunned")
 		sync.add_state(self, "stun_remaining_time")
 		sync.add_state(self, "sync_is_dashing")
+		sync.add_state(self, "sync_heal_amount")
+		sync.add_state(self, "sync_heal_sequence")
 		sync.add_state(self, "pet_type_sync")
 		sync.add_state(self, "power_level_sync")
 		if sync.has_method("process_settings"):

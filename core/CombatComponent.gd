@@ -372,8 +372,8 @@ func _execute_melee_legacy() -> void:
 ## but the projectile must still start ahead of the owner's collider.
 func spawn_pos_for(direction: Vector3, socket_pos: Vector3) -> Vector3:
 	if socket_pos.length() > 0.01:
-		return socket_pos + Vector3(0.0, 1.3, 0.0) + direction * 1.6
-	return entity.global_position + Vector3(0.0, 2.9, 0.0) + direction * 1.6
+		return socket_pos + Vector3(0.0, 2.0, 0.0) + direction * 1.6
+	return entity.global_position + Vector3(0.0, 3.6, 0.0) + direction * 1.6
 
 func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float = 1.0) -> void:
 	if not attack_def.projectile_scene:

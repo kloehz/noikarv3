@@ -36,12 +36,12 @@ func _connect_signals() -> void:
 	if not entity:
 		print("[ERROR] VisualComponent: Cannot connect signals, entity is null!")
 		return
-		
+
 	print("[DEBUG] VisualComponent %s connecting signals" % entity.name)
 	EventBus.entity_spawned.connect(_on_entity_spawned)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.entity_damaged.connect(_on_entity_damaged)
-	
+
 	var health = entity.get_node_or_null("HealthComponent")
 	if health:
 		print("[DEBUG] VisualComponent %s connected to HealthComponent" % entity.name)
@@ -60,6 +60,7 @@ func _connect_signals() -> void:
 	var server_state = entity.get_node_or_null("ServerState")
 	if server_state:
 		server_state.souls_changed.connect(_on_souls_changed)
+		server_state.heal_received.connect(_on_heal_received)
 		_on_souls_changed(server_state.sync_souls)
 
 func _on_souls_changed(amount: int) -> void:
@@ -223,21 +224,28 @@ func _handle_attack_debug_visuals() -> void:
 
 func _update_movement_animations() -> void:
 	if not _actor: return
-	
+	if not entity: return
+
 	# CRITICAL: If dead, don't play movement/idle animations
 	if entity.get("sync_is_dead"):
 		return
-	
+
+	# Some headless tests strip the actor's GLB meshes, leaving the
+	# AnimationPlayer present but with zero animations. Skip silently.
+	if not _actor.animation_player:
+		return
+
 	# Priority: If we are playing an attack, don't override it with move/idle
 	if _actor.is_playing("Attack"):
 		return
-	
+
 	var logic = entity.get_node_or_null("LogicComponent")
 	if logic:
 		var is_dashing = logic.get("is_dashing") as bool
 		if is_dashing:
-			_actor.animation_player.speed_scale = 2.0 # Fast animation during dash
+			_actor.animation_player.speed_scale = 2.0
 			_actor.play_animation("Run")
+			_ensure_loop("Run")
 			return
 		else:
 			_actor.animation_player.speed_scale = 1.0
@@ -245,8 +253,40 @@ func _update_movement_animations() -> void:
 		var velocity = logic.get("current_velocity") as Vector3
 		if velocity and velocity.length() > 0.1:
 			_actor.play_animation("Run")
+			_ensure_loop("Run")
 		else:
 			_actor.play_animation("Idle")
+			_ensure_loop("Idle")
+
+## Force the current animation to loop. Some GLB exports import a single
+## clip that AnimationPlayer treats as one-shot; without this the mob
+## freezes on its first frame instead of looping the idle pose.
+func _ensure_loop(_anim_alias: String) -> void:
+	if not _actor or not _actor.animation_player: return
+	var ap: AnimationPlayer = _actor.animation_player
+	# current_animation is empty before the first play_animation call;
+	# reading it directly emits a noisy engine error so guard with the
+	# cheaper string check first.
+	var current: String = ap.current_animation
+	if current == "":
+		return
+	if not ap.has_animation(current):
+		return
+	# Some Godot 4 import configurations land clips in the default "" library
+	# or in a named library. Resolve the underlying Animation resource and
+	# flip its loop_mode to LINEAR_LOOP if it isn't already.
+	var resolved: Animation = null
+	var slash_idx: int = current.find("/")
+	if slash_idx != -1:
+		var lib_name: String = current.substr(0, slash_idx)
+		var anim_name: String = current.substr(slash_idx + 1)
+		var lib: AnimationLibrary = ap.get_animation_library(lib_name)
+		if lib:
+			resolved = lib.get_animation(anim_name)
+	else:
+		resolved = ap.get_animation(current)
+	if resolved and resolved.loop_mode != Animation.LOOP_LINEAR:
+		resolved.loop_mode = Animation.LOOP_LINEAR
 
 func _play_fallback_punch() -> void:
 	var mesh = entity.get_node_or_null("MeshInstance3D")
@@ -265,6 +305,31 @@ func _on_entity_died(p_entity: Node3D) -> void:
 func _on_entity_damaged(p_entity: Node3D, _amount: int, _source: Node) -> void:
 	if p_entity == self.entity:
 		_play_hit_effect()
+
+## ServerState emits this only for a real, replicated HealthComponent.healed
+## event; HP changes from spawning, respawning, or sync do not enter here.
+func _on_heal_received(amount: int) -> void:
+	_spawn_heal_burst.call_deferred(amount)
+
+func _spawn_heal_burst(amount: int) -> void:
+	if not entity or amount <= 0: return
+	if entity.get("sync_is_dead"): return
+	if not entity.is_inside_tree(): return
+
+	var scene_root := get_tree().current_scene
+	if scene_root == null:
+		return
+
+	var burst: Node3D = preload("res://scenes/vfx/heal_burst.tscn").instantiate()
+	if burst == null: return
+
+	if burst.has_method("configure"):
+		burst.configure(entity, amount)
+
+	scene_root.add_child(burst)
+	# global_position is only valid after the burst has entered the tree.
+	burst.global_position = entity.global_position
+	EventBus.visual_effect_requested.emit(entity, "heal")
 ## Play death visual effect.
 func play_death_effect() -> void:
 	if _actor:
@@ -290,7 +355,11 @@ func play_death_effect() -> void:
 func play_spawn_effect() -> void:
 	if _actor:
 		_actor.visible = true
+		# Force the actor into the Idle animation so mobs don't sit in
+		# T-pose when the GLB importer dropped the import clip or the
+		# AnimationLibrary hides the track under a library prefix.
 		_actor.play_animation("Idle")
+		_ensure_loop("Idle")
 
 	# Show UI
 	var name_label = get_parent().get_node_or_null("NameLabel")
