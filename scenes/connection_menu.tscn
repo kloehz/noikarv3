@@ -83,6 +83,17 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 placeholder_text = "Ingresa tu Nickname..."
 alignment = 1
 
+[node name="CharacterSelect" type="OptionButton" parent="LoginPanel/VBox"]
+custom_minimum_size = Vector2(0, 45)
+layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_input")
+item_count = 2
+selected = 0
+popup/item_0/text = "Aatrox - Warrior"
+popup/item_0/id = 0
+popup/item_1/text = "Ivern - Ranger"
+popup/item_1/id = 1
+
 [node name="EnterButton" type="Button" parent="LoginPanel/VBox"]
 custom_minimum_size = Vector2(0, 50)
 layout_mode = 2

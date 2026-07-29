@@ -94,6 +94,7 @@ func _next_spawn_id(prefix: String) -> String:
 ## Store peer data like names.
 var peer_data: Dictionary = {}
 var _pending_name: String = ""
+var _pending_character_id: String = "warrior"
 
 func _ready() -> void:
 	add_to_group(&"match_manager")
@@ -101,6 +102,7 @@ func _ready() -> void:
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
+	EventBus.player_character_selected.connect(_on_player_character_selected)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.team_assigned.connect(_on_team_assigned)
@@ -226,23 +228,45 @@ func _auto_shutdown() -> void:
 func _on_connected_to_server() -> void:
 	if not _pending_name.is_empty():
 		_submit_name_to_server.rpc_id(1, _pending_name)
+	_submit_character_to_server.rpc_id(1, _pending_character_id)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	_pending_name = player_name
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
 		_submit_name_to_server.rpc_id(1, player_name)
 
+func _on_player_character_selected(character_id: String) -> void:
+	_pending_character_id = character_id
+	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
+		_submit_character_to_server.rpc_id(1, character_id)
+
 @rpc("any_peer", "call_local", "reliable")
 func _submit_name_to_server(player_name: String) -> void:
 	var peer_id = multiplayer.get_remote_sender_id()
 	print("[MatchManager] Received name from peer ", peer_id, ": ", player_name)
-	peer_data[peer_id] = {"name": player_name}
+	var data: Dictionary = peer_data.get(peer_id, {})
+	data["name"] = player_name
+	peer_data[peer_id] = data
 	
 	if multiplayer.is_server():
 		# Update player if already exists
 		var player = players_container.get_node_or_null(str(peer_id))
 		if player and player.has_node("ServerState"):
 			player.get_node("ServerState").player_name = player_name
+
+@rpc("any_peer", "call_local", "reliable")
+func _submit_character_to_server(character_id: String) -> void:
+	var peer_id = multiplayer.get_remote_sender_id()
+	if not multiplayer.is_server() or peer_id <= 0:
+		return
+	var player = players_container.get_node_or_null(str(peer_id)) as BaseEntity
+	if not player:
+		return
+	var selected_id = player._validated_character_id(character_id)
+	var data: Dictionary = peer_data.get(peer_id, {})
+	data["character_id"] = selected_id
+	peer_data[peer_id] = data
+	player.select_character(selected_id)
 
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
@@ -481,6 +505,8 @@ func _spawn_player(peer_id: int) -> void:
 		# Setup name from peer data if available
 		if peer_data.has(peer_id):
 			player.player_name = peer_data[peer_id].name
+			if peer_data[peer_id].has("character_id"):
+				player.select_character(peer_data[peer_id].character_id)
 		
 	print("[MatchManager] Spawned player for peer: ", peer_id, " at ", player.position)
 

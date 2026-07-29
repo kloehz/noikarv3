@@ -31,4 +31,5 @@ mesh = SubResource("SphereMesh_proj")
 [node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
 script = ExtResource("2_rb_sync")
 root = NodePath("..")
-state_properties = Array[String]([":global_position", ":velocity"])
+enable_prediction = true
+state_properties = Array[String]([":global_position", ":velocity", ":_direction", ":speed"])

@@ -15,6 +15,8 @@ signal client_connected(peer_id: int)
 signal client_disconnected(peer_id: int)
 @warning_ignore("unused_signal")
 signal player_name_submitted(name: String)
+@warning_ignore("unused_signal")
+signal player_character_selected(character_id: String)
 
 # Match signals
 @warning_ignore("unused_signal")

@@ -22,6 +22,7 @@ var dash_timer: float = 0.0
 var dash_cooldown: float = 0.0
 var dash_direction: Vector3 = Vector3.ZERO
 @export var look_yaw: float = 0.0
+@export var look_pitch: float = 0.0
 
 # Preview system variables
 var is_previewing: bool = false
@@ -40,11 +41,13 @@ func _ready() -> void:
 	print("[DEBUG] LogicComponent initializing for entity: %s" % entity_name)
 	
 	current_velocity = Vector3.ZERO
+	camera_pivot = get_parent().get_node_or_null("CameraPivot")
 	if entity: 
 		look_yaw = entity.rotation.y
+		if camera_pivot:
+			look_pitch = camera_pivot.rotation.x
 		print("[DEBUG] LogicComponent %s: Initial rotation captured" % entity_name)
 	
-	camera_pivot = get_parent().get_node_or_null("CameraPivot")
 	_server_state = get_parent().get_node_or_null("ServerState")
 
 	if not _server_state:
@@ -97,9 +100,8 @@ func _input(event: InputEvent) -> void:
 	# Camera movement (Continuous when mouse is captured)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		look_yaw -= event.relative.x * mouse_sensitivity
-		if camera_pivot:
-			var new_rot_x = camera_pivot.rotation.x - event.relative.y * mouse_sensitivity
-			camera_pivot.rotation.x = clamp(new_rot_x, deg_to_rad(-60), deg_to_rad(30))
+		look_pitch = clamp(look_pitch - event.relative.y * mouse_sensitivity, deg_to_rad(-60), deg_to_rad(30))
+		_apply_camera_aim()
 
 	# Hold-to-Preview Logic
 	_handle_preview_input(event)
@@ -198,6 +200,7 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 
 func _apply_movement(delta: float) -> void:
 	if not entity: return
+	_apply_camera_aim()
 	
 	# 0. DASH Logic (Predictive)
 	if is_dashing:
@@ -251,3 +254,10 @@ func _is_local_authority() -> bool:
 	if not entity: return false
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
 	return multiplayer.get_unique_id() == owner_id
+
+func get_aim_direction() -> Vector3:
+	return -Basis.from_euler(Vector3(look_pitch, look_yaw, 0.0)).z.normalized()
+
+func _apply_camera_aim() -> void:
+	if camera_pivot:
+		camera_pivot.rotation.x = look_pitch

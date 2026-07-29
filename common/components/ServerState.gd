@@ -5,6 +5,7 @@ extends Node
 signal health_changed(current: int, maximum: int)
 signal death_changed(is_dead: bool)
 signal name_changed(new_name: String)
+signal character_changed(character_id: String)
 signal souls_changed(amount: int)
 signal team_changed(new_team: int)
 signal pet_data_received(type: String, level: int)
@@ -32,6 +33,14 @@ signal pet_data_received(type: String, level: int)
 		if player_name == v: return
 		player_name = v
 		name_changed.emit(player_name)
+
+## Server-validated playable character identity. Clients use this replicated
+## value to load the same actor scene as the authoritative server.
+@export var character_id: String = "warrior":
+	set(v):
+		if character_id == v: return
+		character_id = v
+		character_changed.emit(character_id)
 
 @export var sync_souls: int = 0:
 	set(v):
@@ -79,6 +88,7 @@ func _ready() -> void:
 		sync.add_state(self, "sync_health")
 		sync.add_state(self, "sync_is_dead")
 		sync.add_state(self, "player_name")
+		sync.add_state(self, "character_id")
 		sync.add_state(self, "sync_souls")
 		sync.add_state(self, "team_id")
 		sync.add_state(self, "knockback_velocity")

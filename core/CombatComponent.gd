@@ -22,18 +22,31 @@ var _active_attack: AttackDefinition  # Currently executing attack
 @export var knockback_force: float = 12.0
 
 # --- Node references ---
-var entity: BaseEntity
+var entity: Node
 var logic: Node
 var _melee_shapecast: ShapeCast3D  # Dynamically created for MELEE_HITSCAN
 
 # --- Attack State Machine ---
 enum AttackState { READY, STARTUP, ACTIVE, RECOVERY }
-var current_attack_state: AttackState = AttackState.READY
-var _state_timer: float = 0.0
+@export var current_attack_state: AttackState = AttackState.READY
+@export var _state_timer: float = 0.0
 
 # --- Cooldown per slot ---
-var _primary_cooldown: float = 0.0
-var _secondary_cooldown: float = 0.0
+@export var _primary_cooldown: float = 0.0
+@export var _secondary_cooldown: float = 0.0
+
+## Charged projectile state. These values are rollback state so a late input
+## cannot turn a charged shot into a immediate shot during re-simulation.
+@export var is_charging: bool = false
+@export var current_charge_time: float = 0.0
+@export var _projectile_direction: Vector3 = Vector3.FORWARD
+## Tracks which slot currently owns the attack so the server can dispatch
+## the correct projectile/melee on ACTIVE without replicating a resource.
+@export var _active_attack_slot: int = 0  # 0 = none, 1 = primary, 2 = secondary
+@export var _active_damage_multiplier: float = 1.0
+## Set by the server on the tick it dispatches a spawn. Cleared on recovery.
+## Prevents re-spawning the same projectile during rollback resimulation.
+var _active_spawned_this_attack: bool = false
 
 # --- Hit deduplication: prevents multiple collisions hitting the same target ---
 var _hit_entities_this_attack: Array[Node] = []
@@ -142,7 +155,14 @@ func _configure_shapecast_from_data(cast: ShapeCast3D, data: AttackShapeData) ->
 # ============================================================
 
 func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
-	if not is_fresh:
+	# The client-owned CombatComponent for player projectiles is NOT in the
+	# server's owned_state list, so the server resimulates it as a predicted
+	# tick (is_fresh=false). We must still advance the replicated state machine
+	# and dispatch the spawn when ACTIVE is reached so server authority can
+	# instantiate the projectile exactly once.
+	var advance_only: bool = multiplayer.is_server() and not is_fresh
+
+	if not is_fresh and not advance_only:
 		return
 
 	if entity and entity.get("sync_is_dead"):
@@ -161,17 +181,64 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
 	var is_owner = (multiplayer.get_unique_id() == owner_id)
 
-	if (multiplayer.is_server() or is_owner) and current_attack_state == AttackState.READY:
-		if logic and logic.get("is_shooting"):
+	if (multiplayer.is_server() or is_owner) and current_attack_state == AttackState.READY and is_fresh:
+		if _uses_charged_projectile(_primary):
+			_update_charged_projectile(delta)
+		elif logic and logic.get("is_shooting"):
 			_try_start_attack(_primary, true)
 			# TODO: secondary trigger (e.g. right-click, separate input)
 
+func _uses_charged_projectile(definition: AttackDefinition) -> bool:
+	return definition and definition.attack_type == AttackDefinition.AttackType.PROJECTILE and definition.charge_duration > 0.0
+
+func _update_charged_projectile(delta: float) -> void:
+	var is_holding_shot: bool = logic and logic.get("is_shooting")
+	if is_holding_shot:
+		if not is_charging and _primary_cooldown <= 0.0:
+			is_charging = true
+			current_charge_time = 0.0
+		elif is_charging:
+			current_charge_time = min(current_charge_time + delta, _primary.charge_duration)
+		return
+
+	if not is_charging:
+		return
+
+	var charge_ratio: float = clampf(current_charge_time / _primary.charge_duration, 0.0, 1.0)
+	var damage_multiplier: float = lerpf(_primary.minimum_charge_multiplier, _primary.maximum_charge_multiplier, charge_ratio)
+	is_charging = false
+	current_charge_time = 0.0
+	_projectile_direction = _get_aim_direction()
+	_try_start_attack(_primary, true, damage_multiplier)
+
+func _get_aim_direction() -> Vector3:
+	# Prefer the player's camera forward — its local rotation on X makes the
+	# Euler-based (look_pitch, look_yaw) formula drift away from the actual
+	# screen center.
+	var camera: Camera3D = _get_owner_camera()
+	if camera and camera.is_inside_tree():
+		return -camera.global_transform.basis.z.normalized()
+	if logic and logic.has_method("get_aim_direction"):
+		return logic.get_aim_direction()
+	return -entity.global_transform.basis.z.normalized()
+
+func _get_owner_camera() -> Camera3D:
+	if not entity:
+		return null
+	var pivot: Node3D = entity.get_node_or_null("CameraPivot")
+	if pivot:
+		var cam: Camera3D = pivot.get_node_or_null("Camera3D")
+		if cam:
+			return cam
+	return entity.get_node_or_null("Camera3D")
+
 func _update_attack_state(delta: float) -> void:
 	if current_attack_state == AttackState.READY:
+		_active_spawned_this_attack = false
 		return
-	
+
 	_state_timer -= delta
-	
+
 	if _state_timer <= 0:
 		match current_attack_state:
 			AttackState.STARTUP:
@@ -186,12 +253,13 @@ func _update_attack_state(delta: float) -> void:
 				current_attack_state = AttackState.READY
 				_hit_entities_this_attack.clear()
 				_active_attack = null
+				_active_spawned_this_attack = false
 
 # ============================================================
 # ATTACK START
 # ============================================================
 
-func _try_start_attack(definition: AttackDefinition, is_primary: bool) -> void:
+func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_multiplier: float = 1.0) -> void:
 	# Check cooldown
 	if is_primary and _primary_cooldown > 0: return
 	if not is_primary and _secondary_cooldown > 0: return
@@ -208,11 +276,13 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool) -> void:
 		return
 	
 	_active_attack = attack_def
+	_active_attack_slot = 1 if is_primary else 2
+	_active_damage_multiplier = damage_multiplier
 	current_attack_state = AttackState.STARTUP
 	_state_timer = attack_def.startup_time
 	sync_attack_count += 1
 	attack_started.emit()
-	
+
 	# Set cooldown
 	if is_primary:
 		_primary_cooldown = attack_def.cooldown
@@ -226,13 +296,31 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool) -> void:
 func _on_attack_active() -> void:
 	if not multiplayer.is_server():
 		return
-	
-	if _active_attack:
-		match _active_attack.attack_type:
+
+	# Server dispatches the spawn for any replicated state machine. Idempotent:
+	# multiple resimulations of the same ACTIVE tick must spawn only once.
+	if _active_spawned_this_attack:
+		return
+	_active_spawned_this_attack = true
+
+	# Resolve the slot to a concrete AttackDefinition. The server may have
+	# resimulated this state without carrying the resource reference, so look
+	# it up from the slot that the client committed.
+	var attack_def: AttackDefinition = null
+	match _active_attack_slot:
+		1:
+			attack_def = _primary
+		2:
+			attack_def = _secondary
+		_:
+			attack_def = _active_attack
+
+	if attack_def:
+		match attack_def.attack_type:
 			AttackDefinition.AttackType.MELEE_HITSCAN:
-				_execute_melee_hitscan(_active_attack)
+				_execute_melee_hitscan(attack_def)
 			AttackDefinition.AttackType.PROJECTILE:
-				_execute_projectile(_active_attack)
+				_execute_projectile(attack_def, _active_damage_multiplier)
 			AttackDefinition.AttackType.AOE_DELAYED:
 				# TODO: Implement AOE_DELAYED attack type
 				print("[CombatComponent] AOE_DELAYED is not yet implemented")
@@ -280,20 +368,49 @@ func _execute_melee_legacy() -> void:
 # PROJECTILE
 # ============================================================
 
-func _execute_projectile(attack_def: AttackDefinition) -> void:
+## Resolve the projectile spawn position. The socket establishes its height,
+## but the projectile must still start ahead of the owner's collider.
+func spawn_pos_for(direction: Vector3, socket_pos: Vector3) -> Vector3:
+	if socket_pos.length() > 0.01:
+		return socket_pos + Vector3(0.0, 1.3, 0.0) + direction * 1.6
+	return entity.global_position + Vector3(0.0, 2.9, 0.0) + direction * 1.6
+
+func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float = 1.0) -> void:
 	if not attack_def.projectile_scene:
 		push_error("[CombatComponent] %s: No projectile_scene in AttackDefinition!" % entity.name)
 		return
 	
-	# Spawn direction: entity's forward vector
-	var direction = -entity.global_transform.basis.z.normalized()
-	
-	# Spawn position: slightly in front of entity at chest height
-	var spawn_pos = entity.global_position + Vector3(0, 1, 0) + direction * 1.0
-	
+	# Charged attacks snapshot their aim on release. Immediate projectiles keep
+	# the entity-forward direction so existing AI actors retain their behavior.
+	var direction = _projectile_direction if _uses_charged_projectile(attack_def) else _get_aim_direction()
+
+	# Spawn position: use the weapon socket's height, then move 1.6 m forward
+	# to clear the owner's 1x2x1 collider.
+	var socket_pos := Vector3.ZERO
+	var actor: CharacterActor = entity.character_actor if entity else null
+	if actor and actor.has_method("get_socket"):
+		var weapon_socket = actor.get_socket("WeaponMain")
+		if weapon_socket:
+			socket_pos = weapon_socket.global_position
+	var spawn_pos = spawn_pos_for(direction, socket_pos)
+
 	var projectile = attack_def.projectile_scene.instantiate()
+
+	# Add to scene tree FIRST so the projectile's global transform exists.
+	# Otherwise setting global_position, look_at, and add_collision_exception
+	# with silently no-op or log !is_inside_tree() errors.
+	var projectiles_container = get_tree().root.find_child("Projectiles", true, false)
+	if projectiles_container:
+		projectiles_container.add_child(projectile, true)
+	else:
+		var players = get_tree().root.find_child("Players", true, false)
+		if players and players.get_parent():
+			players.get_parent().add_child(projectile, true)
+		else:
+			get_tree().root.add_child(projectile, true)
+
 	projectile.global_position = spawn_pos
-	
+
 	var owner_id: int
 	if entity.name.is_valid_int():
 		owner_id = entity.name.to_int()
@@ -305,6 +422,7 @@ func _execute_projectile(attack_def: AttackDefinition) -> void:
 	var projectile_damage = attack_def.base_damage
 	if damage > 0:
 		projectile_damage = damage
+	projectile_damage *= damage_multiplier
 
 	# Initialize projectile
 	if projectile.has_method("initialize"):
@@ -316,17 +434,11 @@ func _execute_projectile(attack_def: AttackDefinition) -> void:
 			attack_def.knockback_force
 		)
 
-	# Add to scene tree — MultiplayerSpawner handles replication
-	var projectiles_container = get_tree().root.find_child("Projectiles", true, false)
-	if projectiles_container:
-		projectiles_container.add_child(projectile, true)
-	else:
-		# Fallback: add to same parent as Players
-		var players = get_tree().root.find_child("Players", true, false)
-		if players and players.get_parent():
-			players.get_parent().add_child(projectile, true)
-		else:
-			get_tree().root.add_child(projectile, true)
+	# Don't let the projectile collide with its own owner immediately. Both the
+	# BaseEntity CharacterBody3D (layer 1) and the projectile collision_mask 3
+	# would otherwise make the projectile bounce off the player on spawn.
+	if projectile is PhysicsBody3D and entity is PhysicsBody3D:
+		projectile.add_collision_exception_with(entity)
 
 	print("[CombatComponent] %s fired projectile (dmg=%.0f, speed=%.0f)" % [
 		entity.name, projectile_damage, attack_def.projectile_speed

@@ -27,18 +27,19 @@ func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id:
 	owner_entity_id = p_owner_id
 	knockback = p_knockback
 	_lifetime_remaining = lifetime
-	
-	# Orient the projectile to face movement direction
-	if _direction.length() > 0.01:
-		look_at(global_position + _direction, Vector3.UP)
 
 func _ready() -> void:
 	# Server authority — projectile is controlled by the server
 	set_multiplayer_authority(1)
 	_lifetime_remaining = lifetime
-	
+
 	# Set velocity for Netfox rollback sync
 	velocity = _direction * speed
+
+	# Orient the projectile to face movement direction (now that we have a
+	# global transform inside the tree).
+	if _direction.length() > 0.01:
+		look_at(global_position + _direction, Vector3.UP)
 
 func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if _has_hit:

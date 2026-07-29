@@ -12,6 +12,7 @@ const DEFAULT_PORT = 7777
 @onready var bg_rect: ColorRect = $Background
 
 @onready var name_edit: LineEdit = $LoginPanel/VBox/NameEdit
+@onready var character_select: OptionButton = $LoginPanel/VBox/CharacterSelect
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
 @onready var room_id_edit: LineEdit = $LobbyPanel/VBox/JoinBox/VBox/RoomIDEdit
 @onready var noray_address_edit: LineEdit = $LobbyPanel/VBox/SettingsBox/AddressEdit
@@ -19,6 +20,7 @@ const DEFAULT_PORT = 7777
 
 # --- State ---
 var player_name: String = "Player"
+var character_id: String = "warrior"
 var _active_peer: ENetMultiplayerPeer
 var _is_host: bool = false
 var _current_oid: String = ""
@@ -36,8 +38,16 @@ func _ready() -> void:
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+	EventBus.phase_changed.connect(_on_match_phase_changed)
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
+
+	# Restore the cursor when the window is closed, app goes to background, or
+	# the scene is torn down. Without this the second launch keeps the cursor
+	# hidden and locked at the viewport center because the previous run exited
+	# while MOUSE_MODE_CAPTURED was still active.
+	get_tree().set_auto_accept_quit(false)
 	
 	# Initial Setup
 	name_edit.text = "Player_" + str(randi() % 1000)
@@ -81,6 +91,8 @@ func _switch_state(new_state: State) -> void:
 func _on_enter_lobby_pressed() -> void:
 	player_name = name_edit.text.strip_edges()
 	if player_name.is_empty(): player_name = "Player"
+	character_id = "warrior" if character_select.selected == 0 else "ivern_ranger"
+	EventBus.player_character_selected.emit(character_id)
 	_switch_state(State.LOBBY)
 
 func _on_host_pressed() -> void:
@@ -190,9 +202,42 @@ func _on_peer_connected(id: int) -> void:
 
 func _on_peer_disconnected(id: int) -> void:
 	EventBus.client_disconnected.emit(id)
-	if id == 1: 
+	if id == 1:
 		_switch_state(State.LOBBY)
 		status_label.text = "Desconectado del servidor"
+
+func _on_server_disconnected() -> void:
+	# Server vanished while we were IN_GAME — return to the lobby and release
+	# the captured mouse, otherwise the cursor stays locked at the center.
+	_switch_state(State.LOBBY)
+	status_label.text = "Desconectado del servidor"
+
+func _on_match_phase_changed(phase: int) -> void:
+	if phase == MatchState.Phase.LOBBY and current_state == State.IN_GAME:
+		_switch_state(State.LOBBY)
+
+func _release_capture() -> void:
+	if Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_WM_GO_BACK_REQUEST:
+			_release_capture()
+			get_tree().quit()
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			# Release before the window enters the background. A close request is
+			# not guaranteed after focus is lost, especially on macOS.
+			_release_capture()
+		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
+			Input.mouse_mode = (
+				Input.MOUSE_MODE_CAPTURED
+				if current_state == State.IN_GAME
+				else Input.MOUSE_MODE_VISIBLE
+			)
+
+func _exit_tree() -> void:
+	_release_capture()
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("toggle_menu"):
