@@ -31,6 +31,16 @@ func validate_access_token(token: String) -> Dictionary:
 		"username": validated_username,
 	}
 
+func issue_room_creator_ticket() -> Dictionary:
+	var response := await _request("/api/v1/rooms/creator-ticket", {"issue": true}, access_token)
+	var ticket := str(response.data.get("ticket", ""))
+	return {"accepted": response.status == 201 and not ticket.is_empty(), "ticket": ticket}
+
+func validate_room_creator_ticket(ticket: String, provision_instance_id: String, world_server_credential: String) -> Dictionary:
+	var response := await _request("/api/v1/rooms/creator-ticket/validate", {"ticket": ticket, "provision_instance_id": provision_instance_id}, "", {"X-World-Server-Credential": world_server_credential})
+	var validated_account_id := str(response.data.get("account_id", ""))
+	return {"accepted": response.status == 200 and not validated_account_id.is_empty(), "account_id": validated_account_id}
+
 func _authenticate(path: String, account_name: String, password: String) -> Dictionary:
 	var response := await _request(path, {
 		"username": account_name.strip_edges(),
@@ -52,12 +62,14 @@ func clear_session() -> void:
 	account_id = ""
 	username = ""
 
-func _request(path: String, body: Dictionary, bearer_token := "") -> Dictionary:
+func _request(path: String, body: Dictionary, bearer_token := "", extra_headers: Dictionary = {}) -> Dictionary:
 	var request := HTTPRequest.new()
 	add_child(request)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	if not bearer_token.is_empty():
 		headers.append("Authorization: Bearer " + bearer_token)
+	for header_name in extra_headers:
+		headers.append(str(header_name) + ": " + str(extra_headers[header_name]))
 	var url := str(ProjectSettings.get_setting(API_URL_SETTING, DEFAULT_API_URL)).trim_suffix("/") + path
 	var err := request.request(url, headers, HTTPClient.METHOD_POST if not body.is_empty() else HTTPClient.METHOD_GET, JSON.stringify(body))
 	if err != OK:

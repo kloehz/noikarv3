@@ -46,12 +46,14 @@ func test_team_and_phase_values() -> void:
 	assert_eq(_rules.boss_deploy_countdown_sec, 3.0)
 	assert_eq(_rules.result_display_sec, 10.0)
 	assert_eq(_rules.forfeit_disconnect_sec, 30.0)
+	assert_eq(_rules.character_select_sec, 30.0)
 
 ## Test: seconds_to_ticks converts at the configured 60Hz tickrate
 func test_seconds_to_ticks_conversion() -> void:
 	assert_eq(_rules.seconds_to_ticks(3.0), 180)
 	assert_eq(_rules.seconds_to_ticks(1.5), 90)
 	assert_eq(_rules.seconds_to_ticks(10.0), 600)
+	assert_eq(_rules.seconds_to_ticks(_rules.character_select_sec), 1800)
 
 ## Test: seconds_to_ticks rounds to the nearest tick
 func test_seconds_to_ticks_rounding() -> void:

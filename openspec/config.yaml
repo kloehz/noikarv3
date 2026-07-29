@@ -4,34 +4,39 @@ schema: spec-driven
 strict_tdd: false
 
 context: |
-  Tech stack: Godot 4.7 (Mobile renderer), GDScript, Jolt Physics, Netfox v2.x (rollback netcode) + netfox.noray (Noray NAT traversal).
-  Architecture: Server-authority PvPvE brawler. Authority split: LogicComponent/RollbackSynchronizer player-owned,
-  ServerState/StateSynchronizer server-owned. BaseEntity.gd acts as proxy between network variables and local components.
-  Layout: common/ (shared entities, components, autoloads: EventBus, GameManager, MatchManager),
-  core/ (server-only: AIComponent, CombatComponent, LogicComponent — excluded from client export),
-  client/ (client-only UI/resources), scenes/ (.tscn), addons/ (netfox*).
-  Testing: GUT tests authored (tests/unit, tests/integration) but GUT addon NOT installed — cannot run.
-  Python smoke scripts: tests/verify_export_isolation.py (passes), tests/verify_headless_server.py (fails:
-  missing 'dedicated_server' feature tag in project.godot).
-  Style: Static-typed GDScript, tickrate 60, Rakion-style camera, volumetric melee via ShapeCast3D.
+  Tech stack: Godot 4.7, GDScript, Jolt Physics, Netfox v2.x/Noray, plus Go 1.26.4/PostgreSQL authentication.
+  Architecture: server-authoritative PvPvE; player-owned LogicComponent/RollbackSynchronizer and server-owned StateSynchronizer data.
+  Layout: common/ shared state, core/ server-only logic, client/ client-only UI, scenes/ Inspector-first composition, addons/ Netfox and GUT.
+  Networking: authoritative changes replicate through ServerState/StateSynchronizer; rollback logic stays in _rollback_tick at 60 Hz.
+  UI: CanvasLayer/Control scene composition; preserve keyboard/gamepad focus when adding interactive flows.
+  Style: static-typed GDScript, tabs, composition over inheritance, EventBus for decoupled events.
+  Persistence: OpenSpec source specs and changes are repository records; .atl/ is the local skill index.
 
 testing:
   runner: gut
   runner_installed: true
-  runner_note: "GUT 9.7.1 (Godot 4.7 compatible) vendored in addons/gut; editor plugin not enabled (gut_cmdln only)."
-  unit_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -gexit"
-  integration_command: "godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -gexit"
+  runner_note: "GUT 9.7.1 is vendored in addons/gut; use gut_cmdln headlessly. Godot 4.7 is installed, but no godot executable is exposed on this shell PATH."
+  unit_command: "godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit"
+  integration_command: "godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit"
   smoke_export_isolation: "python3 tests/verify_export_isolation.py"
   smoke_headless_server: "python3 tests/verify_headless_server.py --quick"
-  coverage: ""
+  backend_unit_command: "cd backend && go test ./..."
+  backend_coverage_command: "cd backend && go test -cover ./..."
+  coverage: "Go: go test -cover ./...; GUT coverage is not configured."
   linter: ""
-  type_checker: "godot --headless --check-only (built-in script check)"
+  type_checker: "Godot built-in script checks via headless execution; no standalone configured command."
   formatter: ""
+
+workflow:
+  execution_mode: auto
+  delivery_strategy: auto-forecast
+  review_budget_changed_lines: 400
 
 rules:
   proposal:
     - Include rollback plan for risky changes
     - Respect the authority split: player-owned LogicComponent vs server-owned ServerState
+    - Forecast delivery slices against the 400 changed-line review budget
   specs:
     - Use Given/When/Then for scenarios
     - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
@@ -40,12 +45,14 @@ rules:
     - Include sequence diagrams for complex flows
     - Document architecture decisions with rationale
     - Server-dictated state goes in ServerState.gd and StateSynchronizer property list
+    - Prefer Inspector-configured scene composition over procedural setup
   tasks:
     - Group by phase, use hierarchical numbering
     - Keep tasks completable in one session
   apply:
     - Follow existing code patterns (Netfox authority split, component composition)
     - Never remove the ServerState node from entities; it is the authoritative data bridge
+    - Preserve input focus and non-mouse navigation for new Control-based UI
     tdd: false
     test_command: "python3 tests/verify_export_isolation.py"
   verify:

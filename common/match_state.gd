@@ -15,9 +15,10 @@
 class_name MatchState
 extends Node
 
-## Match phases. Exactly these nine, in this order (LOBBY = 0 zero value).
+## Match phases. LOBBY remains the zero-value for safe initial replication.
 enum Phase {
 	LOBBY,
+	CHARACTER_SELECT,
 	COUNTDOWN,
 	ROUND_SETUP,
 	PVE_RACE,
@@ -46,6 +47,13 @@ var _signals_armed: bool = true
 	set(v):
 		if phase_entered_tick == v: return
 		phase_entered_tick = v
+
+## Non-sensitive deadline replicated so clients can render the selection timer.
+## Roster data intentionally remains server-only in MatchManager.
+@export var selection_deadline_tick: int = 0:
+	set(v):
+		if selection_deadline_tick == v: return
+		selection_deadline_tick = v
 
 ## Deterministic match seed assigned at ROUND_SETUP (seed_base + match_index).
 @export var match_seed: int = 0:
@@ -81,6 +89,7 @@ func _ready() -> void:
 	if sync:
 		sync.add_state(self, "phase")
 		sync.add_state(self, "phase_entered_tick")
+		sync.add_state(self, "selection_deadline_tick")
 		sync.add_state(self, "match_seed")
 		sync.add_state(self, "team_red_score")
 		sync.add_state(self, "team_blue_score")

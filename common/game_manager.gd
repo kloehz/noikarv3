@@ -4,6 +4,7 @@ extends Node
 ## Uses Netfox for server authority and client prediction.
 
 const DEFAULT_PORT = 7777
+var validated_room_creator_account_id := ""
 
 func _ready() -> void:
 	if _is_headless_environment():
@@ -32,13 +33,33 @@ func _start_as_server() -> void:
 		print("[GameManager] Failed to connect to Noray: ", err)
 		return
 		
-	# Parse provision token from command line if spawned by Noray
+	# The provisioning service forwards the backend-attested, single-use ticket
+	# received with Noray's request-host command. It is validated before ENet
+	# admission begins, so the raw account ID never crosses Noray.
 	var provision_token = ""
+	var room_creator_ticket = ""
+	var provision_instance_id = ""
+	var world_server_credential := OS.get_environment("NOIKAR_WORLD_SERVER_CREDENTIAL")
 	for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
 		if arg.begins_with("--provision-token="):
 			provision_token = arg.replace("--provision-token=", "")
+		elif arg.begins_with("--room-creator-ticket="):
+			room_creator_ticket = arg.replace("--room-creator-ticket=", "")
+		elif arg.begins_with("--provision-instance-id="):
+			provision_instance_id = arg.replace("--provision-instance-id=", "")
+		elif arg.begins_with("--world-server-credential="):
+			world_server_credential = arg.replace("--world-server-credential=", "")
 	
 	if not provision_token.is_empty():
+		if room_creator_ticket.is_empty() or provision_instance_id.is_empty() or world_server_credential.is_empty():
+			push_error("[GameManager] Refusing provisioned room without ticket, instance binding, or world credential")
+			return
+		var ticket_identity: Dictionary = await AuthService.validate_room_creator_ticket(room_creator_ticket, provision_instance_id, world_server_credential)
+		if not ticket_identity.get("accepted", false):
+			push_error("[GameManager] Refusing invalid, expired, or replayed creator ticket")
+			return
+		validated_room_creator_account_id = str(ticket_identity["account_id"])
+		EventBus.room_creator_ticket_validated.emit(validated_room_creator_account_id)
 		print("[GameManager] Registering Spawned Server with token: ", provision_token)
 		Noray.register_server(provision_token)
 	else:

@@ -1,49 +1,42 @@
-# Handover & Project Status: noikarv-3
+# Project Status: noikarv3
 
-**Date**: 2026-04-12
-**Current State**: Core Loop Functional (Netfox v2.x Stable)
+**Initialized**: 2026-07-29  
+**Current state**: Authenticated multiplayer baseline is functional; SDD is initialized for planning the lobby, team-ready, and character-selection flow. No feature code was changed by initialization.
 
-## 🏗️ Technical Architecture (Server Authority)
+## Current SDD State
 
-This project uses **Netfox v2.x** with a strict **Authority Split** pattern to ensure a smooth "Brawler" feel with zero-lag movement and cheat-proof stats.
+| Area | Status |
+| --- | --- |
+| Artifact store | `openspec/` |
+| Active changes | None |
+| Source specifications | `match-lifecycle`, `team-identity`, `network-timing-calibration` |
+| Archived changes | `rollback-integrity-baseline`, `tickrate-speed-calibration`, `match-foundation` |
+| Execution mode | `auto` |
+| Delivery strategy | `auto-forecast`, 400 changed-line review budget |
+| Strict TDD | Disabled by `openspec/config.yaml` |
 
-### 1. Authority Breakdown
-- **Entity Root (`BaseEntity`)**: Owned by the **Player** (Peer ID).
-- **`LogicComponent`**: Owned by the **Player**. Handles movement and local input prediction.
-- **`RollbackSynchronizer`**: Owned by the **Player**. Syncs position and input for prediction.
-- **`ServerState` (Critical)**: Owned by the **Server** (Peer 1). Holds variables that players cannot touch (Health, Death state, Knockback Impulses).
-- **`StateSynchronizer`**: Owned by the **Server**. Broadcasts logical state from host to clients.
+## Architecture Constraints
 
-### 2. Synchronization Strategy
-To avoid "Unknown Property" warnings and jitter:
-- **Physics**: Handled by `RollbackSynchronizer` (Global Position, Velocity).
-- **Logic**: Handled by `StateSynchronizer` inside the `ServerState` node (Health, Death, Impulses).
-- **Proxies**: `BaseEntity.gd` acts as a proxy, updating local components when network variables change.
+- Godot 4.7 with static-typed GDScript, Jolt Physics, Netfox v2.x, Noray, and a Go/PostgreSQL authentication API.
+- The server owns authoritative state through `ServerState`/`StateSynchronizer`; clients present replicated state.
+- Rollback-aware physics belongs only in `_rollback_tick`; match and lobby orchestration must remain outside rollback paths.
+- Prefer Inspector-configured `.tscn` composition and reusable nodes over procedural scene construction.
+- Use `EventBus` for decoupled cross-system events. Preserve keyboard/gamepad focus when adding UI controls.
 
-## ✅ Features Implemented
+## Verified Capabilities
 
-### 🎮 Movement & Controls
-- **Strafe Mode**: Player always faces the camera direction. WASD moves relative to the view.
-- **Rakion Camera**: Right-click to rotate the body and camera. Mouse is captured for precision.
-- **Smoothing**: `TickInterpolator` used for other players, disabled for the local player to eliminate visual delay.
+| Check | Result |
+| --- | --- |
+| `python3 tests/verify_export_isolation.py` | Passed |
+| `python3 tests/verify_headless_server.py --quick` | Passed |
+| `cd backend && go test ./...` | Passed (2 tests) |
+| `cd backend && go test -cover ./...` | Passed |
+| GUT 9.7.1 | Vendored; shell execution is blocked because `godot` is not on PATH |
 
-### ⚔️ Combat System
-- **Volumetric Melee**: Uses `ShapeCast3D` (Sphere) for generous and robust hit detection.
-- **Authoritative Damage**: Server calculates hits and applies damage to `ServerState`.
-- **Authoritative Knockback**: Server sets a `knockback_velocity` and `knockback_remaining_time` in the victim's `ServerState`. The victim's `LogicComponent` applies this velocity while the timer is active, overriding local movement.
+## Planning Boundary
 
-### ⚰️ Life Cycle
-- **Death**: At 0 HP, `is_dead` is synced. Visuals hide, collisions disable, and control is locked.
-- **Respawn**: Authoritative 3-second timer on the server. Resets position, health, and state.
-- **Training Dummies**: Fully integrated entities that can be hit, killed, and pushed.
+The existing connection flow already includes account login/registration, a create-or-join room screen, and a pre-connection character `OptionButton`. The next change must define the server-authoritative room roster, ready state, post-connection team presentation, and character-selection ownership without changing the existing match-lifecycle and team-identity guarantees.
 
-## ⚠️ Important for the next Session
-- **Input Map**: Ensure `move_left`, `move_right`, `move_forward`, `move_backward`, `shoot`, and `toggle_menu` are defined in the editor.
-- **Scene Structure**: NEVER remove the `ServerState` node; it is the bridge for authoritative data.
-- **Adding new properties**: Always add them to `ServerState.gd` if they are server-dictated, and update the `StateSynchronizer` properties list.
+## Next Step
 
-## 🚀 Next Steps (Phase 1 & 2)
-1. **DASH / Dodge**: Implement a quick burst of speed with a cooldown.
-2. **STUN**: Brief movement lock when receiving damage.
-3. **ARENA**: Replace the flat floor with a proper map using Godot CSG nodes.
-4. **KILL-Z**: Add a logic to die if falling off the map.
+Run `/sdd-explore` for the multiplayer lobby, team-ready, and character-selection flow; then create a proposal before implementation.

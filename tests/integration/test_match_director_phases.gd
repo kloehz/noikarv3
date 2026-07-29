@@ -224,6 +224,24 @@ func test_stub_phase_guards() -> void:
 	assert_eq(director.match_state.phase, MatchState.Phase.PVE_RACE)
 	assert_eq(_phase_log.size(), 3, "Guarded stubs must not emit phase entries")
 
+func test_character_selection_deadline_is_exact_and_cancels() -> void:
+	var director := _make_director([1, 2])
+	assert_true(director.begin_character_selection([1, 2]))
+	assert_eq(director.match_state.phase, MatchState.Phase.CHARACTER_SELECT)
+	assert_eq(director.match_state.selection_deadline_tick, 1800)
+	director.tick_update(1799)
+	assert_eq(director.match_state.phase, MatchState.Phase.CHARACTER_SELECT)
+	director.tick_update(1800)
+	assert_eq(director.match_state.phase, MatchState.Phase.LOBBY)
+	assert_eq(director.match_state.selection_deadline_tick, 0)
+
+func test_character_selection_all_ready_seam_enters_countdown() -> void:
+	var director := _make_director([1, 2])
+	director.begin_character_selection([1, 2])
+	assert_true(director.complete_character_selection())
+	assert_eq(director.match_state.phase, MatchState.Phase.COUNTDOWN)
+	assert_eq(director.match_state.selection_deadline_tick, 0)
+
 ## Test: Late-join catch-up is silent — replayed values emit no phase_changed,
 ## then post-arm real changes emit exactly once
 func test_silent_late_join_catchup() -> void:

@@ -95,6 +95,9 @@ func _unregister_player(peer_id: int) -> void:
 ## ROUND_SETUP wiring: pull the assigned match seed into spawn id generation.
 func _on_phase_changed(phase: int) -> void:
 	if not multiplayer.is_server(): return
+	if phase == MatchState.Phase.LOBBY:
+		_recompute_lobby()
+		_broadcast_lobby_snapshots()
 	if phase != MatchState.Phase.ROUND_SETUP: return
 	var state := get_node_or_null("MatchState") as MatchState
 	if state:
@@ -122,26 +125,35 @@ func _next_spawn_id(prefix: String) -> String:
 var peer_data: Dictionary = {}
 var _authenticating_peers: Dictionary = {}
 var _pending_name: String = ""
-var _pending_character_id: String = "warrior"
+var _lobby: Dictionary = {}
+var _frozen_peer_ids: Array[int] = []
+
+## Set only after GameManager has consumed a backend-attested ticket.
+var _room_creator_account_id: String = ""
+
+const ALLOWED_CHARACTER_IDS: Array[String] = ["warrior", "ivern_ranger"]
 
 func _ready() -> void:
 	add_to_group(&"match_manager")
 	EventBus.server_started.connect(_on_server_started)
 	EventBus.client_connected.connect(_on_client_connected)
-	EventBus.client_disconnected.connect(_on_client_disconnected)
+	NetworkEvents.on_peer_leave.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
 	EventBus.player_auth_token_submitted.connect(_on_player_auth_token_submitted)
-	EventBus.player_character_selected.connect(_on_player_character_selected)
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.phase_changed.connect(_on_phase_changed)
 	EventBus.team_assigned.connect(_on_team_assigned)
+	EventBus.character_selection_cancelled.connect(_on_character_selection_cancelled)
+	EventBus.character_selection_launching.connect(_spawn_frozen_players)
+	EventBus.match_started.connect(_begin_stage_progression)
+	EventBus.room_creator_ticket_validated.connect(_on_room_creator_ticket_validated)
+	if not GameManager.validated_room_creator_account_id.is_empty():
+		_on_room_creator_ticket_validated(GameManager.validated_room_creator_account_id)
 	
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	
-	# Spawn initial stage if server (single-team placeholder, no mirror yet)
-	if multiplayer.is_server():
-		_begin_stage_progression.call_deferred()
+	# Gameplay entities are intentionally deferred until selection launch.
 
 ## Reset and start the single-team stage progression. Idempotent so callers
 ## can invoke it again after a full reset (e.g. between matches).
@@ -259,9 +271,6 @@ func _strip_visual_nodes_recursive(node: Node) -> void:
 
 func _on_server_started() -> void:
 	print("[MatchManager] Match started as server")
-	# Spawn local player if not headless
-	if not GameManager._is_headless_environment():
-		_spawn_player(1)
 
 func _on_client_connected(peer_id: int) -> void:
 	if not multiplayer.is_server():
@@ -279,6 +288,13 @@ func _on_client_disconnected(peer_id: int) -> void:
 	print("[MatchManager] Client disconnected: ", peer_id)
 	_despawn_player(peer_id)
 	peer_data.erase(peer_id)
+	if _lobby.erase(peer_id):
+		if _frozen_peer_ids.has(peer_id):
+			var director := _get_match_director()
+			if director: director.cancel_character_selection()
+		else:
+			_recompute_lobby()
+			_broadcast_lobby_snapshots()
 	
 	# Wait a frame to ensure queue_free() is processed or use robust check
 	_check_for_empty_server.call_deferred()
@@ -319,7 +335,6 @@ func _auto_shutdown() -> void:
 func _on_connected_to_server() -> void:
 	if not _pending_name.is_empty():
 		_submit_name_to_server.rpc_id(1, _pending_name)
-	_submit_character_to_server.rpc_id(1, _pending_character_id)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	_pending_name = player_name
@@ -344,52 +359,197 @@ func _authenticate_peer(peer_id: int, token: String) -> void:
 	var identity: Dictionary = await AuthService.validate_access_token(token)
 	_authenticating_peers.erase(peer_id)
 	if not identity.get("accepted", false) or not multiplayer.get_peers().has(peer_id):
-		multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+		await _reject_admission_and_disconnect(peer_id, "Account validation failed")
 		return
-	peer_data[peer_id] = {
-		"account_id": identity.account_id,
-		"name": identity.username,
-		"character_id": "warrior",
-	}
-	_spawn_player(peer_id)
+	if not _admit_authenticated_identity(peer_id, identity):
+		await _reject_admission_and_disconnect(peer_id, _admission_failure_reason(str(identity.get("account_id", ""))))
+		return
 	_auth_accepted.rpc_id(peer_id, str(identity.username))
+	_broadcast_lobby_snapshots()
 
 @rpc("authority", "reliable")
 func _auth_accepted(authenticated_username: String) -> void:
 	EventBus.game_server_authenticated.emit(authenticated_username)
 
-func _on_player_character_selected(character_id: String) -> void:
-	_pending_character_id = character_id
-	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
-		_submit_character_to_server.rpc_id(1, character_id)
+@rpc("authority", "reliable")
+func receive_admission_rejection(reason: String) -> void:
+	EventBus.room_admission_rejected.emit(reason)
 
-@rpc("any_peer", "call_local", "reliable")
+func _reject_admission_and_disconnect(peer_id: int, reason: String) -> void:
+	if multiplayer.get_peers().has(peer_id):
+		receive_admission_rejection.rpc_id(peer_id, reason)
+		await get_tree().create_timer(0.1).timeout
+	if multiplayer.get_peers().has(peer_id): multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+
+func _admission_failure_reason(account_id: String) -> String:
+	var director := _get_match_director()
+	if director == null or director.match_state.phase != MatchState.Phase.LOBBY: return "Room is not accepting players"
+	if _has_authenticated_account(account_id): return "This account is already in the room"
+	if _lobby.size() >= director.rules.max_players_per_team * 2: return "Room is full"
+	return "Room admission was denied"
+
+@rpc("any_peer", "reliable")
 func _submit_name_to_server(player_name: String) -> void:
 	var peer_id = multiplayer.get_remote_sender_id()
-	print("[MatchManager] Received name from peer ", peer_id, ": ", player_name)
-	var data: Dictionary = peer_data.get(peer_id, {})
-	data["name"] = player_name
-	peer_data[peer_id] = data
-	
-	if multiplayer.is_server():
-		# Update player if already exists
-		var player = players_container.get_node_or_null(str(peer_id))
-		if player and player.has_node("ServerState"):
-			player.get_node("ServerState").player_name = player_name
+	if not multiplayer.is_server() or not _lobby.has(peer_id): return
+	# Authenticated identity is immutable; this legacy RPC may not rename it.
+	_reject_lobby_request(peer_id, "Account identity is server-managed")
 
-@rpc("any_peer", "call_local", "reliable")
-func _submit_character_to_server(character_id: String) -> void:
-	var peer_id = multiplayer.get_remote_sender_id()
-	if not multiplayer.is_server() or peer_id <= 0:
-		return
-	var player = players_container.get_node_or_null(str(peer_id)) as BaseEntity
-	if not player:
-		return
-	var selected_id = player._validated_character_id(character_id)
-	var data: Dictionary = peer_data.get(peer_id, {})
-	data["character_id"] = selected_id
-	peer_data[peer_id] = data
-	player.select_character(selected_id)
+@rpc("any_peer", "reliable")
+func request_lobby_ready(ready: bool) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	_set_lobby_ready_from_peer(peer_id, ready)
+
+func _set_lobby_ready_from_peer(peer_id: int, ready: bool) -> bool:
+	if not _can_mutate_lobby(peer_id, MatchState.Phase.LOBBY): return false
+	var record: Dictionary = _lobby[peer_id]
+	record["lobby_ready"] = ready
+	_lobby[peer_id] = record
+	_broadcast_lobby_snapshots()
+	return true
+
+@rpc("any_peer", "reliable")
+func request_character_select_start() -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	submit_character_select_start(peer_id)
+
+func submit_character_select_start(peer_id: int) -> bool:
+	if not _can_mutate_lobby(peer_id, MatchState.Phase.LOBBY): return false
+	if not bool(_lobby[peer_id]["is_host"]):
+		_reject_lobby_request(peer_id, "Only the host can start selection")
+		return false
+	if not _all_lobby_ready():
+		_reject_lobby_request(peer_id, "Every member must be ready")
+		return false
+	_frozen_peer_ids = _sorted_lobby_peer_ids()
+	if _get_match_director().begin_character_selection(_frozen_peer_ids):
+		for frozen_id in _frozen_peer_ids:
+			var record: Dictionary = _lobby[frozen_id]
+			record["character_id"] = ""
+			record["selection_ready"] = false
+			_lobby[frozen_id] = record
+		_broadcast_lobby_snapshots()
+		return true
+	return false
+
+@rpc("any_peer", "reliable")
+func request_character_selection(character_id: String, ready: bool) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	submit_character_selection(peer_id, character_id, ready)
+
+func submit_character_selection(peer_id: int, character_id: String, ready: bool) -> bool:
+	if not _can_mutate_lobby(peer_id, MatchState.Phase.CHARACTER_SELECT): return false
+	if not _frozen_peer_ids.has(peer_id):
+		_reject_lobby_request(peer_id, "Player is not in the frozen roster")
+		return false
+	if ready and not ALLOWED_CHARACTER_IDS.has(character_id):
+		_reject_lobby_request(peer_id, "Invalid character selection")
+		return false
+	if not character_id.is_empty() and not ALLOWED_CHARACTER_IDS.has(character_id):
+		_reject_lobby_request(peer_id, "Invalid character selection")
+		return false
+	var record: Dictionary = _lobby[peer_id]
+	if not character_id.is_empty(): record["character_id"] = character_id
+	record["selection_ready"] = ready and not str(record["character_id"]).is_empty()
+	_lobby[peer_id] = record
+	_broadcast_lobby_snapshots()
+	if _all_frozen_selection_ready():
+		_get_match_director().complete_character_selection()
+	return true
+
+@rpc("authority", "reliable")
+func receive_lobby_snapshot(snapshot: Dictionary) -> void:
+	EventBus.lobby_snapshot_received.emit(snapshot)
+
+func _can_mutate_lobby(peer_id: int, expected_phase: int) -> bool:
+	if not multiplayer.is_server() or peer_id <= 0 or not _lobby.has(peer_id):
+		return false
+	if _get_match_director().match_state.phase != expected_phase:
+		_reject_lobby_request(peer_id, "Action is not valid in this phase")
+		return false
+	return true
+
+func _sorted_lobby_peer_ids() -> Array[int]:
+	var ids: Array[int] = []
+	for peer_id in _lobby: ids.append(peer_id)
+	ids.sort()
+	return ids
+
+func _recompute_lobby() -> void:
+	var ids := _sorted_lobby_peer_ids()
+	for index in ids.size():
+		var record: Dictionary = _lobby[ids[index]]
+		record["team"] = TeamId.RED if index % 2 == 0 else TeamId.BLUE
+		record["is_host"] = not _room_creator_account_id.is_empty() and str(record["account_id"]) == _room_creator_account_id
+		record["lobby_ready"] = false
+		_lobby[ids[index]] = record
+
+func _all_lobby_ready() -> bool:
+	return not _lobby.is_empty() and _lobby.values().all(func(record: Dictionary) -> bool: return bool(record["lobby_ready"]))
+
+func _all_frozen_selection_ready() -> bool:
+	return not _frozen_peer_ids.is_empty() and _frozen_peer_ids.all(func(peer_id: int) -> bool:
+		return _lobby.has(peer_id) and bool(_lobby[peer_id]["selection_ready"]))
+
+func _snapshot_for(peer_id: int, rejection: String = "") -> Dictionary:
+	var recipient: Dictionary = _lobby[peer_id]
+	var team_members: Array[Dictionary] = []
+	for member_id in _sorted_lobby_peer_ids():
+		var record: Dictionary = _lobby[member_id]
+		if record["team"] == recipient["team"]:
+			team_members.append({ "name": record["name"], "lobby_ready": record["lobby_ready"], "character_id": record["character_id"], "selection_ready": record["selection_ready"] })
+	return { "phase": _get_match_director().match_state.phase, "deadline_tick": _get_match_director().match_state.selection_deadline_tick, "team": recipient["team"], "is_host": recipient["is_host"], "self_lobby_ready": recipient["lobby_ready"], "self_selection_ready": recipient["selection_ready"], "members": team_members, "rejection": rejection }
+
+func _broadcast_lobby_snapshots() -> void:
+	if not multiplayer.is_server(): return
+	for peer_id in _sorted_lobby_peer_ids():
+		if multiplayer.get_peers().has(peer_id):
+			receive_lobby_snapshot.rpc_id(peer_id, _snapshot_for(peer_id))
+
+func _reject_lobby_request(peer_id: int, reason: String) -> void:
+	if _lobby.has(peer_id) and multiplayer.get_peers().has(peer_id):
+		receive_lobby_snapshot.rpc_id(peer_id, _snapshot_for(peer_id, reason))
+
+func _on_character_selection_cancelled() -> void:
+	_frozen_peer_ids.clear()
+	for peer_id in _lobby:
+		var record: Dictionary = _lobby[peer_id]
+		record["lobby_ready"] = false
+		record["character_id"] = ""
+		record["selection_ready"] = false
+		_lobby[peer_id] = record
+	_broadcast_lobby_snapshots()
+
+func _spawn_frozen_players() -> void:
+	for peer_id in _frozen_peer_ids:
+		_spawn_player(peer_id)
+	_frozen_peer_ids.clear()
+
+func _has_authenticated_account(account_id: String) -> bool:
+	for record in _lobby.values():
+		if str(record["account_id"]) == account_id:
+			return true
+	return false
+
+func _admit_authenticated_identity(peer_id: int, identity: Dictionary) -> bool:
+	var director := _get_match_director()
+	var account_id := str(identity.get("account_id", ""))
+	if director == null or director.match_state.phase != MatchState.Phase.LOBBY:
+		return false
+	if account_id.is_empty() or _lobby.size() >= director.rules.max_players_per_team * 2:
+		return false
+	if _has_authenticated_account(account_id):
+		return false
+	peer_data[peer_id] = {"account_id": account_id, "name": str(identity.get("username", ""))}
+	_lobby[peer_id] = {"account_id": account_id, "name": str(identity.get("username", "")), "team": TeamId.NONE, "lobby_ready": false, "character_id": "", "selection_ready": false, "is_host": false}
+	_recompute_lobby()
+	return true
+
+func _on_room_creator_ticket_validated(account_id: String) -> void:
+	if not multiplayer.is_server() or account_id.is_empty(): return
+	_room_creator_account_id = account_id
+	_recompute_lobby()
+	_broadcast_lobby_snapshots()
 
 ## Defers the queue_free so visuals/VFX have time to play their death effect.
 ## Pulled out so the wave counter can progress synchronously before the cleanup.
@@ -616,16 +776,21 @@ func _spawn_player(peer_id: int) -> void:
 
 	# Initial server-side state setup
 	if multiplayer.is_server():
-		# Apply roster team from the director (NONE pre-assignment / no director)
-		var director := _get_match_director()
-		if director and director.has_method("get_team") and player.has_node("ServerState"):
-			player.get_node("ServerState").team_id = director.get_team(peer_id)
+		# Frozen lobby assignment is applied only at launch; pre-lobby entities
+		# retain NONE and roster records are never replicated through ServerState.
+		if player.has_node("ServerState"):
+			if _lobby.has(peer_id):
+				player.get_node("ServerState").team_id = int(_lobby[peer_id]["team"])
+			else:
+				var director := _get_match_director()
+				if director and director.has_method("get_team"):
+					player.get_node("ServerState").team_id = director.get_team(peer_id)
 
 		# Setup name from peer data if available
 		if peer_data.has(peer_id):
 			player.player_name = peer_data[peer_id].name
-			if peer_data[peer_id].has("character_id"):
-				player.select_character(peer_data[peer_id].character_id)
+		if _lobby.has(peer_id):
+			player.select_character(str(_lobby[peer_id]["character_id"]))
 		
 	print("[MatchManager] Spawned player for peer: ", peer_id, " at ", player.position)
 

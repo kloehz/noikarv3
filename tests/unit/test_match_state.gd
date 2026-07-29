@@ -36,18 +36,19 @@ func _make_client_state() -> MatchState:
 	add_child_autofree(state)
 	return state
 
-## Test: Phase enum has exactly the nine spec phases, LOBBY = 0
+## Test: Phase enum includes the server-authoritative selection phase, LOBBY = 0
 func test_phase_enum_values() -> void:
 	assert_eq(MatchState.Phase.LOBBY, 0)
-	assert_eq(MatchState.Phase.COUNTDOWN, 1)
-	assert_eq(MatchState.Phase.ROUND_SETUP, 2)
-	assert_eq(MatchState.Phase.PVE_RACE, 3)
-	assert_eq(MatchState.Phase.BOSS_LOCK, 4)
-	assert_eq(MatchState.Phase.BOSS_DEPLOY, 5)
-	assert_eq(MatchState.Phase.BOSS_A1, 6)
-	assert_eq(MatchState.Phase.RESULT, 7)
-	assert_eq(MatchState.Phase.POST_MATCH, 8)
-	assert_eq(MatchState.Phase.size(), 9, "Exactly nine phases per spec")
+	assert_eq(MatchState.Phase.CHARACTER_SELECT, 1)
+	assert_eq(MatchState.Phase.COUNTDOWN, 2)
+	assert_eq(MatchState.Phase.ROUND_SETUP, 3)
+	assert_eq(MatchState.Phase.PVE_RACE, 4)
+	assert_eq(MatchState.Phase.BOSS_LOCK, 5)
+	assert_eq(MatchState.Phase.BOSS_DEPLOY, 6)
+	assert_eq(MatchState.Phase.BOSS_A1, 7)
+	assert_eq(MatchState.Phase.RESULT, 8)
+	assert_eq(MatchState.Phase.POST_MATCH, 9)
+	assert_eq(MatchState.Phase.size(), 10, "Exactly ten phases per spec")
 
 ## Test: Replicated defaults are the LOBBY zero state
 func test_defaults() -> void:
@@ -55,6 +56,7 @@ func test_defaults() -> void:
 	add_child_autofree(state)
 	assert_eq(state.phase, MatchState.Phase.LOBBY)
 	assert_eq(state.phase_entered_tick, 0)
+	assert_eq(state.selection_deadline_tick, 0)
 	assert_eq(state.match_seed, 0)
 	assert_eq(state.team_red_score, 0)
 	assert_eq(state.team_blue_score, 0)

@@ -7,7 +7,7 @@
 ## Clients never run transition logic — the tick hookup is server-only and
 ## MatchState changes reach them via StateSynchronizer.
 ##
-## Phase walk: LOBBY ─stub→ COUNTDOWN ─180t→ ROUND_SETUP ─seed→ PVE_RACE
+## Phase walk: LOBBY ─host→ CHARACTER_SELECT ─all ready→ COUNTDOWN ─180t→ ROUND_SETUP ─seed→ PVE_RACE
 ## ─stub→ BOSS_LOCK ─stub→ BOSS_DEPLOY ─180t→ BOSS_A1 ─stub→ RESULT ─600t→
 ## POST_MATCH ─next tick→ LOBBY.
 class_name MatchDirector
@@ -36,6 +36,8 @@ var _last_tick: int = 0
 var _match_index: int = 0
 ## Ticks remaining driver for the current timed phase (0 = untimed phase).
 var _phase_timer_ticks: int = 0
+## Frozen authenticated roster for the current character-selection phase.
+var _frozen_peer_ids: Array[int] = []
 
 func _ready() -> void:
 	add_to_group(&"match_director")
@@ -59,6 +61,9 @@ func _ready() -> void:
 func tick_update(tick: int) -> void:
 	_last_tick = tick
 	match match_state.phase:
+		MatchState.Phase.CHARACTER_SELECT:
+			if tick >= match_state.selection_deadline_tick:
+				cancel_character_selection(tick)
 		MatchState.Phase.COUNTDOWN:
 			if tick - match_state.phase_entered_tick >= _phase_timer_ticks:
 				_enter_round_setup(tick)
@@ -75,11 +80,41 @@ func tick_update(tick: int) -> void:
 
 ## --- Stub seam methods (Stage 3+ wires real conditions) ---------------------
 
-## Stub event: minimum roster reached. LOBBY → COUNTDOWN.
+## Compatibility stub for existing non-lobby test seams. Authenticated lobbies
+## must use begin_character_selection with a frozen roster instead.
 func request_match_start() -> void:
 	if not multiplayer.is_server(): return
 	if match_state.phase != MatchState.Phase.LOBBY: return
 	_enter_phase(MatchState.Phase.COUNTDOWN, _last_tick)
+
+func begin_character_selection(peer_ids: Array[int]) -> bool:
+	if not multiplayer.is_server() or match_state.phase != MatchState.Phase.LOBBY:
+		return false
+	_frozen_peer_ids = peer_ids.duplicate()
+	_frozen_peer_ids.sort()
+	match_state.selection_deadline_tick = _last_tick + rules.seconds_to_ticks(rules.character_select_sec)
+	_enter_phase(MatchState.Phase.CHARACTER_SELECT, _last_tick)
+	return true
+
+func complete_character_selection() -> bool:
+	if not multiplayer.is_server() or match_state.phase != MatchState.Phase.CHARACTER_SELECT:
+		return false
+	EventBus.character_selection_launching.emit()
+	_frozen_peer_ids.clear()
+	match_state.selection_deadline_tick = 0
+	_enter_phase(MatchState.Phase.COUNTDOWN, _last_tick)
+	return true
+
+func cancel_character_selection(tick: int = _last_tick) -> void:
+	if match_state.phase != MatchState.Phase.CHARACTER_SELECT:
+		return
+	_frozen_peer_ids.clear()
+	match_state.selection_deadline_tick = 0
+	_enter_phase(MatchState.Phase.LOBBY, tick)
+	EventBus.character_selection_cancelled.emit()
+
+func frozen_peer_ids() -> Array[int]:
+	return _frozen_peer_ids.duplicate()
 
 ## Stub event: boss lock sequence. First call PVE_RACE → BOSS_LOCK, second
 ## call BOSS_LOCK → BOSS_DEPLOY (both are distinct stub conditions per spec).
@@ -171,6 +206,8 @@ func _reset_to_lobby(tick: int) -> void:
 	match_state.team_red_score = 0
 	match_state.team_blue_score = 0
 	match_state.winner = TeamId.NONE
+	_frozen_peer_ids.clear()
+	match_state.selection_deadline_tick = 0
 	_enter_phase(MatchState.Phase.LOBBY, tick)
 	_recompute_teams()
 

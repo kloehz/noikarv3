@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cwj4434m5oq88"]
 
 [ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
-[ext_resource type="PackedScene" uid="uid://b8n4vxtkpq2ra" path="res://scenes/connection_menu.tscn" id="2_conn"]
+[ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
 [ext_resource type="Script" uid="uid://dnpnjpubiwloe" path="res://common/match_state.gd" id="3_mstate"]
 [ext_resource type="Script" uid="uid://c24ik743i4qc3" path="res://common/match_director.gd" id="4_mdirector"]
 [ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_statesync"]

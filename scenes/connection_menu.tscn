@@ -1,217 +1,186 @@
-[gd_scene load_steps=6 format=3 uid="uid://b8n4vxtkpq2ra"]
+[gd_scene load_steps=4 format=3]
 
-[ext_resource type="Script" path="res://client/connection_manager.gd" id="1_conn"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_glass"]
-bg_color = Color(0.12, 0.12, 0.18, 0.85)
-corner_radius_top_left = 15
-corner_radius_top_right = 15
-corner_radius_bottom_right = 15
-corner_radius_bottom_left = 15
-shadow_color = Color(0, 0, 0, 0.3)
-shadow_size = 10
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button"]
+[ext_resource type="Script" path="res://client/connection_manager.gd" id="1"]
+[sub_resource type="StyleBoxFlat" id="button"]
 bg_color = Color(0.2, 0.4, 0.8, 1)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
-corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_input"]
-bg_color = Color(0.05, 0.05, 0.1, 0.5)
-border_width_bottom = 2
-border_color = Color(0.3, 0.5, 1, 1)
-corner_radius_top_left = 4
-corner_radius_top_right = 4
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status"]
-bg_color = Color(0.1, 0.1, 0.2, 0.9)
-border_width_top = 2
-border_color = Color(0, 0.8, 1, 1)
+corner_radius_bottom_right = 8
+[sub_resource type="StyleBoxFlat" id="input"]
+bg_color = Color(0.05, 0.05, 0.1, 0.8)
 
 [node name="ConnectionMenu" type="CanvasLayer"]
-script = ExtResource("1_conn")
-
+script = ExtResource("1")
 [node name="Background" type="ColorRect" parent="."]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.101961, 0.101961, 0.180392, 1)
+color = Color(0.1, 0.1, 0.18, 1)
 
 [node name="LoginPanel" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
 [node name="VBox" type="VBoxContainer" parent="LoginPanel"]
-layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = -100.0
-offset_right = 150.0
-offset_bottom = 100.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 20
-
+offset_left = -180.0
+offset_top = -150.0
+offset_right = 180.0
+offset_bottom = 150.0
+theme_override_constants/separation = 12
 [node name="Title" type="Label" parent="LoginPanel/VBox"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 42
 text = "NOIKARV"
 horizontal_alignment = 1
-
-[node name="Subtitle" type="Label" parent="LoginPanel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.6, 0.6, 0.8, 1)
-text = "Battle & Summon"
-horizontal_alignment = 1
-
 [node name="AccountEdit" type="LineEdit" parent="LoginPanel/VBox"]
-custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-placeholder_text = "Cuenta"
-alignment = 1
-
+placeholder_text = "Account"
 [node name="PasswordEdit" type="LineEdit" parent="LoginPanel/VBox"]
-custom_minimum_size = Vector2(0, 45)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-placeholder_text = "Contraseña"
+placeholder_text = "Password"
 secret = true
-alignment = 1
-
-[node name="CharacterSelect" type="OptionButton" parent="LoginPanel/VBox"]
-custom_minimum_size = Vector2(0, 45)
-layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-item_count = 2
-selected = 0
-popup/item_0/text = "Aatrox - Warrior"
-popup/item_0/id = 0
-popup/item_1/text = "Ivern - Ranger"
-popup/item_1/id = 1
-
 [node name="EnterButton" type="Button" parent="LoginPanel/VBox"]
-custom_minimum_size = Vector2(0, 50)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-text = "ENTRAR AL LOBBY"
-
+text = "SIGN IN"
+focus_neighbor_bottom = NodePath("../RegisterButton")
 [node name="RegisterButton" type="Button" parent="LoginPanel/VBox"]
-custom_minimum_size = Vector2(0, 42)
 layout_mode = 2
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-text = "CREAR CUENTA"
-
+text = "CREATE ACCOUNT"
+focus_neighbor_top = NodePath("../EnterButton")
 [node name="LoginStatus" type="Label" parent="LoginPanel/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.45, 0.4, 1)
-horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="LobbyPanel" type="Control" parent="."]
+[node name="RoomPanel" type="Control" parent="."]
 visible = false
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBox" type="VBoxContainer" parent="LobbyPanel"]
-layout_mode = 1
+[node name="VBox" type="VBoxContainer" parent="RoomPanel"]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -200.0
-offset_top = -180.0
+offset_top = -150.0
 offset_right = 200.0
-offset_bottom = 180.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 20
-
-[node name="HostBox" type="PanelContainer" parent="LobbyPanel/VBox"]
-custom_minimum_size = Vector2(0, 100)
+offset_bottom = 150.0
+theme_override_constants/separation = 12
+[node name="HostBox" type="VBoxContainer" parent="RoomPanel/VBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_glass")
-
-[node name="VBox" type="VBoxContainer" parent="LobbyPanel/VBox/HostBox"]
+[node name="HostButton" type="Button" parent="RoomPanel/VBox/HostBox"]
 layout_mode = 2
-alignment = 1
-
-[node name="Label" type="Label" parent="LobbyPanel/VBox/HostBox/VBox"]
+text = "CREATE ROOM"
+[node name="JoinBox" type="VBoxContainer" parent="RoomPanel/VBox"]
 layout_mode = 2
-text = "Nueva Aventura"
-horizontal_alignment = 1
-
-[node name="HostButton" type="Button" parent="LobbyPanel/VBox/HostBox/VBox"]
-custom_minimum_size = Vector2(150, 40)
+[node name="RoomIDEdit" type="LineEdit" parent="RoomPanel/VBox/JoinBox"]
 layout_mode = 2
-size_flags_horizontal = 4
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-text = "CREAR SALA"
-
-[node name="JoinBox" type="PanelContainer" parent="LobbyPanel/VBox"]
-custom_minimum_size = Vector2(0, 150)
+placeholder_text = "Room code"
+[node name="JoinButton" type="Button" parent="RoomPanel/VBox/JoinBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_glass")
-
-[node name="VBox" type="VBoxContainer" parent="LobbyPanel/VBox/JoinBox"]
+text = "JOIN ROOM"
+[node name="SettingsBox" type="VBoxContainer" parent="RoomPanel/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 10
-alignment = 1
-
-[node name="Label" type="Label" parent="LobbyPanel/VBox/JoinBox/VBox"]
+[node name="AddressEdit" type="LineEdit" parent="RoomPanel/VBox/SettingsBox"]
 layout_mode = 2
-text = "Unirse a una Sala"
-horizontal_alignment = 1
-
-[node name="RoomIDEdit" type="LineEdit" parent="LobbyPanel/VBox/JoinBox/VBox"]
-custom_minimum_size = Vector2(250, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
-placeholder_text = "Código de Sala..."
-alignment = 1
-
-[node name="JoinButton" type="Button" parent="LobbyPanel/VBox/JoinBox/VBox"]
-custom_minimum_size = Vector2(150, 40)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_styles/normal = SubResource("StyleBoxFlat_button")
-text = "CONECTAR"
-
-[node name="SettingsBox" type="VBoxContainer" parent="LobbyPanel/VBox"]
-layout_mode = 2
-
-[node name="Label" type="Label" parent="LobbyPanel/VBox/SettingsBox"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-text = "Noray Server IP:"
-horizontal_alignment = 1
-
-[node name="AddressEdit" type="LineEdit" parent="LobbyPanel/VBox/SettingsBox"]
-custom_minimum_size = Vector2(150, 30)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 12
-theme_override_styles/normal = SubResource("StyleBoxFlat_input")
 text = "127.0.0.1"
-alignment = 1
+
+[node name="RoomStatus" type="Label" parent="RoomPanel/VBox"]
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="TeamLobbyPanel" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+[node name="VBox" type="VBoxContainer" parent="TeamLobbyPanel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -160.0
+offset_right = 220.0
+offset_bottom = 160.0
+theme_override_constants/separation = 12
+[node name="Title" type="Label" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+text = "TEAM LOBBY"
+horizontal_alignment = 1
+[node name="Roster" type="Label" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+[node name="Ready" type="CheckButton" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+text = "READY"
+focus_neighbor_bottom = NodePath("../StartSelection")
+[node name="StartSelection" type="Button" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+text = "START CHARACTER SELECTION"
+focus_neighbor_top = NodePath("../Ready")
+[node name="Status" type="Label" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+autowrap_mode = 2
+
+[node name="CharacterSelectPanel" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+[node name="VBox" type="VBoxContainer" parent="CharacterSelectPanel"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -180.0
+offset_right = 220.0
+offset_bottom = 180.0
+theme_override_constants/separation = 12
+[node name="Title" type="Label" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+text = "CHARACTER SELECTION"
+horizontal_alignment = 1
+[node name="Deadline" type="Label" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+[node name="Roster" type="Label" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+[node name="Characters" type="HBoxContainer" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+[node name="Aatrox" type="Button" parent="CharacterSelectPanel/VBox/Characters"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "AATROX\nWarrior"
+focus_neighbor_right = NodePath("../Ivern")
+focus_neighbor_bottom = NodePath("../../Ready")
+[node name="Ivern" type="Button" parent="CharacterSelectPanel/VBox/Characters"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "IVERN\nRanger"
+focus_neighbor_left = NodePath("../Aatrox")
+focus_neighbor_bottom = NodePath("../../Ready")
+[node name="Ready" type="CheckButton" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+text = "LOCK IN"
+focus_neighbor_top = NodePath("../Characters/Aatrox")
+[node name="Status" type="Label" parent="CharacterSelectPanel/VBox"]
+layout_mode = 2
+autowrap_mode = 2
 
 [node name="ConnectingPanel" type="PanelContainer" parent="."]
 visible = false
@@ -220,45 +189,27 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_top = -60.0
-grow_horizontal = 2
-grow_vertical = 0
-theme_override_styles/panel = SubResource("StyleBoxFlat_status")
-
 [node name="VBox" type="VBoxContainer" parent="ConnectingPanel"]
 layout_mode = 2
-alignment = 1
-
 [node name="StatusLabel" type="Label" parent="ConnectingPanel/VBox"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0, 0.8, 1, 1)
-text = "Conectando..."
 horizontal_alignment = 1
 
 [node name="HUD" type="Control" parent="."]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 mouse_filter = 2
-
 [node name="RoomInfo" type="Label" parent="HUD"]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -300.0
+offset_left = 20.0
 offset_top = 20.0
-offset_right = -20.0
+offset_right = 400.0
 offset_bottom = 50.0
-grow_horizontal = 0
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_constants/outline_size = 5
-text = "SALA: ---"
-horizontal_alignment = 2
+text = "ROOM: ---"
 
 [connection signal="pressed" from="LoginPanel/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
 [connection signal="pressed" from="LoginPanel/VBox/RegisterButton" to="." method="_on_register_pressed"]
-[connection signal="pressed" from="LobbyPanel/VBox/HostBox/VBox/HostButton" to="." method="_on_host_pressed"]
-[connection signal="pressed" from="LobbyPanel/VBox/JoinBox/VBox/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="RoomPanel/VBox/HostBox/HostButton" to="." method="_on_host_pressed"]
+[connection signal="pressed" from="RoomPanel/VBox/JoinBox/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="toggled" from="TeamLobbyPanel/VBox/Ready" to="." method="_on_lobby_ready_toggled"]
+[connection signal="pressed" from="TeamLobbyPanel/VBox/StartSelection" to="." method="_on_start_selection_pressed"]
+[connection signal="pressed" from="CharacterSelectPanel/VBox/Characters/Aatrox" to="." method="_on_character_pressed" binds= ["warrior"]]
+[connection signal="pressed" from="CharacterSelectPanel/VBox/Characters/Ivern" to="." method="_on_character_pressed" binds= ["ivern_ranger"]]
+[connection signal="toggled" from="CharacterSelectPanel/VBox/Ready" to="." method="_on_selection_ready_toggled"]

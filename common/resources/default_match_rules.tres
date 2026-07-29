@@ -21,3 +21,4 @@ countdown_sec = 3.0
 boss_deploy_countdown_sec = 3.0
 result_display_sec = 10.0
 forfeit_disconnect_sec = 30.0
+character_select_sec = 30.0

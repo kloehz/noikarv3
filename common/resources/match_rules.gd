@@ -39,6 +39,7 @@ extends Resource
 @export var boss_deploy_countdown_sec: float = 3.0
 @export var result_display_sec: float = 10.0
 @export var forfeit_disconnect_sec: float = 30.0
+@export var character_select_sec: float = 30.0
 
 ## Converts a duration in seconds to simulation ticks.
 ## Convention: roundi(seconds * NetworkTime.tickrate), minimum 1 tick.

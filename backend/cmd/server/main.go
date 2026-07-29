@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +25,7 @@ import (
 
 const (
 	accessTokenTTL = time.Hour
+	roomCreatorTicketTTL = 2 * time.Minute
 	minPasswordLen = 8
 	minSecretLen   = 32
 	authMigration  = `CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -29,19 +34,52 @@ CREATE TABLE IF NOT EXISTS accounts (
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);`
+);
+CREATE TABLE IF NOT EXISTS room_creator_tickets (
+    ticket_hash TEXT PRIMARY KEY,
+    account_id UUID NOT NULL REFERENCES accounts(id),
+    provision_instance_id UUID,
+    world_credential_hash TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
+);
+ALTER TABLE room_creator_tickets DROP CONSTRAINT IF EXISTS room_creator_tickets_pkey;
+ALTER TABLE room_creator_tickets DROP COLUMN IF EXISTS ticket_id;
+ALTER TABLE room_creator_tickets ADD COLUMN IF NOT EXISTS ticket_hash TEXT;
+ALTER TABLE room_creator_tickets DROP COLUMN IF EXISTS provision_nonce;
+ALTER TABLE room_creator_tickets ADD COLUMN IF NOT EXISTS provision_instance_id UUID;
+ALTER TABLE room_creator_tickets ADD COLUMN IF NOT EXISTS world_credential_hash TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS room_creator_tickets_ticket_hash_idx ON room_creator_tickets(ticket_hash);`
+	roomCreatorTicketBindSQL = `UPDATE room_creator_tickets SET provision_instance_id = $1, world_credential_hash = $2
+		WHERE ticket_hash = $3 AND provision_instance_id IS NULL AND used_at IS NULL AND expires_at > NOW()`
+	roomCreatorTicketRedeemSQL = `UPDATE room_creator_tickets SET used_at = NOW()
+		WHERE ticket_hash = $1 AND provision_instance_id = $2 AND world_credential_hash = $3 AND used_at IS NULL AND expires_at > NOW()
+		RETURNING account_id`
 )
 
 type config struct {
 	address     string
 	databaseURL string
 	jwtSecret   []byte
+	provisionerCredential []byte
 }
 
 type server struct {
 	db        *pgxpool.Pool
 	jwtSecret []byte
+	provisionerCredential []byte
 }
+
+type roomCreatorTicketResponse struct {
+	Ticket string `json:"ticket"`
+}
+
+type roomCreatorTicketValidationRequest struct {
+	Ticket string `json:"ticket"`
+	ProvisionInstanceID string `json:"provision_instance_id"`
+}
+
+type roomCreatorTicketBindRequest struct { Ticket string `json:"ticket"`; ProvisionInstanceID string `json:"provision_instance_id"`; WorldServerCredential string `json:"world_server_credential"` }
 
 type credentials struct {
 	Username string `json:"username"`
@@ -87,12 +125,15 @@ func main() {
 		log.Fatalf("run auth migration: %v", err)
 	}
 
-	s := &server{db: db, jwtSecret: cfg.jwtSecret}
+	s := &server{db: db, jwtSecret: cfg.jwtSecret, provisionerCredential: cfg.provisionerCredential}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", s.health)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/me", s.me)
+	mux.HandleFunc("POST /api/v1/rooms/creator-ticket", s.issueRoomCreatorTicket)
+	mux.HandleFunc("POST /api/v1/rooms/creator-ticket/bind", s.bindRoomCreatorTicket)
+	mux.HandleFunc("POST /api/v1/rooms/creator-ticket/validate", s.validateRoomCreatorTicket)
 
 	httpServer := &http.Server{
 		Addr:              cfg.address,
@@ -119,7 +160,11 @@ func loadConfig() (config, error) {
 	if address == "" {
 		address = "8080"
 	}
-	return config{address: ":" + address, databaseURL: databaseURL, jwtSecret: []byte(secret)}, nil
+	provisionerCredential := strings.TrimSpace(os.Getenv("PROVISIONER_CREDENTIAL"))
+	if utf8.RuneCountInString(provisionerCredential) < minSecretLen {
+		return config{}, fmt.Errorf("PROVISIONER_CREDENTIAL must contain at least %d characters", minSecretLen)
+	}
+	return config{address: ":" + address, databaseURL: databaseURL, jwtSecret: []byte(secret), provisionerCredential: []byte(provisionerCredential)}, nil
 }
 
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {
@@ -187,6 +232,58 @@ func (s *server) me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *server) issueRoomCreatorTicket(w http.ResponseWriter, r *http.Request) {
+	accessClaims, err := s.parseBearerToken(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid or expired token")
+		return
+	}
+	ticket, ticketHash, expiresAt, err := newRoomCreatorTicket()
+	if err != nil {
+		log.Printf("sign room creator ticket: %v", err)
+		writeError(w, http.StatusInternalServerError, "could not create room ticket")
+		return
+	}
+	accountID, err := uuid.Parse(accessClaims.AccountID)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid account")
+		return
+	}
+	if _, err := s.db.Exec(r.Context(), "INSERT INTO room_creator_tickets (ticket_hash, account_id, expires_at) VALUES ($1, $2, $3)", ticketHash, accountID, expiresAt); err != nil {
+		log.Printf("store room creator ticket: %v", err)
+		writeError(w, http.StatusInternalServerError, "could not create room ticket")
+		return
+	}
+	writeJSON(w, http.StatusCreated, roomCreatorTicketResponse{Ticket: ticket})
+}
+
+func (s *server) bindRoomCreatorTicket(w http.ResponseWriter, r *http.Request) {
+	if !s.validProvisionerCredential(r.Header.Get("X-Provisioner-Credential")) { writeError(w, http.StatusUnauthorized, "invalid provisioner credential"); return }
+	var request roomCreatorTicketBindRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&request); err != nil || request.Ticket == "" || !validProvisionInstanceID(request.ProvisionInstanceID) || len(request.WorldServerCredential) < minSecretLen { writeError(w, http.StatusBadRequest, "invalid provision binding"); return }
+	tag, err := s.db.Exec(r.Context(), roomCreatorTicketBindSQL, request.ProvisionInstanceID, hashSecret(request.WorldServerCredential), hashRoomCreatorTicket(request.Ticket))
+	if err != nil { writeError(w, http.StatusUnauthorized, "invalid room ticket"); return }
+	if tag.RowsAffected() != 1 { writeError(w, http.StatusUnauthorized, "invalid room ticket"); return }
+	writeJSON(w, http.StatusNoContent, nil)
+}
+
+func (s *server) validateRoomCreatorTicket(w http.ResponseWriter, r *http.Request) {
+	var request roomCreatorTicketValidationRequest
+	worldCredential := r.Header.Get("X-World-Server-Credential")
+	if len(worldCredential) < minSecretLen { writeError(w, http.StatusUnauthorized, "invalid world server credential"); return }
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&request); err != nil || request.Ticket == "" || !validProvisionInstanceID(request.ProvisionInstanceID) {
+		writeError(w, http.StatusBadRequest, "room ticket is required")
+		return
+	}
+	var validatedAccountID uuid.UUID
+	err := s.db.QueryRow(r.Context(), roomCreatorTicketRedeemSQL, hashRoomCreatorTicket(request.Ticket), request.ProvisionInstanceID, hashSecret(worldCredential)).Scan(&validatedAccountID)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid, expired, or replayed room ticket")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"account_id": validatedAccountID.String()})
+}
+
 func (s *server) respondWithToken(w http.ResponseWriter, status int, accountID uuid.UUID, username string) {
 	token, err := s.signToken(accountID.String(), username)
 	if err != nil {
@@ -207,6 +304,27 @@ func (s *server) signToken(accountID, username string) (string, error) {
 		},
 	}).SignedString(s.jwtSecret)
 }
+
+func newRoomCreatorTicket() (string, string, time.Time, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil { return "", "", time.Time{}, err }
+	ticket := base64.RawURLEncoding.EncodeToString(raw)
+	expiresAt := time.Now().Add(roomCreatorTicketTTL)
+	return ticket, hashRoomCreatorTicket(ticket), expiresAt, nil
+}
+
+func hashRoomCreatorTicket(ticket string) string {
+	sum := sha256.Sum256([]byte(ticket))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func (s *server) validProvisionerCredential(value string) bool {
+	if value == "" || len(s.provisionerCredential) == 0 { return false }
+	return subtle.ConstantTimeCompare([]byte(value), s.provisionerCredential) == 1
+}
+
+func validProvisionInstanceID(value string) bool { _, err := uuid.Parse(value); return err == nil }
+func hashSecret(value string) string { return hashRoomCreatorTicket(value) }
 
 func (s *server) parseBearerToken(r *http.Request) (*claims, error) {
 	header := strings.SplitN(r.Header.Get("Authorization"), " ", 2)

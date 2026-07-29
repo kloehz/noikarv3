@@ -9,3 +9,6 @@
 
 # Local Go build output.
 /backend/server
+
+# Local agent skill registry cache.
+.atl/

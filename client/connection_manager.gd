@@ -1,174 +1,119 @@
 extends CanvasLayer
 
-## Modern Connection Manager with Lobby flow.
-## Handles states: LOGIN -> LOBBY -> CONNECTING -> IN_GAME
+const DEFAULT_PORT := 7777
 
-const DEFAULT_PORT = 7777
-
-# --- UI References ---
 @onready var login_panel: Control = $LoginPanel
-@onready var lobby_panel: Control = $LobbyPanel
+@onready var room_panel: Control = $RoomPanel
+@onready var team_lobby_panel: Control = $TeamLobbyPanel
+@onready var character_select_panel: Control = $CharacterSelectPanel
 @onready var connecting_panel: Control = $ConnectingPanel
 @onready var bg_rect: ColorRect = $Background
-
 @onready var account_edit: LineEdit = $LoginPanel/VBox/AccountEdit
 @onready var password_edit: LineEdit = $LoginPanel/VBox/PasswordEdit
 @onready var login_status: Label = $LoginPanel/VBox/LoginStatus
-@onready var character_select: OptionButton = $LoginPanel/VBox/CharacterSelect
+@onready var room_id_edit: LineEdit = $RoomPanel/VBox/JoinBox/RoomIDEdit
+@onready var noray_address_edit: LineEdit = $RoomPanel/VBox/SettingsBox/AddressEdit
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
-@onready var room_id_edit: LineEdit = $LobbyPanel/VBox/JoinBox/VBox/RoomIDEdit
-@onready var noray_address_edit: LineEdit = $LobbyPanel/VBox/SettingsBox/AddressEdit
 @onready var room_info: Label = $HUD/RoomInfo
+@onready var room_status: Label = $RoomPanel/VBox/RoomStatus
+@onready var lobby_roster: Label = $TeamLobbyPanel/VBox/Roster
+@onready var lobby_status: Label = $TeamLobbyPanel/VBox/Status
+@onready var lobby_ready: CheckButton = $TeamLobbyPanel/VBox/Ready
+@onready var start_selection: Button = $TeamLobbyPanel/VBox/StartSelection
+@onready var selection_roster: Label = $CharacterSelectPanel/VBox/Roster
+@onready var selection_status: Label = $CharacterSelectPanel/VBox/Status
+@onready var selection_ready: CheckButton = $CharacterSelectPanel/VBox/Ready
+@onready var deadline: Label = $CharacterSelectPanel/VBox/Deadline
+@onready var aatrox_button: Button = $CharacterSelectPanel/VBox/Characters/Aatrox
+@onready var ivern_button: Button = $CharacterSelectPanel/VBox/Characters/Ivern
 
-# --- State ---
-var player_name: String = "Player"
-var character_id: String = "warrior"
 var _active_peer: ENetMultiplayerPeer
-var _is_host: bool = false
-var _current_oid: String = ""
+var _current_oid := ""
+var _snapshot: Dictionary = {}
+var _selected_character := "warrior"
 
-enum State { LOGIN, LOBBY, CONNECTING, IN_GAME }
-var current_state: State = State.LOGIN
+enum State { LOGIN, ROOM, CONNECTING, TEAM_LOBBY, CHARACTER_SELECT, IN_GAME }
+var current_state := State.LOGIN
 
 func _ready() -> void:
-	# Force cursor visible at startup (Godot 4.7 on macOS sometimes keeps the
-	# cursor hidden if the window loses focus before _switch_state runs).
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-	# Signal connections
-	multiplayer.peer_connected.connect(_on_peer_connected)
-	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	EventBus.phase_changed.connect(_on_match_phase_changed)
 	EventBus.game_server_authenticated.connect(_on_game_server_authenticated)
+	EventBus.lobby_snapshot_received.connect(_on_lobby_snapshot_received)
+	EventBus.room_admission_rejected.connect(_on_room_admission_rejected)
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
-
-	# Restore the cursor when the window is closed, app goes to background, or
-	# the scene is torn down. Without this the second launch keeps the cursor
-	# hidden and locked at the viewport center because the previous run exited
-	# while MOUSE_MODE_CAPTURED was still active.
-	get_tree().set_auto_accept_quit(false)
-	
-	# Initial Setup
 	_switch_state(State.LOGIN)
-	
-	# Background animation (Subtle pulse)
-	var tween = create_tween().set_loops()
+	var tween := create_tween().set_loops()
 	tween.tween_property(bg_rect, "color", Color("1a1a2e"), 4.0)
 	tween.tween_property(bg_rect, "color", Color("16213e"), 4.0)
 
 func _switch_state(new_state: State) -> void:
 	current_state = new_state
-
+	bg_rect.visible = new_state != State.IN_GAME
+	login_panel.visible = new_state == State.LOGIN
+	room_panel.visible = new_state == State.ROOM or new_state == State.CONNECTING
+	team_lobby_panel.visible = new_state == State.TEAM_LOBBY
+	character_select_panel.visible = new_state == State.CHARACTER_SELECT
+	connecting_panel.visible = new_state == State.CONNECTING
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if new_state == State.IN_GAME else Input.MOUSE_MODE_VISIBLE
 	match new_state:
-		State.LOGIN:
-			bg_rect.visible = true
-			login_panel.visible = true
-			lobby_panel.visible = false
-			connecting_panel.visible = false
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		State.LOBBY:
-			bg_rect.visible = true
-			login_panel.visible = false
-			lobby_panel.visible = true
-			connecting_panel.visible = false
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		State.CONNECTING:
-			bg_rect.visible = true
-			login_panel.visible = false
-			lobby_panel.visible = true 
-			connecting_panel.visible = true
-		State.IN_GAME:
-			bg_rect.visible = false # HIDE BLUE BACKGROUND
-			login_panel.visible = false
-			lobby_panel.visible = false
-			connecting_panel.visible = false
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-
-# --- UI Actions ---
+		State.LOGIN: account_edit.grab_focus()
+		State.ROOM: $RoomPanel/VBox/HostBox/HostButton.grab_focus()
+		State.TEAM_LOBBY: lobby_ready.grab_focus()
+		State.CHARACTER_SELECT: aatrox_button.grab_focus()
 
 func _on_enter_lobby_pressed() -> void:
 	var result: Dictionary = await AuthService.login(account_edit.text, password_edit.text)
-	if not result.get("accepted", false):
-		login_status.text = str(result.get("reason", "Could not sign in"))
-		return
-	player_name = AuthService.username
-	password_edit.clear()
-	login_status.text = ""
-	character_id = "warrior" if character_select.selected == 0 else "ivern_ranger"
-	EventBus.player_character_selected.emit(character_id)
-	_switch_state(State.LOBBY)
+	_finish_auth(result)
 
 func _on_register_pressed() -> void:
 	var result: Dictionary = await AuthService.register(account_edit.text, password_edit.text)
+	_finish_auth(result)
+
+func _finish_auth(result: Dictionary) -> void:
 	if not result.get("accepted", false):
-		login_status.text = str(result.get("reason", "Could not create account"))
+		login_status.text = str(result.get("reason", "Could not sign in"))
 		return
-	player_name = AuthService.username
 	password_edit.clear()
 	login_status.text = ""
-	character_id = "warrior" if character_select.selected == 0 else "ivern_ranger"
-	EventBus.player_character_selected.emit(character_id)
-	_switch_state(State.LOBBY)
+	_switch_state(State.ROOM)
 
 func _on_host_pressed() -> void:
-	# In this project, "Host" means requesting a dedicated server and joining it.
-	# So _is_host is false because WE are still a client of that spawned server.
-	_is_host = false 
 	_start_noray_flow(true)
 
 func _on_join_pressed() -> void:
-	var room_id = room_id_edit.text.strip_edges()
-	if room_id.is_empty():
-		return
-	_current_oid = room_id
-	_is_host = false
-	_start_noray_flow(false)
-
-# --- Networking Flow ---
+	_current_oid = room_id_edit.text.strip_edges()
+	if not _current_oid.is_empty(): _start_noray_flow(false)
 
 func _start_noray_flow(as_host: bool) -> void:
 	_switch_state(State.CONNECTING)
-	status_label.text = "Conectando a Noray..."
-	
-	var noray_addr = noray_address_edit.text.strip_edges()
+	status_label.text = "Connecting to Noray..."
+	var noray_addr := noray_address_edit.text.strip_edges()
 	if noray_addr.is_empty(): noray_addr = "127.0.0.1"
-	
 	if not Noray.is_connected_to_host():
-		var err = await Noray.connect_to_host(noray_addr)
-		if err != OK:
-			_fail_connection("Error Noray: " + str(err))
+		if await Noray.connect_to_host(noray_addr) != OK:
+			_fail_connection("Could not connect to Noray")
 			return
-
 	if as_host:
-		status_label.text = "Solicitando Servidor Dedicado..."
-		Noray.request_host()
+		var ticket_result: Dictionary = await AuthService.issue_room_creator_ticket()
+		if not ticket_result.get("accepted", false):
+			_fail_connection("Could not obtain a room creator ticket")
+			return
+		if Noray.request_host(str(ticket_result["ticket"])) != OK:
+			_fail_connection("Could not provision a creator-bound room")
+			return
 		_current_oid = await Noray.on_host_ready
-		status_label.text = "Servidor Listo! ID: " + _current_oid
-	
-	status_label.text = "Registrando puerto NAT..."
 	Noray.register_host()
 	if Noray.oid.is_empty(): await Noray.on_oid
 	if Noray.pid.is_empty(): await Noray.on_pid
-	
-	var reg_err = await Noray.register_remote()
-	if reg_err != OK:
-		_fail_connection("Error Registro Puerto")
+	if await Noray.register_remote() != OK:
+		_fail_connection("Could not register the room connection")
 		return
-		
-	status_label.text = "Abriendo túnel hacia " + _current_oid + "..."
 	Noray.connect_nat(_current_oid)
-
-func _fail_connection(msg: String) -> void:
-	status_label.text = msg
-	await get_tree().create_timer(3.0).timeout
-	if current_state == State.CONNECTING:
-		_switch_state(State.LOBBY)
-
-# --- Noray Callbacks ---
 
 func _on_noray_connect_nat(address: String, port: int) -> void:
 	_connect_to_peer(address, port)
@@ -177,95 +122,66 @@ func _on_noray_connect_relay(address: String, port: int) -> void:
 	_connect_to_peer(address, port)
 
 func _connect_to_peer(address: String, port: int) -> void:
-	if _is_host:
-		# This case is only if we are the ACTUAL server (not used in this UI flow)
-		status_label.text = "Handshaking client..."
-		if _active_peer: PacketHandshake.over_enet_peer(_active_peer, address, port)
-		return
-
-	status_label.text = "Iniciando ENet client..."
 	_active_peer = ENetMultiplayerPeer.new()
-	
-	# RESTORE RETRY LOOP (Crucial for NAT stability)
-	var err = ERR_CONNECTION_ERROR
-	var retries = 5
-	while retries > 0:
-		err = _active_peer.create_client(address, port, 0, 0, 0, Noray.local_port)
-		if err == OK: break
-		retries -= 1
-		status_label.text = "Reintentando ENet... (" + str(retries) + ")"
-		await get_tree().create_timer(0.2).timeout
-	
-	if err != OK:
-		_fail_connection("Error ENet tras reintentos")
+	if _active_peer.create_client(address, port, 0, 0, 0, Noray.local_port) != OK:
+		_fail_connection("Could not start the game connection")
 		return
-
 	multiplayer.multiplayer_peer = _active_peer
 	PacketHandshake.over_enet_peer(_active_peer, address, port)
-	
-	# The server derives the displayed name from the validated account token.
-
-# --- Multiplayer Callbacks ---
 
 func _on_connected_to_server() -> void:
-	status_label.text = "Validando cuenta..."
+	status_label.text = "Validating account..."
 	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
-	EventBus.client_connected.emit(multiplayer.get_unique_id())
 
 func _on_game_server_authenticated(_username: String) -> void:
-	if current_state != State.CONNECTING:
-		return
-	_switch_state(State.IN_GAME)
-	room_info.text = "SALA: " + _current_oid
+	room_info.text = "ROOM: " + _current_oid
 
-func _on_connection_failed() -> void:
-	_fail_connection("Conexión al servidor fallida")
+func _on_room_admission_rejected(reason: String) -> void:
+	room_status.text = reason
+	_switch_state(State.ROOM)
 
-func _on_peer_connected(id: int) -> void:
-	EventBus.client_connected.emit(id)
+func _on_lobby_snapshot_received(snapshot: Dictionary) -> void:
+	_snapshot = snapshot.duplicate(true)
+	_render_snapshot()
+	var phase := int(_snapshot.get("phase", MatchState.Phase.LOBBY))
+	if phase == MatchState.Phase.LOBBY:
+		_switch_state(State.TEAM_LOBBY)
+	elif phase == MatchState.Phase.CHARACTER_SELECT:
+		_switch_state(State.CHARACTER_SELECT)
 
-func _on_peer_disconnected(id: int) -> void:
-	EventBus.client_disconnected.emit(id)
-	if id == 1:
-		_switch_state(State.LOBBY)
-		status_label.text = "Desconectado del servidor"
+func _render_snapshot() -> void:
+	var members: Array = _snapshot.get("members", [])
+	var lines: Array[String] = ["Your team"]
+	for member in members:
+		lines.append("%s  %s%s" % [str(member.get("name", "Player")), "Ready" if member.get("lobby_ready", false) else "Waiting", " · " + str(member.get("character_id", "")) if not str(member.get("character_id", "")).is_empty() else ""])
+	lobby_roster.text = "\n".join(lines)
+	selection_roster.text = "\n".join(lines)
+	lobby_ready.set_pressed_no_signal(bool(_snapshot.get("self_lobby_ready", false)))
+	selection_ready.set_pressed_no_signal(bool(_snapshot.get("self_selection_ready", false)))
+	start_selection.visible = bool(_snapshot.get("is_host", false))
+	lobby_status.text = str(_snapshot.get("rejection", ""))
+	selection_status.text = str(_snapshot.get("rejection", ""))
+	deadline.text = "Selection deadline tick: %d" % int(_snapshot.get("deadline_tick", 0))
 
-func _on_server_disconnected() -> void:
-	# Server vanished while we were IN_GAME — return to the lobby and release
-	# the captured mouse, otherwise the cursor stays locked at the center.
-	_switch_state(State.LOBBY)
-	status_label.text = "Desconectado del servidor"
+func _on_lobby_ready_toggled(ready: bool) -> void:
+	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_lobby_ready.rpc_id(1, ready)
+
+func _on_start_selection_pressed() -> void:
+	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_select_start.rpc_id(1)
+
+func _on_character_pressed(character_id: String) -> void:
+	_selected_character = character_id
+	selection_status.text = "Selected " + character_id
+	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, character_id, false)
+
+func _on_selection_ready_toggled(ready: bool) -> void:
+	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, _selected_character, ready)
 
 func _on_match_phase_changed(phase: int) -> void:
-	if phase == MatchState.Phase.LOBBY and current_state == State.IN_GAME:
-		_switch_state(State.LOBBY)
+	if phase == MatchState.Phase.COUNTDOWN: _switch_state(State.IN_GAME)
 
-func _release_capture() -> void:
-	if Input.mouse_mode != Input.MOUSE_MODE_VISIBLE:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-
-func _notification(what: int) -> void:
-	match what:
-		NOTIFICATION_WM_CLOSE_REQUEST, NOTIFICATION_WM_GO_BACK_REQUEST:
-			_release_capture()
-			get_tree().quit()
-		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
-			# Release before the window enters the background. A close request is
-			# not guaranteed after focus is lost, especially on macOS.
-			_release_capture()
-		NOTIFICATION_APPLICATION_RESUMED, NOTIFICATION_APPLICATION_FOCUS_IN:
-			Input.mouse_mode = (
-				Input.MOUSE_MODE_CAPTURED
-				if current_state == State.IN_GAME
-				else Input.MOUSE_MODE_VISIBLE
-			)
-
-func _exit_tree() -> void:
-	_release_capture()
-
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("toggle_menu"):
-		if current_state == State.IN_GAME:
-			_switch_state(State.LOBBY)
-		elif current_state == State.LOBBY:
-			_switch_state(State.IN_GAME)
+func _on_connection_failed() -> void: _fail_connection("Game server connection failed")
+func _on_server_disconnected() -> void: _switch_state(State.ROOM)
+func _fail_connection(message: String) -> void:
+	status_label.text = message
+	_switch_state(State.ROOM)

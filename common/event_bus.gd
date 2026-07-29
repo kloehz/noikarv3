@@ -20,6 +20,12 @@ signal player_auth_token_submitted(token: String)
 @warning_ignore("unused_signal")
 signal game_server_authenticated(username: String)
 @warning_ignore("unused_signal")
+signal room_creator_ticket_validated(account_id: String)
+@warning_ignore("unused_signal")
+signal room_admission_rejected(reason: String)
+@warning_ignore("unused_signal")
+signal lobby_snapshot_received(snapshot: Dictionary)
+@warning_ignore("unused_signal")
 signal player_character_selected(character_id: String)
 
 # Match signals
@@ -31,6 +37,10 @@ signal match_ended(winner_id: int)
 signal phase_changed(phase: int)  # MatchState.Phase; every effective phase entry
 @warning_ignore("unused_signal")
 signal team_assigned  # LOBBY team assignment completed (server)
+@warning_ignore("unused_signal")
+signal character_selection_cancelled
+@warning_ignore("unused_signal")
+signal character_selection_launching
 
 # Entity signals
 @warning_ignore("unused_signal")

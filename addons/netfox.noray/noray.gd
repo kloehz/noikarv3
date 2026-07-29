@@ -113,9 +113,12 @@ func disconnect_from_host():
 func register_host() -> Error:
 	return _put_command("register-host")
 
-## Request the backend to spawn a dedicated server.
-func request_host() -> Error:
-	return _put_command("request-host")
+## Request a dedicated server using a backend-attested, single-use ticket.
+## The provisioner forwards it unchanged as `--room-creator-ticket=<ticket>`.
+func request_host(room_creator_ticket: String) -> Error:
+	if room_creator_ticket.is_empty():
+		return ERR_INVALID_PARAMETER
+	return _put_command("request-host", room_creator_ticket)
 
 ## Register a spawned headless server using the provision token.
 func register_server(token: String) -> Error:
