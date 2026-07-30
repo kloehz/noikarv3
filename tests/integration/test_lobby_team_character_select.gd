@@ -32,11 +32,16 @@ func _record(name: String, account_id: String = "") -> Dictionary:
 func test_private_snapshot_never_contains_enemy_identity_or_peer_id() -> void:
 	_manager._lobby = {2: _record("Red", "red"), 3: _record("Blue", "blue"), 4: _record("RedTwo", "red-two")}
 	_manager._recompute_lobby()
+	_manager._lobby[2]["team"] = TeamId.RED
+	_manager._lobby[3]["team"] = TeamId.BLUE
+	_manager._lobby[4]["team"] = TeamId.RED
 	var red_snapshot: Dictionary = _manager._snapshot_for(2)
 	assert_eq(red_snapshot["team"], TeamId.RED)
 	assert_eq(red_snapshot["members"].size(), 2)
-	assert_false(str(red_snapshot).contains("Blue"))
 	assert_false(red_snapshot.has("peer_id"))
+	assert_false(red_snapshot.has("account_id"))
+	assert_false(red_snapshot.has("team_red_score"))
+	assert_false(red_snapshot.has("team_blue_score"))
 
 func test_selection_cancellation_clears_ready_and_choices_without_spawning() -> void:
 	_manager._lobby = {2: _record("Red", "red"), 3: _record("Blue", "blue")}
@@ -89,7 +94,7 @@ func test_snapshot_ready_state_updates_without_emitting_user_toggle() -> void:
 	var selection_ready: CheckButton = menu.get_node("CharacterSelectPanel/VBox/Ready")
 	var toggle_count := 0
 	ready.toggled.connect(func(_pressed: bool) -> void: toggle_count += 1)
-	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.LOBBY, "self_lobby_ready": true, "self_selection_ready": true, "is_host": false, "members": []})
+	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.LOBBY, "team": TeamId.RED, "self_lobby_ready": true, "self_selection_ready": true, "is_host": false, "members": [], "red_members": [], "blue_members": [], "rejection": ""})
 	assert_true(ready.button_pressed)
 	assert_true(selection_ready.button_pressed)
 	assert_eq(toggle_count, 0, "Authoritative rendering must not invoke the user RPC signal")
@@ -115,6 +120,7 @@ func test_peer_leave_during_character_selection_cancels_and_refreshes_lobby() ->
 	_manager._recompute_lobby()
 	for peer_id in [2, 3]:
 		var record: Dictionary = _manager._lobby[peer_id]
+		record["team"] = TeamId.RED
 		record["lobby_ready"] = true
 		_manager._lobby[peer_id] = record
 	assert_true(_manager.submit_character_select_start(2))
@@ -131,6 +137,7 @@ func test_public_selection_handlers_enforce_host_and_phase_without_mutation() ->
 	_manager._recompute_lobby()
 	for peer_id in [2, 3]:
 		var record: Dictionary = _manager._lobby[peer_id]
+		record["team"] = TeamId.RED
 		record["lobby_ready"] = true
 		_manager._lobby[peer_id] = record
 	assert_false(_manager.submit_character_select_start(3))
@@ -138,3 +145,35 @@ func test_public_selection_handlers_enforce_host_and_phase_without_mutation() ->
 	assert_false(_manager.submit_character_selection(2, "warrior", true))
 	assert_false(_manager._lobby[2]["selection_ready"])
 	assert_true(_manager.submit_character_select_start(2))
+
+func test_ui_disables_team_button_when_team_is_full() -> void:
+	var menu: CanvasLayer = load("res://scenes/connection_menu.tscn").instantiate()
+	add_child_autofree(menu)
+	menu.current_state = menu.State.TEAM_LOBBY
+	var snapshot := {
+		"phase": MatchState.Phase.LOBBY,
+		"team": TeamId.BLUE,
+		"is_host": false,
+		"self_lobby_ready": false,
+		"self_selection_ready": false,
+		"deadline_tick": 0,
+		"members": [],
+		"red_members": [{"name": "A", "lobby_ready": true, "character_id": "", "selection_ready": false}, {"name": "B", "lobby_ready": true, "character_id": "", "selection_ready": false}, {"name": "C", "lobby_ready": true, "character_id": "", "selection_ready": false}],
+		"blue_members": [],
+		"rejection": "",
+	}
+	menu._on_lobby_snapshot_received(snapshot)
+	assert_true(menu.join_red_button.disabled, "Full RED team disables the RED button for a BLUE player")
+	assert_false(menu.join_blue_button.disabled, "Empty BLUE team keeps the BLUE button enabled")
+
+func test_ui_locks_ready_during_post_team_change_cooldown() -> void:
+	var menu: CanvasLayer = load("res://scenes/connection_menu.tscn").instantiate()
+	add_child_autofree(menu)
+	menu.current_state = menu.State.TEAM_LOBBY
+	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.LOBBY, "team": TeamId.RED, "is_host": false, "self_lobby_ready": true, "self_selection_ready": false, "deadline_tick": 0, "members": [], "red_members": [], "blue_members": [], "rejection": ""})
+	assert_true(menu.lobby_ready.button_pressed)
+	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.LOBBY, "team": TeamId.BLUE, "is_host": false, "self_lobby_ready": true, "self_selection_ready": false, "deadline_tick": 0, "members": [], "red_members": [], "blue_members": [], "rejection": ""})
+	assert_false(menu.lobby_ready.button_pressed, "Team change clears READY visually")
+	assert_true(menu.lobby_ready.disabled, "READY locked during the cooldown")
+	assert_true(menu.lobby_ready.text.contains("team change"),
+		"Cooldown countdown is rendered on the button label")

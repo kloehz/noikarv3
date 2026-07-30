@@ -23,6 +23,11 @@ extends Node
 ## the scene it is the sibling MatchState node under Main.
 var match_state: MatchState
 
+## Broadcast of the current server tick. MatchManager listens so its team
+## cooldown checks stay aligned with the director's tick_update (which is the
+## canonical tick driver in production and in synthetic-tick tests).
+signal server_tick_updated(tick: int)
+
 ## Test seam: when non-empty, replaces the computed roster (host 1 +
 ## multiplayer.get_peers()) entirely. Deterministic LOBBY team assignment and
 ## headless determinism tests inject their roster here.
@@ -60,6 +65,7 @@ func _ready() -> void:
 ## it directly with synthetic ticks. Server-only logic.
 func tick_update(tick: int) -> void:
 	_last_tick = tick
+	server_tick_updated.emit(tick)
 	match match_state.phase:
 		MatchState.Phase.CHARACTER_SELECT:
 			if tick >= match_state.selection_deadline_tick:
@@ -137,6 +143,16 @@ func request_boss_a1_end() -> void:
 func get_team(peer_id: int) -> TeamId.Value:
 	return _roster.get(peer_id, TeamId.NONE)
 
+## Public accessor for the latest server tick observed by tick_update. Consumers
+## like MatchManager use this to align cooldowns with the director's clock.
+func current_tick() -> int:
+	return _last_tick
+
+## Resolves the MatchManager through its group. Mirrors _get_match_director in
+## MatchManager so each side can find the other without scene-tree ordering.
+func _get_match_manager() -> Node:
+	return get_tree().get_first_node_in_group(&"match_manager")
+
 func _on_after_tick(_delta: float, tick: int) -> void:
 	tick_update(tick)
 
@@ -145,21 +161,39 @@ func _on_roster_changed() -> void:
 	if match_state.phase == MatchState.Phase.LOBBY:
 		_recompute_teams()
 
-## Deterministic LOBBY team assignment: peer ids sorted ascending (host 1
-## included), even index → RED, odd index → BLUE. Full recompute on any LOBBY
-## roster churn so the same peer set always yields the same assignment.
+## LOBBY team assignment. Two paths:
+## - Production (roster_override empty): enumerate peers from MatchManager and
+##   use each peer's explicit team choice. Peers with NONE are left unassigned.
+## - Test seam (roster_override set): preserve parity-based assignment so
+##   existing determinism tests stay green without a MatchManager.
+## Full recompute on any LOBBY roster churn so both paths stay deterministic.
 func _recompute_teams() -> void:
 	var ids: Array[int] = []
-	if roster_override.is_empty():
+	var manager := _get_match_manager()
+	if not roster_override.is_empty():
+		ids.append_array(roster_override)
+		ids.sort()
+		_roster.clear()
+		for i in ids.size():
+			_roster[ids[i]] = TeamId.RED if i % 2 == 0 else TeamId.BLUE
+	elif manager and manager.has_method("get_lobby_peer_ids"):
+		for peer_id in manager.get_lobby_peer_ids():
+			ids.append(peer_id)
+		ids.sort()
+		_roster.clear()
+		for peer_id in ids:
+			var team: int = TeamId.NONE
+			if manager.has_method("get_team_for"):
+				team = int(manager.get_team_for(peer_id))
+			_roster[peer_id] = team
+	else:
 		ids.append(1)
 		for peer_id in multiplayer.get_peers():
 			ids.append(peer_id)
-	else:
-		ids.append_array(roster_override)
-	ids.sort()
-	_roster.clear()
-	for i in ids.size():
-		_roster[ids[i]] = TeamId.RED if i % 2 == 0 else TeamId.BLUE
+		ids.sort()
+		_roster.clear()
+		for i in ids.size():
+			_roster[ids[i]] = TeamId.RED if i % 2 == 0 else TeamId.BLUE
 	EventBus.team_assigned.emit()
 
 ## --- Team registry (spawn-sequence ordered, server-only) --------------------

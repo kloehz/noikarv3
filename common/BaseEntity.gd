@@ -52,7 +52,7 @@ func _ready() -> void:
 	# Assign groups for faster AI faction detection
 	if name.is_valid_int():
 		add_to_group(&"players")
-	elif name.begins_with("Dummy") or name.begins_with("ELITE") or name.begins_with("MOB_"):
+	elif name.begins_with("Dummy") or name.begins_with("ELITE") or name.begins_with("MOB_") or name.begins_with("BOSS_"):
 		add_to_group(&"mobs")
 	elif name.begins_with("PET"):
 		add_to_group(&"pets")

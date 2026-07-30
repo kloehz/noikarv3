@@ -22,6 +22,10 @@ const BOSS_HP_MULTIPLIER: float = 2.0
 const STAGE_TYPES: Array[String] = ["HECARIM_TANK", "IVERN_HEAL", "KOGMAW_DMG"]
 const BOSS_DEFINITION := { "type": "AATROX", "prefix": "BOSS_" }
 
+## Lobby team-choice cooldown: after switching team, READY stays locked for this
+## many ticks (server-side). Mirrored client-side as a 3s visual lock.
+const TEAM_CHANGE_COOLDOWN_TICKS: int = 180
+
 # Kept for backwards compatibility with anything that still imports the constant.
 const MOB_RESPAWN_DELAY: float = 3.0
 const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
@@ -49,25 +53,35 @@ var _shutdown_timer: SceneTreeTimer = null
 var match_seed: int = 0
 var _spawn_counters: Dictionary = {}
 
-# --- MOB STAGE STATE (PR5 single-team placeholder) ---
-## Index of the next stage to spawn. -1 means the boss has already spawned and
-## the progression is finished. Each call to _spawn_next_stage advances the wave.
-var _next_stage_index: int = 0
-## Number of mobs alive in the current wave. Drives progression: when it
-## reaches 0, the server spawns the next stage (or the boss, or stops).
-var _wave_alive: int = 0
-## Soul-derived elites are an optional free-play mechanic, not part of staged
-## progression. They remain disabled until the boss has been defeated.
-var _stage_progression_active: bool = false
-## Instance IDs belonging to the currently active staged wave. Only these
-## entities may change staged-wave accounting; free-play mobs and elites still
-## drop souls but cannot advance the progression.
-var _active_wave_entity_ids: Dictionary = {}
+# --- MOB STAGE STATE (per-team parallel progression) ---
+## Index of the next stage to spawn per team. -1 means that team has finished
+## its progression (either completed all 3 stages or its stages are no longer
+## relevant once the boss has spawned). Each call to _spawn_next_stage_for_team
+## advances that team's wave.
+var _next_stage_index_by_team: Dictionary = {TeamId.RED: 0, TeamId.BLUE: 0}
+## Number of mobs alive in each team's current wave. Drives per-team
+## progression: when it reaches 0, the server spawns that team's next stage,
+## and when stage 3 is cleared the boss fires.
+var _wave_alive_by_team: Dictionary = {TeamId.RED: 0, TeamId.BLUE: 0}
+## Per-team gate: true while the team still has stages to clear. Disabled
+## once the boss fires for either team (the slower team keeps progressing but
+## no further waves follow the boss).
+var _stage_progression_active_by_team: Dictionary = {TeamId.RED: false, TeamId.BLUE: false}
+## Per-team instance IDs of mobs belonging to the currently active wave.
+## Only these entities may change wave accounting; free-play mobs and elites
+## still drop souls but cannot advance the progression.
+var _active_wave_entity_ids_by_team: Dictionary = {
+	TeamId.RED: {} as Dictionary,
+	TeamId.BLUE: {} as Dictionary,
+}
 ## Instance IDs whose wave death has already been accounted for in this match.
 ## Death signals may be delivered more than once while VFX cleanup is pending;
 ## retaining the claim for the match prevents a late duplicate from affecting a
 ## newly spawned wave.
 var _handled_wave_death_ids: Dictionary = {}
+## Once true, the boss has spawned. Boss is shared (one AATROX for the whole
+## match) and appears when the FIRST team clears stage 3.
+var _boss_spawned: bool = false
 
 ## Sets the deterministic match seed that feeds _next_spawn_id and resets the
 ## per-prefix counters so spawn ids stay deterministic within a match.
@@ -79,6 +93,48 @@ func set_match_seed(seed: int) -> void:
 ## play working when no director exists (design: group + has_method guard).
 func _get_match_director() -> Node:
 	return get_tree().get_first_node_in_group(&"match_director")
+
+## Caches the latest server tick from the director. Mirrored locally so team
+## cooldown checks stay authoritative without depending on netfox timing.
+func _on_server_tick(tick: int) -> void:
+	_server_tick = tick
+
+## Public team lookup. Returns the peer's chosen team, or NONE if unassigned.
+## MatchDirector's roster reads through this so the explicit choice is the
+## single source of truth (no parity auto-assignment).
+func get_team_for(peer_id: int) -> int:
+	if _lobby.has(peer_id):
+		return int(_lobby[peer_id].get("team", TeamId.NONE))
+	return TeamId.NONE
+
+## Returns the sorted list of authenticated peer ids currently in the lobby.
+## Used by MatchDirector to enumerate the LOBBY roster in production.
+func get_lobby_peer_ids() -> Array[int]:
+	return _sorted_lobby_peer_ids()
+
+## Counts how many peers are currently on the given team (NONE excluded).
+func _team_member_count(team: int) -> int:
+	var count := 0
+	for record in _lobby.values():
+		if int(record.get("team", TeamId.NONE)) == team:
+			count += 1
+	return count
+
+## Returns true if the peer switched teams within the cooldown window. The
+## peer is locked out of READY until the window expires (server-enforced).
+func _last_team_change_within_cooldown(peer_id: int) -> bool:
+	if not _last_team_change_tick.has(peer_id):
+		return false
+	return _server_tick - int(_last_team_change_tick[peer_id]) < TEAM_CHANGE_COOLDOWN_TICKS
+
+## Reads the per-entity team tag from ServerState. Returns TeamId.NONE when
+## the entity has no ServerState (e.g. dummy) or when it has no team assigned
+## (e.g. free-play elites / the shared boss).
+func _entity_team(entity: Node) -> int:
+	var ss: ServerState = entity.get_node_or_null("ServerState") as ServerState
+	if ss == null:
+		return TeamId.NONE
+	return int(ss.team_id)
 
 ## Registers a spawned entity in the director's spawn-sequence team registry.
 ## Players register under their roster team; everything else under NONE.
@@ -137,6 +193,14 @@ var _pending_name: String = ""
 var _lobby: Dictionary = {}
 var _frozen_peer_ids: Array[int] = []
 
+## Last server tick at which each peer changed their team choice. Used to enforce
+## the post-switch READY cooldown so an opportunistic team swap cannot strand
+## another player with a hostile roster.
+var _last_team_change_tick: Dictionary = {}
+## Latest server tick observed via the director's tick broadcast. Stays 0 in
+## tests until synthetic ticks drive the director.
+var _server_tick: int = 0
+
 ## Set only after GameManager has consumed a backend-attested ticket.
 var _room_creator_account_id: String = ""
 
@@ -168,65 +232,83 @@ func _ready() -> void:
 	if mob_spawner:
 		mob_spawner.spawn_function = _spawn_enemy_from_spawn_data
 
+	var director := _get_match_director()
+	if director and director.has_signal("server_tick_updated"):
+		director.server_tick_updated.connect(_on_server_tick)
+
 	# Gameplay entities are intentionally deferred until selection launch.
 
-## Reset and start the single-team stage progression. Duplicate match-start
-## signals are ignored while a wave or boss is already active.
+## Reset and start BOTH teams' stage progression in parallel. Duplicate
+## match-start signals are ignored while either team is still progressing or
+## the boss is already out.
 func _begin_stage_progression() -> void:
 	if not multiplayer.is_server(): return
-	if _stage_progression_active:
+	if _boss_spawned or _stage_progression_active_by_team[TeamId.RED] or _stage_progression_active_by_team[TeamId.BLUE]:
 		return
-	_next_stage_index = 0
-	_wave_alive = 0
-	_active_wave_entity_ids.clear()
 	_handled_wave_death_ids.clear()
-	_stage_progression_active = true
-	_spawn_next_stage()
+	for team in [TeamId.RED, TeamId.BLUE]:
+		_next_stage_index_by_team[team] = 0
+		_wave_alive_by_team[team] = 0
+		_active_wave_entity_ids_by_team[team].clear()
+		_stage_progression_active_by_team[team] = true
+		_spawn_next_stage_for_team(team)
 
-## Spawn the next stage or the boss if every prior stage is cleared.
-## No-op once the boss has been spawned — mobs and the boss do not respawn.
-func _spawn_next_stage() -> void:
+## Spawn the next stage for one team or trigger the boss if the team just
+## cleared stage 3. Stages 1 and 2 advance independently of the boss state so
+## the slower team keeps progressing after the boss is out; only the boss
+## branch is idempotent via the _boss_spawned guard inside _spawn_boss().
+func _spawn_next_stage_for_team(team: int) -> void:
 	if not multiplayer.is_server(): return
-	if _next_stage_index < 0: return
-	if _next_stage_index >= STAGE_TYPES.size():
+	if not _stage_progression_active_by_team.get(team, false): return
+	var next_idx: int = int(_next_stage_index_by_team.get(team, -1))
+	if next_idx < 0: return
+	if next_idx >= STAGE_TYPES.size():
+		_next_stage_index_by_team[team] = -1
+		_stage_progression_active_by_team[team] = false
 		_spawn_boss()
 		return
-	var enemy_type: String = STAGE_TYPES[_next_stage_index]
-	var anchor: Vector3 = _stage_spawn_pos(_next_stage_index)
-	_spawn_stage_row(enemy_type, anchor, "MOB_")
-	_next_stage_index += 1
+	var enemy_type: String = STAGE_TYPES[next_idx]
+	var anchor: Vector3 = _stage_spawn_pos_for_team(team, next_idx)
+	_spawn_stage_row_for_team(enemy_type, anchor, team, "MOB_")
+	_next_stage_index_by_team[team] = next_idx + 1
 
-## Spawn a single 5x2 row of MOBS_PER_STAGE enemies at the given Z line.
-## Lives in Mobs container; counted toward _wave_alive for progression.
-func _spawn_stage_row(enemy_type: String, anchor: Vector3, prefix: String) -> void:
-	_active_wave_entity_ids.clear()
+## Spawn a single 5x2 row of MOBS_PER_STAGE enemies at the team's stage Z line.
+## Mobs are tagged with the team so per-team wave accounting can dispatch on
+## death. Free-play elites (NONE team) still bypass this counter.
+func _spawn_stage_row_for_team(enemy_type: String, anchor: Vector3, team: int, prefix: String) -> void:
+	_active_wave_entity_ids_by_team[team].clear()
 	var half: float = (STAGE_COLS - 1) * 0.5
 	for i in MOBS_PER_STAGE:
 		var col: int = i % STAGE_COLS
 		var row: int = i / STAGE_COLS
 		var x: float = anchor.x + (col - half) * STAGE_COL_SPACING
 		var pos := Vector3(x, 0, anchor.z + row * STAGE_ROW_SPACING)
-		var mob := _spawn_named_enemy(enemy_type, pos, prefix)
+		var mob := _spawn_named_enemy(enemy_type, pos, prefix, 1.0, 0.0, team)
 		if mob:
-			_wave_alive += 1
-			_active_wave_entity_ids[mob.get_instance_id()] = true
+			_wave_alive_by_team[team] += 1
+			_active_wave_entity_ids_by_team[team][mob.get_instance_id()] = true
 
-## Spawn the boss (AATROX at the far edge) with HP + visual scaling.
+## Spawn the boss (AATROX at the far edge) with HP + visual scaling. Single
+## shared boss for the whole match; fires once when the first team clears
+## stage 3. The slower team keeps progressing but its later stage-3 clear
+## won't re-summon the boss because _spawn_next_stage_for_team guards on
+## _boss_spawned before calling us.
 func _spawn_boss() -> void:
 	if not multiplayer.is_server(): return
-	_active_wave_entity_ids.clear()
-	var boss := _spawn_named_enemy(BOSS_DEFINITION["type"], _boss_spawn_pos(), BOSS_DEFINITION["prefix"], BOSS_SCALE)
+	if _boss_spawned: return
+	_boss_spawned = true
+	var boss := _spawn_named_enemy(BOSS_DEFINITION["type"], _boss_spawn_pos(), BOSS_DEFINITION["prefix"], BOSS_SCALE, 0.0, TeamId.NONE)
 	if boss == null:
+		_boss_spawned = false
 		return
 	_apply_boss_scaling(boss)
-	_wave_alive = 1
-	_active_wave_entity_ids[boss.get_instance_id()] = true
-	_next_stage_index = -1
 
 ## Instantiates an EnemyEntity under Mobs with a stable id derived from prefix.
-## Returns null when the scene cannot be instantiated.
-func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0) -> Node:
-	var spawn_data := _enemy_spawn_data(enemy_type, pos, prefix, actor_scale, spawn_grace_duration)
+## The team argument tags the mob so per-team wave accounting can dispatch on
+## death; pass TeamId.NONE for free-play elites / bosses. Returns null when
+## the scene cannot be instantiated.
+func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE) -> Node:
+	var spawn_data := _enemy_spawn_data(enemy_type, pos, prefix, actor_scale, spawn_grace_duration, team)
 	var enemy: EnemyEntity
 	var mob_spawner := get_node_or_null("MobSpawner") as MultiplayerSpawner
 	if mob_spawner:
@@ -238,7 +320,7 @@ func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String, actor_
 		return null
 	_finalize_spawn_position(enemy, pos)
 	_register_spawn(enemy)
-	print("[MatchManager] %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
+	print("[MatchManager] %s (%s, team=%d) spawned at %s" % [enemy.name, enemy_type, team, pos])
 	return enemy
 
 ## MultiplayerSpawner calls this on every peer before it inserts the node into
@@ -249,14 +331,19 @@ func _spawn_enemy_from_spawn_data(spawn_data: Dictionary) -> Node:
 	enemy.configure_enemy(str(spawn_data.get("enemy_type", "")), float(spawn_data.get("actor_scale", 1.0)))
 	enemy.spawn_grace_duration = float(spawn_data.get("spawn_grace_duration", 0.0))
 	enemy.position = spawn_data.get("local_position", Vector3.ZERO)
+	var team_id: int = int(spawn_data.get("team_id", TeamId.NONE))
+	var server_state: ServerState = enemy.get_node_or_null("ServerState") as ServerState
+	if server_state:
+		server_state.team_id = team_id
 	return enemy
 
-func _enemy_spawn_data(enemy_type: String, global_pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0) -> Dictionary:
+func _enemy_spawn_data(enemy_type: String, global_pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE) -> Dictionary:
 	return {
 		"name": _next_spawn_id(prefix),
 		"enemy_type": enemy_type,
 		"actor_scale": actor_scale,
 		"spawn_grace_duration": spawn_grace_duration,
+		"team_id": team,
 		"local_position": mobs_container.to_local(global_pos),
 	}
 
@@ -271,8 +358,8 @@ func _apply_boss_scaling(boss: Node) -> void:
 
 ## Spawn a single enemy of the given type at the given position.
 ## This is the public API for spawning enemies dynamically.
-func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float = 0.0) -> Node:
-	return _spawn_named_enemy(enemy_type, pos, "MOB_", 1.0, spawn_grace_duration)
+func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE) -> Node:
+	return _spawn_named_enemy(enemy_type, pos, "MOB_", 1.0, spawn_grace_duration, team)
 
 ## --- Spawn point resolution -------------------------------------------------
 
@@ -289,11 +376,15 @@ func _team_spawn_pos(team: int) -> Vector3:
 	return marker.global_position
 
 func _team_for_player_spawn(peer_id: int) -> int:
+	if _lobby.has(peer_id):
+		var team: int = int(_lobby[peer_id].get("team", TeamId.NONE))
+		if team != TeamId.NONE:
+			return team
 	var director := _get_match_director()
 	if director and director.has_method("get_team"):
-		return director.get_team(peer_id)
-	if _lobby.has(peer_id):
-		return int(_lobby[peer_id].get("team", TeamId.RED))
+		var dteam: int = director.get_team(peer_id)
+		if dteam != TeamId.NONE:
+			return dteam
 	return TeamId.RED
 
 ## MultiplayerSpawner invokes this on every peer. The payload carries the
@@ -309,6 +400,20 @@ func _player_spawn_data(peer_id: int, global_pos: Vector3) -> Dictionary:
 		"name": str(peer_id),
 		"local_position": players_container.to_local(global_pos),
 	}
+
+## Returns the world position of the per-team stage marker for the given
+## stage index. Team Red uses TeamRedMobStage{1,2,3}, Team Blue uses
+## TeamBlueMobStage{1,2,3}. The legacy center-line MobStage1/2/3 markers
+## remain in the map for backward compatibility but are no longer consumed.
+func _stage_spawn_pos_for_team(team: int, index: int) -> Vector3:
+	if spawn_points == null: return Vector3.ZERO
+	var team_prefix := "TeamRedMobStage" if team == TeamId.RED else "TeamBlueMobStage"
+	var marker_name := "%s%d" % [team_prefix, index + 1]
+	var marker: Marker3D = spawn_points.get_node_or_null(marker_name) as Marker3D
+	if marker == null:
+		push_error("Missing required stage marker: %s" % marker_name)
+		return Vector3.ZERO
+	return marker.global_position
 
 ## Returns the world position of the stage marker for the given stage index.
 ## index 0 -> MobStage1, 1 -> MobStage2, 2 -> MobStage3, ...
@@ -482,6 +587,13 @@ func request_lobby_ready(ready: bool) -> void:
 func _set_lobby_ready_from_peer(peer_id: int, ready: bool) -> bool:
 	if not _can_mutate_lobby(peer_id, MatchState.Phase.LOBBY): return false
 	var record: Dictionary = _lobby[peer_id]
+	if ready:
+		if int(record.get("team", TeamId.NONE)) == TeamId.NONE:
+			_reject_lobby_request(peer_id, "Choose a team before marking ready")
+			return false
+		if _last_team_change_within_cooldown(peer_id):
+			_reject_lobby_request(peer_id, "Team changed too recently")
+			return false
 	record["lobby_ready"] = ready
 	_lobby[peer_id] = record
 	_broadcast_lobby_snapshots()
@@ -491,6 +603,41 @@ func _set_lobby_ready_from_peer(peer_id: int, ready: bool) -> bool:
 func request_character_select_start() -> void:
 	var peer_id := multiplayer.get_remote_sender_id()
 	submit_character_select_start(peer_id)
+
+@rpc("any_peer", "reliable")
+func request_team_choice(team: int) -> void:
+	var peer_id := multiplayer.get_remote_sender_id()
+	submit_team_choice(peer_id, team)
+
+## Server-side team choice handler. Validates LOBBY phase, valid team value,
+## and per-team cap. Resets READY because team changes invalidate the previous
+## ready intent and starts the post-switch READY cooldown.
+func submit_team_choice(peer_id: int, team: int) -> bool:
+	if not multiplayer.is_server(): return false
+	if not _can_mutate_lobby(peer_id, MatchState.Phase.LOBBY): return false
+	if team != TeamId.RED and team != TeamId.BLUE:
+		_reject_lobby_request(peer_id, "Invalid team")
+		return false
+	var current_team: int = int(_lobby[peer_id].get("team", TeamId.NONE))
+	if team == current_team:
+		return true
+	var director := _get_match_director()
+	var cap: int = director.rules.max_players_per_team if director and director.rules else 3
+	if _team_member_count(team) >= cap:
+		_reject_lobby_request(peer_id, "Team is full")
+		return false
+	var record: Dictionary = _lobby[peer_id]
+	var previous_team: int = int(record.get("team", TeamId.NONE))
+	record["team"] = team
+	record["lobby_ready"] = false
+	_lobby[peer_id] = record
+	if previous_team != TeamId.NONE:
+		_last_team_change_tick[peer_id] = _server_tick
+	var mgr := _get_match_director()
+	if mgr and mgr.has_method("_recompute_teams"):
+		mgr._recompute_teams()
+	_broadcast_lobby_snapshots()
+	return true
 
 func submit_character_select_start(peer_id: int) -> bool:
 	if not _can_mutate_lobby(peer_id, MatchState.Phase.LOBBY): return false
@@ -558,13 +705,13 @@ func _recompute_lobby() -> void:
 	var ids := _sorted_lobby_peer_ids()
 	for index in ids.size():
 		var record: Dictionary = _lobby[ids[index]]
-		record["team"] = TeamId.RED if index % 2 == 0 else TeamId.BLUE
 		record["is_host"] = not _room_creator_account_id.is_empty() and str(record["account_id"]) == _room_creator_account_id
 		record["lobby_ready"] = false
 		_lobby[ids[index]] = record
 
 func _all_lobby_ready() -> bool:
-	return not _lobby.is_empty() and _lobby.values().all(func(record: Dictionary) -> bool: return bool(record["lobby_ready"]))
+	return not _lobby.is_empty() and _lobby.values().all(func(record: Dictionary) -> bool:
+		return bool(record["lobby_ready"]) and int(record.get("team", TeamId.NONE)) != TeamId.NONE)
 
 func _all_frozen_selection_ready() -> bool:
 	return not _frozen_peer_ids.is_empty() and _frozen_peer_ids.all(func(peer_id: int) -> bool:
@@ -573,11 +720,18 @@ func _all_frozen_selection_ready() -> bool:
 func _snapshot_for(peer_id: int, rejection: String = "") -> Dictionary:
 	var recipient: Dictionary = _lobby[peer_id]
 	var team_members: Array[Dictionary] = []
+	var red_members: Array[Dictionary] = []
+	var blue_members: Array[Dictionary] = []
 	for member_id in _sorted_lobby_peer_ids():
 		var record: Dictionary = _lobby[member_id]
+		var member_payload := { "name": record["name"], "lobby_ready": record["lobby_ready"], "character_id": record["character_id"], "selection_ready": record["selection_ready"] }
+		if record["team"] == TeamId.RED:
+			red_members.append(member_payload)
+		elif record["team"] == TeamId.BLUE:
+			blue_members.append(member_payload)
 		if record["team"] == recipient["team"]:
-			team_members.append({ "name": record["name"], "lobby_ready": record["lobby_ready"], "character_id": record["character_id"], "selection_ready": record["selection_ready"] })
-	return { "phase": _get_match_director().match_state.phase, "deadline_tick": _get_match_director().match_state.selection_deadline_tick, "team": recipient["team"], "is_host": recipient["is_host"], "self_lobby_ready": recipient["lobby_ready"], "self_selection_ready": recipient["selection_ready"], "members": team_members, "rejection": rejection }
+			team_members.append(member_payload)
+	return { "phase": _get_match_director().match_state.phase, "deadline_tick": _get_match_director().match_state.selection_deadline_tick, "team": recipient["team"], "is_host": recipient["is_host"], "self_lobby_ready": recipient["lobby_ready"], "self_selection_ready": recipient["selection_ready"], "members": team_members, "red_members": red_members, "blue_members": blue_members, "rejection": rejection }
 
 func _broadcast_lobby_snapshots() -> void:
 	if not multiplayer.is_server(): return
@@ -649,7 +803,11 @@ func _on_entity_died(entity: Node3D) -> void:
 	var is_boss = entity.name.begins_with("BOSS_")
 	if (is_mob or is_boss) and not _claim_wave_death(entity):
 		return
-	var is_active_wave_entity := _stage_progression_active and _active_wave_entity_ids.has(entity.get_instance_id())
+	var mob_team: int = _entity_team(entity) if (is_mob or is_boss) else TeamId.NONE
+	var active_wave_for_team: Dictionary = _active_wave_entity_ids_by_team.get(mob_team, {} as Dictionary)
+	var is_active_wave_entity: bool = mob_team != TeamId.NONE \
+		and bool(_stage_progression_active_by_team.get(mob_team, false)) \
+		and active_wave_for_team.has(entity.get_instance_id())
 
 	# Mobs and bosses drop souls on death. Only basic mobs may chain back into
 	# an elite via the expired-soul roll; elite/boss souls stay collectible but
@@ -663,26 +821,24 @@ func _on_entity_died(entity: Node3D) -> void:
 		_schedule_entity_cleanup(entity)
 		return
 
-	# --- BOSS: One-shot, progression ends here ---
+	# --- BOSS: Single shared boss; clean up and end the match's staged waves ---
 	if is_boss:
-		print("[MatchManager] Boss %s died. Progression complete." % entity.name)
-		if is_active_wave_entity:
-			_active_wave_entity_ids.erase(entity.get_instance_id())
-			_wave_alive = max(_wave_alive - 1, 0)
-			_stage_progression_active = false
-			_active_wave_entity_ids.clear()
+		print("[MatchManager] Boss %s died. Match waves end." % entity.name)
+		for team in [TeamId.RED, TeamId.BLUE]:
+			_stage_progression_active_by_team[team] = false
+			_active_wave_entity_ids_by_team[team].clear()
 		_schedule_entity_cleanup(entity)
 		return
 
-	# --- MOBS: no individual respawn; advance stage when the wave is cleared ---
+	# --- MOBS: no individual respawn; advance that team's stage when the wave is cleared ---
 	if is_mob:
 		if is_active_wave_entity:
-			print("[MatchManager] Mob %s died. Wave remaining: %d" % [entity.name, _wave_alive - 1])
-			_active_wave_entity_ids.erase(entity.get_instance_id())
-			_wave_alive = max(_wave_alive - 1, 0)
+			print("[MatchManager] Mob %s (team %d) died. Wave remaining: %d" % [entity.name, mob_team, _wave_alive_by_team[mob_team] - 1])
+			_active_wave_entity_ids_by_team[mob_team].erase(entity.get_instance_id())
+			_wave_alive_by_team[mob_team] = max(_wave_alive_by_team[mob_team] - 1, 0)
 		_schedule_entity_cleanup(entity)
-		if is_active_wave_entity and _wave_alive == 0:
-			_spawn_next_stage()
+		if is_active_wave_entity and _wave_alive_by_team[mob_team] == 0:
+			_spawn_next_stage_for_team(mob_team)
 		return
 
 	# --- PLAYERS: Respawn in place ---
@@ -727,17 +883,16 @@ func _on_soul_expired(pos: Vector3, soul) -> void:
 		_spawn_elite_mob(pos)
 
 func _spawn_elite_mob(pos: Vector3) -> Node:
-	if _stage_progression_active:
+	if _stage_progression_active_by_team[TeamId.RED] or _stage_progression_active_by_team[TeamId.BLUE]:
 		print("[MatchManager] Elite spawn ignored during staged progression.")
 		return null
-	var elite := _spawn_named_enemy("AATROX", pos, "ELITE_")
+	var elite := _spawn_named_enemy("AATROX", pos, "ELITE_", 1.0, 0.0, TeamId.NONE)
 	if elite == null:
 		return null
 
-	# Elites count toward the wave so they cannot artificially drive _wave_alive
-	# to 0 and prematurely trigger the next stage. Symmetric with the decrement
-	# in _on_entity_died (ELITE_ prefix matched by the `is_mob` branch).
-	_wave_alive += 1
+	# Elites have team_id NONE so they are excluded from per-team wave
+	# accounting by _on_entity_died's active-wave check. This keeps them
+	# from artificially driving either team's counter.
 
 	# Apply elite stat scaling (deferred to ensure setup is complete)
 	_setup_elite_logic.call_deferred(elite)

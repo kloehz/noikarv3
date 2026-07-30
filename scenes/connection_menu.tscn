@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://client/connection_manager.gd" id="1"]
 [sub_resource type="StyleBoxFlat" id="button"]
@@ -9,6 +9,18 @@ corner_radius_bottom_left = 8
 corner_radius_bottom_right = 8
 [sub_resource type="StyleBoxFlat" id="input"]
 bg_color = Color(0.05, 0.05, 0.1, 0.8)
+[sub_resource type="StyleBoxFlat" id="team_red_button"]
+bg_color = Color(0.55, 0.15, 0.15, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
+[sub_resource type="StyleBoxFlat" id="team_blue_button"]
+bg_color = Color(0.15, 0.3, 0.65, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_left = 6
+corner_radius_bottom_right = 6
 
 [node name="ConnectionMenu" type="CanvasLayer"]
 script = ExtResource("1")
@@ -121,11 +133,48 @@ theme_override_constants/separation = 12
 layout_mode = 2
 text = "TEAM LOBBY"
 horizontal_alignment = 1
-[node name="Roster" type="Label" parent="TeamLobbyPanel/VBox"]
+[node name="TeamChoices" type="HBoxContainer" parent="TeamLobbyPanel/VBox"]
 layout_mode = 2
+theme_override_constants/separation = 12
+[node name="JoinRedButton" type="Button" parent="TeamLobbyPanel/VBox/TeamChoices"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("team_red_button")
+theme_override_styles/hover = SubResource("team_red_button")
+theme_override_styles/pressed = SubResource("team_red_button")
+theme_override_styles/disabled = SubResource("team_red_button")
+theme_override_font_sizes/font_size = 18
+text = "JOIN RED"
+focus_neighbor_right = NodePath("../JoinBlueButton")
+focus_neighbor_bottom = NodePath("../../Ready")
+[node name="JoinBlueButton" type="Button" parent="TeamLobbyPanel/VBox/TeamChoices"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("team_blue_button")
+theme_override_styles/hover = SubResource("team_blue_button")
+theme_override_styles/pressed = SubResource("team_blue_button")
+theme_override_styles/disabled = SubResource("team_blue_button")
+theme_override_font_sizes/font_size = 18
+text = "JOIN BLUE"
+focus_neighbor_left = NodePath("../JoinRedButton")
+focus_neighbor_bottom = NodePath("../../Ready")
+[node name="TeamRosters" type="HBoxContainer" parent="TeamLobbyPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+[node name="RedRoster" type="Label" parent="TeamLobbyPanel/VBox/TeamRosters"]
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 1
+autowrap_mode = 2
+[node name="BlueRoster" type="Label" parent="TeamLobbyPanel/VBox/TeamRosters"]
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 1
+autowrap_mode = 2
 [node name="Ready" type="CheckButton" parent="TeamLobbyPanel/VBox"]
 layout_mode = 2
 text = "READY"
+focus_neighbor_top = NodePath("../TeamChoices/JoinRedButton")
 focus_neighbor_bottom = NodePath("../StartSelection")
 [node name="StartSelection" type="Button" parent="TeamLobbyPanel/VBox"]
 layout_mode = 2
@@ -208,6 +257,8 @@ text = "ROOM: ---"
 [connection signal="pressed" from="LoginPanel/VBox/RegisterButton" to="." method="_on_register_pressed"]
 [connection signal="pressed" from="RoomPanel/VBox/HostBox/HostButton" to="." method="_on_host_pressed"]
 [connection signal="pressed" from="RoomPanel/VBox/JoinBox/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="TeamLobbyPanel/VBox/TeamChoices/JoinRedButton" to="." method="_on_team_choice_pressed" binds= [1]]
+[connection signal="pressed" from="TeamLobbyPanel/VBox/TeamChoices/JoinBlueButton" to="." method="_on_team_choice_pressed" binds= [2]]
 [connection signal="toggled" from="TeamLobbyPanel/VBox/Ready" to="." method="_on_lobby_ready_toggled"]
 [connection signal="pressed" from="TeamLobbyPanel/VBox/StartSelection" to="." method="_on_start_selection_pressed"]
 [connection signal="pressed" from="CharacterSelectPanel/VBox/Characters/Aatrox" to="." method="_on_character_pressed" binds= ["warrior"]]

@@ -16,10 +16,13 @@ const DEFAULT_PORT := 7777
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
 @onready var room_info: Label = $HUD/RoomInfo
 @onready var room_status: Label = $RoomPanel/VBox/RoomStatus
-@onready var lobby_roster: Label = $TeamLobbyPanel/VBox/Roster
 @onready var lobby_status: Label = $TeamLobbyPanel/VBox/Status
 @onready var lobby_ready: CheckButton = $TeamLobbyPanel/VBox/Ready
 @onready var start_selection: Button = $TeamLobbyPanel/VBox/StartSelection
+@onready var join_red_button: Button = $TeamLobbyPanel/VBox/TeamChoices/JoinRedButton
+@onready var join_blue_button: Button = $TeamLobbyPanel/VBox/TeamChoices/JoinBlueButton
+@onready var red_roster: Label = $TeamLobbyPanel/VBox/TeamRosters/RedRoster
+@onready var blue_roster: Label = $TeamLobbyPanel/VBox/TeamRosters/BlueRoster
 @onready var selection_roster: Label = $CharacterSelectPanel/VBox/Roster
 @onready var selection_status: Label = $CharacterSelectPanel/VBox/Status
 @onready var selection_ready: CheckButton = $CharacterSelectPanel/VBox/Ready
@@ -34,6 +37,15 @@ var _selected_character := "warrior"
 
 enum State { LOGIN, ROOM, CONNECTING, TEAM_LOBBY, CHARACTER_SELECT, IN_GAME }
 var current_state := State.LOGIN
+
+## Local team echoed from the latest snapshot. Compared against incoming
+## snapshots to detect a server-side team change and start the visual cooldown.
+var _local_team: int = TeamId.NONE
+## Time.get_ticks_msec() deadline after which the local READY lock expires.
+## Driven from the snapshot's team field, not from a per-button press, so the
+## client cannot bypass the cooldown by re-pressing the same team button.
+var _team_change_cooldown_until_ms: int = 0
+const _TEAM_CHANGE_COOLDOWN_MS: int = 3000
 
 func _ready() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -154,17 +166,83 @@ func _render_snapshot() -> void:
 	var lines: Array[String] = ["Your team"]
 	for member in members:
 		lines.append("%s  %s%s" % [str(member.get("name", "Player")), "Ready" if member.get("lobby_ready", false) else "Waiting", " · " + str(member.get("character_id", "")) if not str(member.get("character_id", "")).is_empty() else ""])
-	lobby_roster.text = "\n".join(lines)
 	selection_roster.text = "\n".join(lines)
-	lobby_ready.set_pressed_no_signal(bool(_snapshot.get("self_lobby_ready", false)))
+	var new_team: int = int(_snapshot.get("team", TeamId.NONE))
+	if new_team != _local_team and _local_team != TeamId.NONE:
+		_team_change_cooldown_until_ms = Time.get_ticks_msec() + _TEAM_CHANGE_COOLDOWN_MS
+		lobby_ready.set_pressed_no_signal(false)
+	_local_team = new_team
+	var max_per_team: int = _max_players_per_team()
+	var red_members: Array = _snapshot.get("red_members", [])
+	var blue_members: Array = _snapshot.get("blue_members", [])
+	red_roster.text = _format_team_roster("RED", red_members, max_per_team)
+	blue_roster.text = _format_team_roster("BLUE", blue_members, max_per_team)
+	var red_full: bool = red_members.size() >= max_per_team
+	var blue_full: bool = blue_members.size() >= max_per_team
+	join_red_button.disabled = red_full and _local_team != TeamId.RED
+	join_blue_button.disabled = blue_full and _local_team != TeamId.BLUE
+	join_red_button.text = _format_team_button("RED", red_members.size(), max_per_team, _local_team == TeamId.RED, red_full and _local_team != TeamId.RED)
+	join_blue_button.text = _format_team_button("BLUE", blue_members.size(), max_per_team, _local_team == TeamId.BLUE, blue_full and _local_team != TeamId.BLUE)
+	_apply_ready_cooldown()
+	if not lobby_ready.disabled:
+		lobby_ready.set_pressed_no_signal(bool(_snapshot.get("self_lobby_ready", false)))
 	selection_ready.set_pressed_no_signal(bool(_snapshot.get("self_selection_ready", false)))
 	start_selection.visible = bool(_snapshot.get("is_host", false))
 	lobby_status.text = str(_snapshot.get("rejection", ""))
 	selection_status.text = str(_snapshot.get("rejection", ""))
 	deadline.text = "Selection deadline tick: %d" % int(_snapshot.get("deadline_tick", 0))
 
+func _format_team_roster(label: String, members: Array, max_per_team: int) -> String:
+	var header := "%s (%d/%d)" % [label, members.size(), max_per_team]
+	if members.is_empty():
+		return "%s\n(empty)" % header
+	var names: Array[String] = [header]
+	for member in members:
+		var ready_marker := "R" if member.get("lobby_ready", false) else "-"
+		names.append("[%s] %s" % [ready_marker, str(member.get("name", "Player"))])
+	return "\n".join(names)
+
+func _format_team_button(label: String, count: int, max_per_team: int, is_self: bool, full: bool) -> String:
+	var suffix := ""
+	if is_self: suffix = " (YOUR TEAM)"
+	elif full: suffix = " (FULL)"
+	return "%s %d/%d%s" % [label, count, max_per_team, suffix]
+
+func _apply_ready_cooldown() -> void:
+	var now_ms := Time.get_ticks_msec()
+	if now_ms < _team_change_cooldown_until_ms:
+		var remaining: float = float(_team_change_cooldown_until_ms - now_ms) / 1000.0
+		lobby_ready.disabled = true
+		lobby_ready.text = "READY (team change %.1fs)" % remaining
+	else:
+		lobby_ready.disabled = _local_team == TeamId.NONE
+		lobby_ready.text = "READY"
+
+func _max_players_per_team() -> int:
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager and "rules" in manager and manager.rules and "max_players_per_team" in manager.rules:
+		return int(manager.rules.max_players_per_team)
+	return 3
+
+func _process(_delta: float) -> void:
+	if current_state != State.TEAM_LOBBY: return
+	if Time.get_ticks_msec() < _team_change_cooldown_until_ms:
+		_apply_ready_cooldown()
+
 func _on_lobby_ready_toggled(ready: bool) -> void:
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_lobby_ready.rpc_id(1, ready)
+
+func _on_team_choice_pressed(team: int) -> void:
+	if team != TeamId.RED and team != TeamId.BLUE: return
+	if _local_team == team: return
+	if Time.get_ticks_msec() < _team_change_cooldown_until_ms: return
+	if multiplayer.has_multiplayer_peer():
+		get_tree().get_first_node_in_group(&"match_manager").request_team_choice.rpc_id(1, team)
+	else:
+		_local_team = team
+		_team_change_cooldown_until_ms = Time.get_ticks_msec() + _TEAM_CHANGE_COOLDOWN_MS
+		lobby_ready.set_pressed_no_signal(false)
+		_apply_ready_cooldown()
 
 func _on_start_selection_pressed() -> void:
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_select_start.rpc_id(1)
