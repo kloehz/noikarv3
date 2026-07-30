@@ -379,20 +379,28 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 	if not attack_def.projectile_scene:
 		push_error("[CombatComponent] %s: No projectile_scene in AttackDefinition!" % entity.name)
 		return
-	
+
 	# Charged attacks snapshot their aim on release. Immediate projectiles keep
 	# the entity-forward direction so existing AI actors retain their behavior.
 	var direction = _projectile_direction if _uses_charged_projectile(attack_def) else _get_aim_direction()
 
-	# Spawn position: use the weapon socket's height, then move 1.6 m forward
-	# to clear the owner's 1x2x1 collider.
-	var socket_pos := Vector3.ZERO
-	var actor: CharacterActor = entity.character_actor if entity else null
-	if actor and actor.has_method("get_socket"):
-		var weapon_socket = actor.get_socket("WeaponMain")
-		if weapon_socket:
-			socket_pos = weapon_socket.global_position
-	var spawn_pos = spawn_pos_for(direction, socket_pos)
+	# Spawn position: enemy mobs shoot from chest height (~1.0m above their
+	# root, where the WeaponMain socket is too high because the socket lives
+	# at y=50 in local units and looks visually wrong on mob models). Players
+	# use the weapon socket so their aim feels precise at the raised weapon.
+	# Both spawn paths offset 1.6 m along the shot direction so the
+	# projectile leaves the owner's 1x2x1 collider cleanly.
+	var spawn_pos: Vector3
+	if entity.is_in_group(&"mobs"):
+		spawn_pos = entity.global_position + Vector3(0.0, 1.0, 0.0) + direction * 1.6
+	else:
+		var socket_pos := Vector3.ZERO
+		var actor: CharacterActor = entity.character_actor if entity else null
+		if actor and actor.has_method("get_socket"):
+			var weapon_socket = actor.get_socket("WeaponMain")
+			if weapon_socket:
+				socket_pos = weapon_socket.global_position
+		spawn_pos = spawn_pos_for(direction, socket_pos)
 
 	var projectile = attack_def.projectile_scene.instantiate()
 

@@ -7,10 +7,7 @@
 
 [sub_resource type="Resource" id="Resource_hecarim_shape"]
 script = ExtResource("3_shape")
-shape_type = 0
-radius = 2.5
-offset = Vector3(0, 1.2, -1.5)
-damage_multiplier = 1.0
+metadata/_custom_type_script = "uid://dubhplo6iij4o"
 
 [sub_resource type="Resource" id="Resource_hecarim_attack"]
 script = ExtResource("4_attack")
@@ -22,6 +19,7 @@ knockback_force = 18.0
 startup_time = 0.2
 active_time = 0.15
 recovery_time = 0.35
+metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
 
 [node name="HecarimTank" type="Node3D"]
 script = ExtResource("1_actor")

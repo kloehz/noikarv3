@@ -17,8 +17,9 @@ func test_hecarim_tank_melee_hitscan_attack() -> void:
 	var attack := _primary_attack_for("res://scenes/characters/HecarimTank.tscn")
 	assert_eq(attack.attack_type, AttackDefinition.AttackType.MELEE_HITSCAN)
 	assert_not_null(attack.shape_data, "melee attack needs shape_data")
-	assert_gte(attack.shape_data.radius, 1.5,
-		"Hecarim is a horse; melee should reach at least 1.5m")
+	# Hecarim matches the Aatrox default melee profile: small forward arc.
+	assert_gte(attack.shape_data.radius, 0.5,
+		"melee radius must reach at least 0.5m so it overlaps the mob's own collider")
 	assert_gte(attack.base_damage, 15.0)
 	assert_gte(attack.knockback_force, 10.0, "tank should push targets around")
 
@@ -49,9 +50,10 @@ func test_atrox_boss_melee_cleave() -> void:
 	var attack := _primary_attack_for("res://scenes/characters/Aatrox.tscn")
 	assert_eq(attack.attack_type, AttackDefinition.AttackType.MELEE_HITSCAN)
 	assert_not_null(attack.shape_data, "boss melee needs a configured shape")
-	# Boss must clear mobs in front of it: at least 3 m radius, positive knockback.
-	assert_gte(attack.shape_data.radius, 3.0,
-		"Boss cleave should hit at least 3m radius")
+	# Aatrox uses the default melee profile (small forward arc) — bigger
+	# spheres made the boss hit targets well outside its visual silhouette.
+	assert_gte(attack.shape_data.radius, 0.5,
+		"melee radius must reach at least 0.5m so it overlaps the boss's own collider")
 	assert_gte(attack.base_damage, 30.0,
 		"Boss should hit harder than regular mobs")
 	assert_gte(attack.knockback_force, 15.0)
