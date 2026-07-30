@@ -24,6 +24,7 @@ anim_run = "Run_Base"
 anim_attack = "Attack1"
 anim_death = "Death"
 visual_forward_yaw = 3.1415927
+suggested_attack_range = 7.5
 primary_attack = SubResource("Resource_ivern_heal_attack")
 
 [node name="Model" parent="." instance=ExtResource("2_model")]

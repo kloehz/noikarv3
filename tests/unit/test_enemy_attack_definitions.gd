@@ -29,6 +29,8 @@ func test_ivern_ranger_ranged_projectile_attack() -> void:
 	assert_not_null(attack.projectile_scene, "ranged attack needs a projectile scene")
 	assert_gte(attack.projectile_speed, 15.0)
 	assert_gte(attack.base_damage, 15.0)
+	# PROJECTILE attacks don't use shape_data; the projectile scene handles
+	# its own collision shape via the CharacterBody3D inside it.
 
 func test_ivern_heal_ranged_projectile_attack() -> void:
 	# Healer needs SOMETHING for self-defense; ranged projectile is the cheapest
@@ -45,6 +47,26 @@ func test_kogmaw_dmg_ranged_projectile_attack() -> void:
 	assert_eq(attack.attack_type, AttackDefinition.AttackType.PROJECTILE)
 	assert_not_null(attack.projectile_scene)
 	assert_gte(attack.base_damage, 18.0)
+
+func _actor_attack_range_for(scene_path: String) -> float:
+	var scene: PackedScene = load(scene_path)
+	var actor: CharacterActor = scene.instantiate()
+	add_child_autofree(actor)
+	return actor.suggested_attack_range
+
+func test_ranged_enemies_have_tripled_attack_range() -> void:
+	# Both Ivern variants and KogMaw should fire from long range so the
+	# player can't close distance for free. We required 3x the melee default
+	# (2.5 m -> 7.5 m) so ranged AI trades chasing for kiting.
+	const RANGED_FLOOR: float = 7.0
+	for path in [
+		"res://scenes/characters/IvernRanger.tscn",
+		"res://scenes/characters/IvernHeal.tscn",
+		"res://scenes/characters/KogMawDmg.tscn",
+	]:
+		var atk_range: float = _actor_attack_range_for(path)
+		assert_gte(atk_range, RANGED_FLOOR,
+			"%s attack_range %.2f must be >= %.2f" % [path, atk_range, RANGED_FLOOR])
 
 func test_atrox_boss_melee_cleave() -> void:
 	var attack := _primary_attack_for("res://scenes/characters/Aatrox.tscn")
