@@ -122,3 +122,47 @@ func test_patrol_waypoints_use_anchor_when_set() -> void:
 		assert_lt(horiz.length(), ai.patrol_radius + 0.001,
 			"Waypoint %s should be relative to anchor (100,0,-200)" % wp)
 	ai.free()
+
+func test_patrol_uses_slower_input_axis_than_chase() -> void:
+	# Spin up a real BaseEntity + LogicComponent subtree so AIComponent can
+	# write through the real typed properties (logic.input_axis is the
+	# sprint vector the PhysicsDriver consumes downstream).
+	var ai_script := load("res://core/AIComponent.gd")
+	var ai = ai_script.new()
+	ai.patrol_speed_factor = 0.4
+	var entity_scene := load("res://scenes/BaseEntity.tscn")
+	var entity = entity_scene.instantiate()
+	var logic_node: Node = entity.get_node_or_null("LogicComponent")
+	assert_not_null(logic_node, "BaseEntity.tscn must contain LogicComponent")
+	ai.entity = entity
+	ai.logic = logic_node
+	add_child_autofree(entity)
+	entity.global_position = Vector3.ZERO
+	# Default _move_towards: full sprint (chase speed).
+	ai._move_towards(Vector3(0, 0, -10))
+	assert_eq(logic_node.input_axis, Vector2(0, -1),
+		"Default _move_towards must keep full chase speed")
+	# _move_towards with 0.4 factor: 40% of the sprint magnitude (patrol).
+	ai._move_towards(Vector3(0, 0, -10), 0.4)
+	assert_almost_eq(logic_node.input_axis.x, 0.0, 0.001)
+	assert_almost_eq(logic_node.input_axis.y, -0.4, 0.001,
+		"PATROL must scale the input axis by patrol_speed_factor")
+	assert_lt(logic_node.input_axis.length(), Vector2(0, -1).length(),
+		"Patrol input magnitude must be strictly less than chase speed")
+
+func test_patrol_speed_factor_clamps_out_of_range() -> void:
+	var ai_script := load("res://core/AIComponent.gd")
+	var ai = ai_script.new()
+	var entity_scene := load("res://scenes/BaseEntity.tscn")
+	var entity = entity_scene.instantiate()
+	var logic_node: Node = entity.get_node_or_null("LogicComponent")
+	ai.entity = entity
+	ai.logic = logic_node
+	add_child_autofree(entity)
+	entity.global_position = Vector3.ZERO
+	# 1.5 must clamp to 1.0; -0.3 must clamp to 0.0 (no negative backwards movement).
+	ai._move_towards(Vector3(0, 0, -10), 1.5)
+	assert_eq(logic_node.input_axis, Vector2(0, -1))
+	ai._move_towards(Vector3(0, 0, -10), -0.3)
+	assert_eq(logic_node.input_axis, Vector2.ZERO,
+		"Negative speed_factor must clamp to zero, never move backwards")

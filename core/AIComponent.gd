@@ -25,6 +25,10 @@ enum State { IDLE, PATROL, CHASE, ATTACK, FOLLOW_OWNER }
 ## PATROL kicks in. Keeps freshly spawned mobs from drifting apart before
 ## players have a chance to walk into range.
 @export var patrol_start_delay: float = 1.5
+## Fraction of max_speed used while PATROLLING (1.0 = full chase speed).
+## Kept under 1.0 so the wander looks lazy compared to the focused
+## sprint when a target enters detection_range.
+@export var patrol_speed_factor: float = 0.4
 
 var entity: BaseEntity
 var logic: Node
@@ -163,7 +167,7 @@ func _logic_patrol(delta: float) -> void:
 			_patrol_target = _pick_patrol_point()
 			_patrol_wait_timer = 0.0
 	else:
-		_move_towards(_patrol_target)
+		_move_towards(_patrol_target, patrol_speed_factor)
 		_patrol_wait_timer = 0.0
 
 ## Picks a waypoint uniformly inside patrol_radius. Using sqrt(randf) for
@@ -241,7 +245,7 @@ func _logic_follow() -> void:
 	else:
 		_stop_inputs()
 
-func _move_towards(pos: Vector3) -> void:
+func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	var dir = (pos - entity.global_position).normalized()
 
 	# Point the character at the target
@@ -252,7 +256,10 @@ func _move_towards(pos: Vector3) -> void:
 
 	# MOVE FORWARD relative to the rotation
 	# Vector2(0, -1) is always "Forward" in our LogicComponent
-	logic.input_axis = Vector2(0, -1)
+	# speed_factor scales the input magnitude so PATROL can wander lazily
+	# (speed_factor 0.4 = 40% of chase speed) while CHASE keeps the full
+	# Vector2(0, -1) sprint.
+	logic.input_axis = Vector2(0, -1) * clampf(speed_factor, 0.0, 1.0)
 
 func _look_at_target(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()
