@@ -174,13 +174,13 @@ func _logic_follow() -> void:
 
 func _move_towards(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()
-	
+
 	# Point the character at the target
 	var target_yaw = atan2(-dir.x, -dir.z)
-	
+
 	# Force look_yaw to the target instantly (faster rotation)
 	logic.look_yaw = lerp_angle(logic.look_yaw, target_yaw, 0.4)
-	
+
 	# MOVE FORWARD relative to the rotation
 	# Vector2(0, -1) is always "Forward" in our LogicComponent
 	logic.input_axis = Vector2(0, -1)

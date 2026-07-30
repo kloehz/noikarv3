@@ -9,6 +9,8 @@ anim_idle = "Hecarim_idle1.anm"
 anim_run = "Run"
 anim_attack = "Attack1"
 anim_death = "Death"
+play_idle_on_ready = true
+visual_forward_yaw = 3.1415927
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)

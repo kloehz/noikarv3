@@ -15,6 +15,8 @@ var socket_feet: Marker3D
 func _ready() -> void:
 	_find_animation_player()
 	_find_sockets()
+	if play_idle_on_ready:
+		play_animation("Idle", 0.0)
 
 func _find_animation_player() -> void:
 	animation_player = _recursive_find_class(self, "AnimationPlayer")
@@ -49,6 +51,15 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 @export var anim_attack: String = "Cast_Damage"
 @export var anim_death: String = "Death"
 @export var anim_hit: String = "Damage_Hurt"
+## Starts this actor's configured idle clip as soon as its AnimationPlayer is ready.
+## Enable only for imported scenes that otherwise enter their bind pose on spawn.
+@export var play_idle_on_ready: bool = false
+## Yaw (radians) applied to the actor node at spawn to align the imported
+## mesh's visible forward with the entity's local -Z (Godot movement axis).
+## Set to PI for models imported with +Z as forward; leave 0 for models
+## that already face -Z. BaseEntity applies this to character_actor, never
+## to the entity, so AI/chase/look driving entity.rotation.y stays correct.
+@export var visual_forward_yaw: float = 0.0
 
 # --- New: Combat Hints for Logic ---
 @export_group("Combat Specs")
@@ -68,40 +79,47 @@ func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	if not animation_player:
 		_find_animation_player()
 
-	if not animation_player: return
+	if not animation_player:
+		return
 
-	var actual_anim = anim_name
+	var actual_anim := _resolve_animation_name(anim_name)
+	if actual_anim != "" and animation_player.current_animation != actual_anim:
+		animation_player.play(actual_anim, blend)
+
+## Resolves a standard alias to the exact AnimationPlayer playback name.
+## Named animation libraries require the library/clip form for current_animation.
+func _resolve_animation_name(anim_name: String) -> String:
+	if not animation_player:
+		return ""
+
+	var configured_anim := anim_name
 	match anim_name:
-		"Idle": actual_anim = anim_idle
-		"Run": actual_anim = anim_run
-		"Attack": actual_anim = anim_attack
-		"Death": actual_anim = anim_death
-		"Hit": actual_anim = anim_hit
+		"Idle": configured_anim = anim_idle
+		"Run": configured_anim = anim_run
+		"Attack": configured_anim = anim_attack
+		"Death": configured_anim = anim_death
+		"Hit": configured_anim = anim_hit
 
-	if animation_player.has_animation(actual_anim):
-		if animation_player.current_animation != actual_anim:
-			animation_player.play(actual_anim, blend)
-	else:
-		# Fallback: try to find the animation across all libraries by suffix.
-		# Some importers nest animations under a library ("library/Idle").
-		for lib_name in animation_player.get_animation_library_list():
-			var lib = animation_player.get_animation_library(lib_name)
-			if lib and lib.has_animation(actual_anim):
-				animation_player.play("%s/%s" % [lib_name, actual_anim], blend)
-				break
+	if animation_player.has_animation(configured_anim):
+		return configured_anim
+
+	# Some importers nest animations under a library ("library/Idle").
+	for lib_name in animation_player.get_animation_library_list():
+		var lib := animation_player.get_animation_library(lib_name)
+		if lib and lib.has_animation(configured_anim):
+			return ("%s/%s" % [lib_name, configured_anim]).trim_prefix("/")
+		if anim_name == "Idle" and lib:
+			for imported_name in lib.get_animation_list():
+				if imported_name.to_lower().contains("idle"):
+					return ("%s/%s" % [lib_name, imported_name]).trim_prefix("/")
+	return ""
 
 ## Check if a specific animation or any one-shot is playing
 func is_playing(anim_name: String) -> bool:
-	if not animation_player: return false
-	var actual_anim = anim_name
-	match anim_name:
-		"Idle": actual_anim = anim_idle
-		"Run": actual_anim = anim_run
-		"Attack": actual_anim = anim_attack
-		"Death": actual_anim = anim_death
-	if animation_player.current_animation == "":
+	if not animation_player:
 		return false
-	return animation_player.is_playing() and animation_player.current_animation == actual_anim
+	var actual_anim := _resolve_animation_name(anim_name)
+	return actual_anim != "" and animation_player.is_playing() and animation_player.current_animation == actual_anim
 
 func get_current_animation() -> String:
 	return animation_player.current_animation if animation_player else &""

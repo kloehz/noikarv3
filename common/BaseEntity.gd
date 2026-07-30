@@ -149,8 +149,15 @@ func _load_character_actor() -> void:
 			_strip_visual_nodes(character_actor)
 		
 		add_child(character_actor)
-		# Compensate for models imported with +Z as forward (Godot expects -Z)
-		character_actor.rotation.y = PI
+		# Per-actor facing correction. Imported models in this project ship with
+		# +Z as their visible forward, while Godot CharacterBody3D/LogicComponent
+		# move along the entity's local -Z. Each actor scene declares its own
+		# visual_forward_yaw so the actor's mesh aligns with the movement
+		# forward at spawn. We rotate the ACTOR node, never the entity itself,
+		# because rotating the entity would invert the AI/chase/look direction
+		# that LogicComponent drives through entity.rotation.y.
+		if abs(character_actor.visual_forward_yaw) > 0.0001:
+			character_actor.rotation.y = character_actor.visual_forward_yaw
 		# Ensure authority matches
 		if is_instance_valid(character_actor):
 			character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)

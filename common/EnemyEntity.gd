@@ -13,8 +13,11 @@ extends BaseEntity
 ##   players_container.add_child(enemy, true)
 ##   enemy.setup_enemy("AATROX", Vector3(0, 0, -5))
 
-## Enemy variant identifier (maps to an actor scene).
-@export var enemy_type: String = "AATROX"
+## Enemy variant identifier (maps to an actor scene). It is intentionally empty
+## until the MultiplayerSpawner custom spawn payload configures this entity.
+@export var enemy_type: String = ""
+## Set from the same custom spawn payload as enemy_type.
+@export var actor_scale: float = 1.0
 
 ## Difficulty scaling multiplier (future use for wave scaling).
 @export var difficulty: float = 1.0
@@ -37,11 +40,30 @@ var _saved_collision_layer: int = 0
 var _saved_collision_mask: int = 0
 
 func _ready() -> void:
+	if not ENEMY_ACTORS.has(enemy_type):
+		push_error("[Enemy] Spawned without a valid enemy_type: %s" % enemy_type)
+		queue_free()
+		return
+	# The MultiplayerSpawner custom spawn callback configures this value before
+	# inserting the node on every peer, so BaseEntity never loads a fallback actor.
+	character_actor_path = _actor_path_for(enemy_type)
 	if spawn_grace_duration > 0.0:
 		_begin_spawn_grace()
 	super._ready()
+	_finish_enemy_setup()
 	if _spawn_grace_active:
 		_finish_spawn_grace.call_deferred()
+
+## Sets spawn-time identity before this node enters MultiplayerSpawner. This is
+## intentionally separate from setup_enemy so clients never load a fallback
+## actor while waiting for a post-spawn server mutation.
+func configure_enemy(p_type: String, p_actor_scale: float = 1.0) -> void:
+	enemy_type = p_type
+	actor_scale = maxf(p_actor_scale, 0.01)
+	character_actor_path = _actor_path_for(enemy_type)
+
+func _actor_path_for(p_type: String) -> String:
+	return ENEMY_ACTORS.get(p_type, "")
 
 func _begin_spawn_grace() -> void:
 	_spawn_grace_active = true
@@ -73,17 +95,14 @@ func _set_hurtbox_enabled(is_enabled: bool) -> void:
 		hurtbox.monitorable = is_enabled
 		hurtbox.monitoring = is_enabled
 
-## Configure this enemy with a type and position.
-## Call on the SERVER after add_child().
+## Reconfigures a live server enemy. Normal spawns must use configure_enemy
+## before add_child so MultiplayerSpawner replicates the correct identity.
 func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 	if _has_setup and enemy_type == p_type: return
 	
-	enemy_type = p_type
+	configure_enemy(p_type, actor_scale)
 	_has_setup = true
-	
-	# Resolve actor path
-	var actor_path = ENEMY_ACTORS.get(p_type, ENEMY_ACTORS["AATROX"])
-	character_actor_path = actor_path
+	if not is_node_ready(): return
 	
 	# Re-load model via BaseEntity logic
 	if character_actor:
@@ -100,6 +119,14 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 	if has_node("MeshInstance3D"):
 		get_node("MeshInstance3D").visible = false
 	
+	_finish_enemy_setup()
+
+	print("[Enemy] %s spawned at %s (type: %s)" % [name, global_position, enemy_type])
+
+func _finish_enemy_setup() -> void:
+	if is_instance_valid(character_actor):
+		character_actor.scale = Vector3.ONE * actor_scale
+
 	# Re-link VisualComponent
 	if has_node("VisualComponent"):
 		var vis = get_node("VisualComponent")
@@ -120,14 +147,14 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 		ai.state = 1  # State.CHASE
 	
 	# Ensure server authority
-	set_multiplayer_authority(1)
+	if multiplayer.is_server():
+		set_multiplayer_authority(1)
 	# Project rule: any authority change after _ready() MUST be followed by
 	# process_settings() so netfox rebuilds property configs per authority.
 	var rb = get_node_or_null("RollbackSynchronizer")
 	if rb and rb.has_method("process_settings"):
 		rb.process_settings()
 	
-	print("[Enemy] %s spawned at %s (type: %s)" % [name, global_position, enemy_type])
 
 func _rollback_tick(_delta: float, _tick: int, _is_fresh: bool) -> void:
 	if _spawn_grace_active:

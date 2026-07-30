@@ -15,9 +15,9 @@ context: |
 testing:
   runner: gut
   runner_installed: true
-  runner_note: "GUT 9.7.1 is vendored in addons/gut; use gut_cmdln headlessly. Godot 4.7 is installed, but no godot executable is exposed on this shell PATH."
-  unit_command: "godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit"
-  integration_command: "godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit"
+  runner_note: "GUT 9.7.1 is vendored in addons/gut; use the project-configured Godot 4.7 executable at /Applications/Godot.app/Contents/MacOS/Godot with gut_cmdln headlessly."
+  unit_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit"
+  integration_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit"
   smoke_export_isolation: "python3 tests/verify_export_isolation.py"
   smoke_headless_server: "python3 tests/verify_headless_server.py --quick"
   backend_unit_command: "cd backend && go test ./..."
@@ -56,7 +56,7 @@ rules:
     tdd: false
     test_command: "python3 tests/verify_export_isolation.py"
   verify:
-    test_command: "python3 tests/verify_export_isolation.py && python3 tests/verify_headless_server.py --quick"
+    test_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit && /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit && python3 tests/verify_gut_suite_integrity.py && python3 tests/verify_export_isolation.py && python3 tests/verify_headless_server.py --quick"
     build_command: ""
     coverage_threshold: 0
   archive:
