@@ -1,6 +1,7 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://client/connection_manager.gd" id="1"]
+[ext_resource type="Script" path="res://client/ui/BossHealthBar.gd" id="5_boss_bar"]
 [sub_resource type="StyleBoxFlat" id="button"]
 bg_color = Color(0.2, 0.4, 0.8, 1)
 corner_radius_top_left = 8
@@ -252,6 +253,16 @@ offset_top = 20.0
 offset_right = 400.0
 offset_bottom = 50.0
 text = "ROOM: ---"
+[node name="BossHealthBar" type="Control" parent="HUD"]
+visible = false
+mouse_filter = 2
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -320.0
+offset_top = 20.0
+offset_right = 320.0
+offset_bottom = 70.0
+script = ExtResource("5_boss_bar")
 
 [connection signal="pressed" from="LoginPanel/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
 [connection signal="pressed" from="LoginPanel/VBox/RegisterButton" to="." method="_on_register_pressed"]

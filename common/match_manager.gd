@@ -312,6 +312,35 @@ func _spawn_boss() -> void:
 		_boss_spawned = false
 		return
 	_apply_boss_scaling(boss)
+	_hook_boss_damage_tracking(boss)
+
+## Wires HealthComponent.damaged to the boss's ServerState so the shared
+## health bar shows per-team damage contribution. Server-side only.
+func _hook_boss_damage_tracking(boss: Node) -> void:
+	if not multiplayer.is_server(): return
+	var health: HealthComponent = boss.get_node_or_null("HealthComponent") as HealthComponent
+	if health == null:
+		push_error("[MatchManager] Boss %s missing HealthComponent; damage tracking disabled" % boss.name)
+		return
+	var server_state: ServerState = boss.get_node_or_null("ServerState") as ServerState
+	if server_state == null:
+		push_error("[MatchManager] Boss %s missing ServerState; damage tracking disabled" % boss.name)
+		return
+	health.damaged.connect(_on_boss_damaged.bind(boss, server_state))
+
+## Accumulates damage taken by the boss into the attacking team's
+## counter on the boss's ServerState. StateSynchronizer replicates these
+## fields to every client so the shared health bar updates in lockstep.
+func _on_boss_damaged(amount: int, source: Node, _boss: Node, server_state: ServerState) -> void:
+	if not multiplayer.is_server(): return
+	if amount <= 0: return
+	var attacker_team: int = TeamId.NONE
+	if source and source.has_node("ServerState"):
+		attacker_team = int(source.get_node("ServerState").team_id)
+	if attacker_team == TeamId.RED:
+		server_state.red_damage_taken += amount
+	elif attacker_team == TeamId.BLUE:
+		server_state.blue_damage_taken += amount
 
 ## Instantiates an EnemyEntity under Mobs with a stable id derived from prefix.
 ## The team argument tags the mob so per-team wave accounting can dispatch on

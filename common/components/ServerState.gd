@@ -10,6 +10,7 @@ signal souls_changed(amount: int)
 signal team_changed(new_team: int)
 signal pet_data_received(type: String, level: int)
 signal heal_received(amount: int)
+signal boss_damage_changed(red_damage: int, blue_damage: int)
 
 @export var max_health: int = 100:
 	set(v):
@@ -57,6 +58,22 @@ signal heal_received(amount: int)
 		team_id = v
 		team_changed.emit(team_id)
 
+## Server-tracked boss damage attribution. Updated by MatchManager when a
+## hit lands on the boss; replicated to clients so the shared boss health
+## bar can show each team's contribution in real time. Stays at 0 for
+## non-boss entities.
+@export var red_damage_taken: int = 0:
+	set(v):
+		if red_damage_taken == v: return
+		red_damage_taken = v
+		boss_damage_changed.emit(red_damage_taken, blue_damage_taken)
+
+@export var blue_damage_taken: int = 0:
+	set(v):
+		if blue_damage_taken == v: return
+		blue_damage_taken = v
+		boss_damage_changed.emit(red_damage_taken, blue_damage_taken)
+
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
 
@@ -102,6 +119,8 @@ func _ready() -> void:
 		sync.add_state(self, "character_id")
 		sync.add_state(self, "sync_souls")
 		sync.add_state(self, "team_id")
+		sync.add_state(self, "red_damage_taken")
+		sync.add_state(self, "blue_damage_taken")
 		sync.add_state(self, "knockback_velocity")
 		sync.add_state(self, "knockback_remaining_time")
 		sync.add_state(self, "is_stunned")

@@ -29,11 +29,15 @@ const DEFAULT_PORT := 7777
 @onready var deadline: Label = $CharacterSelectPanel/VBox/Deadline
 @onready var aatrox_button: Button = $CharacterSelectPanel/VBox/Characters/Aatrox
 @onready var ivern_button: Button = $CharacterSelectPanel/VBox/Characters/Ivern
+@onready var boss_health_bar: Control = $HUD/BossHealthBar
 
 var _active_peer: ENetMultiplayerPeer
 var _current_oid := ""
 var _snapshot: Dictionary = {}
 var _selected_character := "warrior"
+## Boss whose ServerState.boss_damage_changed drives the HUD bar. Re-resolved
+## every poll in case the boss spawns/despawns during the match.
+var _tracked_boss: Node = null
 
 enum State { LOGIN, ROOM, CONNECTING, TEAM_LOBBY, CHARACTER_SELECT, IN_GAME }
 var current_state := State.LOGIN
@@ -224,10 +228,52 @@ func _max_players_per_team() -> int:
 		return int(manager.rules.max_players_per_team)
 	return 3
 
+## Polls the Mobs container for a BOSS_* entity and keeps the BossHealthBar
+## wired to its replicated damage counters. The boss can spawn and despawn
+## during the match (boss entity is freed on death), so we re-resolve the
+## reference every tick. Connecting twice to the same source is a no-op
+## because we compare instance ids before subscribing.
+func _refresh_boss_health_bar() -> void:
+	if boss_health_bar == null: return
+	var boss: Node = _find_boss_entity()
+	if boss != _tracked_boss:
+		_tracked_boss = boss
+		if boss == null:
+			boss_health_bar.visible = false
+			return
+		var server_state: Node = boss.get_node_or_null("ServerState")
+		if server_state == null:
+			boss_health_bar.visible = false
+			return
+		boss_health_bar.visible = true
+		boss_health_bar.set_label("BOSS")
+		server_state.boss_damage_changed.connect(_on_boss_damage_changed.bind(boss, server_state))
+		# Paint the current values immediately (the boss may have taken
+		# damage on the server before we discovered it).
+		var max_hp: int = int(boss.max_health) if "max_health" in boss else 100
+		_on_boss_damage_changed(int(server_state.red_damage_taken),
+			int(server_state.blue_damage_taken), boss, server_state, max_hp)
+
+func _find_boss_entity() -> Node:
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null: return null
+	var mobs: Node = manager.get_node_or_null("Mobs")
+	if mobs == null: return null
+	for child in mobs.get_children():
+		if String(child.name).begins_with("BOSS_"):
+			return child
+	return null
+
+func _on_boss_damage_changed(red_damage: int, blue_damage: int, _boss: Node, server_state: Node, max_hp: int = -1) -> void:
+	if boss_health_bar == null: return
+	if max_hp < 0 and _boss and "max_health" in _boss:
+		max_hp = int(_boss.max_health)
+	boss_health_bar.set_damage(red_damage, blue_damage, max(1, max_hp))
+
 func _process(_delta: float) -> void:
-	if current_state != State.TEAM_LOBBY: return
 	if Time.get_ticks_msec() < _team_change_cooldown_until_ms:
 		_apply_ready_cooldown()
+	_refresh_boss_health_bar()
 
 func _on_lobby_ready_toggled(ready: bool) -> void:
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_lobby_ready.rpc_id(1, ready)
