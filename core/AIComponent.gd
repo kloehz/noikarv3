@@ -5,12 +5,26 @@ extends Node
 ## AI Brain that simulates inputs for LogicComponent.
 ## Only runs on the Server.
 
-enum State { IDLE, CHASE, ATTACK, FOLLOW_OWNER }
+enum State { IDLE, PATROL, CHASE, ATTACK, FOLLOW_OWNER }
 
 @export var state: State = State.IDLE
 @export var detection_range: float = 15.0
 @export var attack_range: float = 3.0
 @export var follow_distance: float = 4.0
+
+## Patrol behavior tuning. Mobs spend their IDLE window waiting, then
+## transition to PATROL and wander between random waypoints inside
+## patrol_radius of the anchor set via set_patrol_center (called by
+## MatchManager at spawn). The anchor stays even if the mob is knocked
+## away, so the patrol area is bounded by spawn location rather than the
+## mob's current position.
+@export var patrol_radius: float = 8.0
+## Seconds to pause at each patrol waypoint before picking the next one.
+@export var patrol_wait_time: float = 2.0
+## Seconds the mob must stay IDLE (no target in detection_range) before
+## PATROL kicks in. Keeps freshly spawned mobs from drifting apart before
+## players have a chance to walk into range.
+@export var patrol_start_delay: float = 1.5
 
 var entity: BaseEntity
 var logic: Node
@@ -25,6 +39,12 @@ var _target_search_interval: float = 0.2 # Search every 200ms
 var _is_mob: bool = false
 var _is_pet: bool = false
 var _faction_cached: bool = false
+
+# Patrol state
+var _patrol_center: Vector3 = Vector3.ZERO
+var _patrol_target: Vector3 = Vector3.ZERO
+var _patrol_wait_timer: float = 0.0
+var _idle_timer: float = 0.0
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -58,19 +78,27 @@ func refresh_faction() -> void:
 	_faction_cached = true
 	print("[AI] Faction refreshed for %s (Pet: %s, Mob: %s)" % [entity.name, _is_pet, _is_mob])
 
+## Anchor for PATROL state. MatchManager calls this at spawn so each mob
+## wanders inside a bounded area around its spawn point instead of
+## drifting toward the world origin. Idempotent.
+func set_patrol_center(center: Vector3) -> void:
+	_patrol_center = center
+	if _patrol_target == Vector3.ZERO:
+		_patrol_target = center
+
 func tick(delta: float) -> void:
 	if not entity or entity.get("sync_is_dead"):
 		if logic: _stop_inputs()
 		return
-	
+
 	# Lazy faction cache — ensures groups are assigned before we check
 	if not _faction_cached:
 		refresh_faction()
-	
+
 	if not logic:
 		logic = entity.get_node_or_null("LogicComponent")
 		if not logic: return
-	
+
 	# Ensure we have the players node
 	if not is_instance_valid(_players_node):
 		_players_node = get_tree().root.find_child("Players", true, false)
@@ -81,7 +109,9 @@ func tick(delta: float) -> void:
 
 	match state:
 		State.IDLE:
-			_logic_idle()
+			_logic_idle(delta)
+		State.PATROL:
+			_logic_patrol(delta)
 		State.CHASE:
 			_logic_chase()
 		State.ATTACK:
@@ -89,21 +119,60 @@ func tick(delta: float) -> void:
 		State.FOLLOW_OWNER:
 			_logic_follow()
 
-func _logic_idle() -> void:
+func _logic_idle(delta: float) -> void:
 	_stop_inputs()
-	
+
 	# If we are a pet with an owner, prefer following over idling
 	if _is_pet and is_instance_valid(owner_node):
 		state = State.FOLLOW_OWNER
 		return
-	
+
 	# Only search for targets occasionally
 	if _target_search_timer <= 0:
 		_find_nearest_target()
 		_target_search_timer = _target_search_interval
-		
+
 	if target:
 		state = State.CHASE
+		return
+
+	# After sitting idle long enough, transition to PATROL so the mob
+	# spreads out instead of standing on its spawn tile.
+	_idle_timer += delta
+	if _idle_timer >= patrol_start_delay:
+		state = State.PATROL
+		_patrol_target = _pick_patrol_point()
+		_patrol_wait_timer = 0.0
+		_idle_timer = 0.0
+
+func _logic_patrol(delta: float) -> void:
+	if _target_search_timer <= 0:
+		_find_nearest_target()
+		_target_search_timer = _target_search_interval
+
+	if target:
+		state = State.CHASE
+		_patrol_wait_timer = 0.0
+		return
+
+	var dist = entity.global_position.distance_to(_patrol_target)
+	if dist < 1.0:
+		_stop_inputs()
+		_patrol_wait_timer += delta
+		if _patrol_wait_timer >= patrol_wait_time:
+			_patrol_target = _pick_patrol_point()
+			_patrol_wait_timer = 0.0
+	else:
+		_move_towards(_patrol_target)
+		_patrol_wait_timer = 0.0
+
+## Picks a waypoint uniformly inside patrol_radius. Using sqrt(randf) for
+## the radial distance gives uniform area distribution; raw randf would
+## cluster points near the center.
+func _pick_patrol_point() -> Vector3:
+	var angle: float = randf() * TAU
+	var distance: float = sqrt(randf()) * patrol_radius
+	return _patrol_center + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 
 func _logic_chase() -> void:
 	if not is_instance_valid(target) or target.get("sync_is_dead"):

@@ -9,12 +9,13 @@ const PET_SCENE = preload("res://scenes/PetEntity.tscn")
 const ENEMY_SCENE = preload("res://scenes/EnemyEntity.tscn")
 const AI_COMPONENT = preload("res://core/AIComponent.gd")
 
-# --- MOB STAGE CONFIG (PR5 placeholder: single team, no mirror) ---
+# --- MOB STAGE CONFIG ---
 const STAGE_COUNT: int = 3
 const MOBS_PER_STAGE: int = 10
-const STAGE_ROW_SPACING: float = 6.0
-const STAGE_COL_SPACING: float = 4.0
-const STAGE_COLS: int = 5
+## Radius around the team stage anchor where mobs scatter at spawn. Square-root
+## sampling on the radial distance gives uniform area distribution so mobs
+## don't cluster near the center.
+const STAGE_SCATTER_RADIUS: float = 10.0
 const BOSS_SCALE: float = 3.0
 const BOSS_HP_MULTIPLIER: float = 2.0
 
@@ -272,21 +273,30 @@ func _spawn_next_stage_for_team(team: int) -> void:
 	_spawn_stage_row_for_team(enemy_type, anchor, team, "MOB_")
 	_next_stage_index_by_team[team] = next_idx + 1
 
-## Spawn a single 5x2 row of MOBS_PER_STAGE enemies at the team's stage Z line.
-## Mobs are tagged with the team so per-team wave accounting can dispatch on
-## death. Free-play elites (NONE team) still bypass this counter.
+## Spawn MOBS_PER_STAGE enemies scattered uniformly around the team's stage
+## anchor. Square-root sampling on the radial distance gives even area
+## density (no center-cluster), and each mob's spawn position becomes its
+## PATROL anchor so the AI wanders in a bounded region instead of forming
+## a static formation. Mobs are tagged with the team so per-team wave
+## accounting can dispatch on death. Free-play elites (NONE team) still
+## bypass this counter.
 func _spawn_stage_row_for_team(enemy_type: String, anchor: Vector3, team: int, prefix: String) -> void:
 	_active_wave_entity_ids_by_team[team].clear()
-	var half: float = (STAGE_COLS - 1) * 0.5
-	for i in MOBS_PER_STAGE:
-		var col: int = i % STAGE_COLS
-		var row: int = i / STAGE_COLS
-		var x: float = anchor.x + (col - half) * STAGE_COL_SPACING
-		var pos := Vector3(x, 0, anchor.z + row * STAGE_ROW_SPACING)
+	for _i in MOBS_PER_STAGE:
+		var angle: float = randf() * TAU
+		var distance: float = sqrt(randf()) * STAGE_SCATTER_RADIUS
+		var pos := Vector3(
+			anchor.x + cos(angle) * distance,
+			0,
+			anchor.z + sin(angle) * distance
+		)
 		var mob := _spawn_named_enemy(enemy_type, pos, prefix, 1.0, 0.0, team)
 		if mob:
 			_wave_alive_by_team[team] += 1
 			_active_wave_entity_ids_by_team[team][mob.get_instance_id()] = true
+			var ai: Node = mob.get_node_or_null("AIComponent")
+			if ai and ai.has_method("set_patrol_center"):
+				ai.set_patrol_center(pos)
 
 ## Spawn the boss (AATROX at the far edge) with HP + visual scaling. Single
 ## shared boss for the whole match; fires once when the first team clears
