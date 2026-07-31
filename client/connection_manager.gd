@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const DEFAULT_PORT := 7777
+const GAME_CONNECTION_TIMEOUT_SEC := 12.0
 
 @onready var login_panel: Control = $LoginPanel
 @onready var room_panel: Control = $RoomPanel
@@ -32,6 +33,7 @@ const DEFAULT_PORT := 7777
 @onready var boss_health_bar: Control = $HUD/BossHealthBar
 
 var _active_peer: ENetMultiplayerPeer
+var _game_connection_attempt := 0
 var _current_oid := ""
 var _snapshot: Dictionary = {}
 var _selected_character := "warrior"
@@ -52,6 +54,13 @@ var _team_change_cooldown_until_ms: int = 0
 const _TEAM_CHANGE_COOLDOWN_MS: int = 3000
 
 func _ready() -> void:
+	# Provisioned rooms load main.tscn too, which includes this menu. The
+	# server already owns Noray.local_port for its ENet listener; letting the
+	# client-only manager react to Noray's `connect` command would make it try
+	# to bind a second ENet host to that same port.
+	if _is_provisioned_server_process():
+		queue_free()
+		return
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -66,6 +75,10 @@ func _ready() -> void:
 	var tween := create_tween().set_loops()
 	tween.tween_property(bg_rect, "color", Color("1a1a2e"), 4.0)
 	tween.tween_property(bg_rect, "color", Color("16213e"), 4.0)
+
+func _is_provisioned_server_process() -> bool:
+	var args := OS.get_cmdline_args() + OS.get_cmdline_user_args()
+	return args.has("--server")
 
 func _switch_state(new_state: State) -> void:
 	current_state = new_state
@@ -122,7 +135,15 @@ func _start_noray_flow(as_host: bool) -> void:
 		if Noray.request_host(str(ticket_result["ticket"])) != OK:
 			_fail_connection("Could not provision a creator-bound room")
 			return
-		_current_oid = await Noray.on_host_ready
+		# Race host-ready against error + watchdog timeout: noray can refuse
+		# the provisioning (bad ticket, spawn failure) and only sends
+		# `error <reason>`, or the spawned headless server can crash before
+		# reaching register-server / server-ready. Without the race + timeout
+		# this await would hang forever and the user would see "Connecting
+		# to Noray..." with no progress.
+		_current_oid = await _await_host_provisioning()
+	if _current_oid.is_empty():
+		return
 	Noray.register_host()
 	if Noray.oid.is_empty(): await Noray.on_oid
 	if Noray.pid.is_empty(): await Noray.on_pid
@@ -137,15 +158,67 @@ func _on_noray_connect_nat(address: String, port: int) -> void:
 func _on_noray_connect_relay(address: String, port: int) -> void:
 	_connect_to_peer(address, port)
 
+## Waits for either `Noray.on_host_ready` or `Noray.on_error`, whichever fires
+## first, up to a watchdog timeout. Returns the OID on success, or an empty
+## string if noray refused the provisioning or never answered. Without this
+## race + timeout the await on `on_host_ready` would hang forever when noray
+## replies with `error <reason>` instead of `host-ready`, or when the spawned
+## headless server fails before sending register-server / server-ready.
+func _await_host_provisioning() -> String:
+	# GDScript 4 lambdas capture primitives (bool, int, String) by VALUE, so
+	# the race state has to live inside reference-typed containers if the
+	# resolver wants to publish results back to this coroutine.
+	var done: Array = [false]
+	var result: Array = [""]
+	var ready_cb := func(oid: String) -> void:
+		if done[0]:
+			return
+		done[0] = true
+		result[0] = oid
+	var error_cb := func(reason: String) -> void:
+		if done[0]:
+			return
+		done[0] = true
+		_fail_connection("Noray refused the request: " + reason)
+		result[0] = ""
+	var timer_cb := func() -> void:
+		if done[0]:
+			return
+		done[0] = true
+		_fail_connection("Provisioning timed out — headless server did not become ready")
+		result[0] = ""
+	Noray.on_host_ready.connect(ready_cb, CONNECT_ONE_SHOT)
+	Noray.on_error.connect(error_cb, CONNECT_ONE_SHOT)
+	# Watchdog covers the case where the spawned Godot process exits silently
+	# (e.g. ticket validation failed, no `register-server` / `server-ready`).
+	# 20s gives the headless server plenty of time to start on a cold cache.
+	var watchdog: SceneTreeTimer = get_tree().create_timer(20.0)
+	watchdog.timeout.connect(timer_cb, CONNECT_ONE_SHOT)
+	while not done[0]:
+		await get_tree().process_frame
+	return result[0]
+
 func _connect_to_peer(address: String, port: int) -> void:
+	_game_connection_attempt += 1
+	var attempt := _game_connection_attempt
+	status_label.text = "Connecting to game server..."
 	_active_peer = ENetMultiplayerPeer.new()
 	if _active_peer.create_client(address, port, 0, 0, 0, Noray.local_port) != OK:
 		_fail_connection("Could not start the game connection")
 		return
 	multiplayer.multiplayer_peer = _active_peer
 	PacketHandshake.over_enet_peer(_active_peer, address, port)
+	_watch_game_connection(attempt, _active_peer)
+
+func _watch_game_connection(attempt: int, peer: ENetMultiplayerPeer) -> void:
+	await get_tree().create_timer(GAME_CONNECTION_TIMEOUT_SEC).timeout
+	if attempt != _game_connection_attempt or peer != _active_peer:
+		return
+	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTING:
+		_fail_connection("Timed out connecting to the game server")
 
 func _on_connected_to_server() -> void:
+	_game_connection_attempt += 1
 	status_label.text = "Validating account..."
 	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
 
@@ -305,7 +378,13 @@ func _on_match_phase_changed(phase: int) -> void:
 	if phase == MatchState.Phase.COUNTDOWN: _switch_state(State.IN_GAME)
 
 func _on_connection_failed() -> void: _fail_connection("Game server connection failed")
-func _on_server_disconnected() -> void: _switch_state(State.ROOM)
+func _on_server_disconnected() -> void: _fail_connection("Disconnected from game server")
 func _fail_connection(message: String) -> void:
+	_game_connection_attempt += 1
+	if _active_peer:
+		_active_peer.close()
+		if multiplayer.multiplayer_peer == _active_peer:
+			multiplayer.multiplayer_peer = null
+		_active_peer = null
 	status_label.text = message
 	_switch_state(State.ROOM)

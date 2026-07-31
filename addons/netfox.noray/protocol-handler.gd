@@ -28,7 +28,12 @@ func ingest(data: String):
 		if not line.contains(" "):
 			on_command.emit(line, "")
 		else:
-			var parts = line.split(" ")
-			var command = parts[0]
-			var param = parts[1]
+			# Split off only the command; the rest of the line (which can
+			# contain spaces, e.g. `error Failed to provision server`) is
+			# the data payload. Older commands like `host-ready <oid>`
+			# happen to use the first whitespace-delimited token, which
+			# still works since there are no embedded spaces in OIDs.
+			var sep_idx := line.find(" ")
+			var command := line.substr(0, sep_idx)
+			var param := line.substr(sep_idx + 1)
 			on_command.emit(command, param)

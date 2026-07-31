@@ -62,6 +62,11 @@ signal on_connect_relay(address: String, port: int)
 ## Emitted when a requested headless server is ready.
 signal on_host_ready(oid: String)
 
+## Emitted when noray reports an error (missing ticket, spawn failure, etc.).
+## Without this signal a failed `request-host` would hang forever on
+## `await on_host_ready` — there is no other way out of that wait.
+signal on_error(reason: String)
+
 func _enter_tree():
 	_protocol.on_command.connect(func (cmd, data): on_command.emit(cmd, data))
 	on_command.connect(_handle_commands)
@@ -70,6 +75,7 @@ func _enter_tree():
 func connect_to_host(address: String, port: int = 8890) -> Error:
 	if is_connected_to_host():
 		disconnect_from_host()
+	_reset_registration()
 
 	_logger.info("Trying to connect to noray at %s:%s", [address, port])
 	
@@ -108,9 +114,19 @@ func disconnect_from_host():
 	if is_connected_to_host():
 		on_disconnect_from_host.emit()
 	_peer.disconnect_from_host()
+	_reset_registration()
+
+func _reset_registration() -> void:
+	_oid = ""
+	_pid = ""
+	_local_port = -1
 
 ## Register as host.
 func register_host() -> Error:
+	# OID/PID belong to one TCP host registration. Keeping values from a
+	# previous connection lets callers skip `await on_pid` and send an expired
+	# PID to the UDP registrar before Noray replies with the new identity.
+	_reset_registration()
 	return _put_command("register-host")
 
 ## Request a dedicated server using a backend-attested, single-use ticket.
@@ -122,6 +138,7 @@ func request_host(room_creator_ticket: String) -> Error:
 
 ## Register a spawned headless server using the provision token.
 func register_server(token: String) -> Error:
+	_reset_registration()
 	return _put_command("register-server", token)
 
 ## Tell the backend the headless server is bound and ready to accept the waiting client.
@@ -233,5 +250,11 @@ func _handle_commands_safe(command: String, data: String):
 	elif command == "host-ready":
 		_logger.debug("Received host-ready from backend for OID: %s", [data])
 		on_host_ready.emit(data)
+	elif command == "error":
+		# noray emits `error <reason>` when request-host can't be provisioned
+		# (missing ticket, bind failure, spawn failure). Surface it so the
+		# caller can race `await on_host_ready` against `await on_error`.
+		_logger.warning("Noray reported error: %s", [data])
+		on_error.emit(data)
 	else:
 		_logger.trace("Received command %s %s", [command, data])
