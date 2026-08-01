@@ -21,6 +21,19 @@ enum AttackType { MELEE_HITSCAN, PROJECTILE, AOE_DELAYED }
 ## Speed of the projectile (units/sec). Only used when attack_type == PROJECTILE.
 @export var projectile_speed: float = 20.0
 
+## Holding the primary input charges a projectile when this is greater than zero.
+## A zero duration preserves the immediate-fire behavior used by existing actors.
+@export var charge_duration: float = 0.0
+
+## Damage multiplier applied when a charged projectile is released immediately.
+@export var minimum_charge_multiplier: float = 1.0
+
+## Damage multiplier applied after charge_duration has elapsed.
+@export var maximum_charge_multiplier: float = 1.0
+
+## Local-only aiming presentation for charged projectile attacks.
+@export var aim_fov: float = 58.0
+
 ## --- AOE_DELAYED (stub) ---
 ## Radius of the AoE effect. Only used when attack_type == AOE_DELAYED.
 @export var aoe_radius: float = 3.0

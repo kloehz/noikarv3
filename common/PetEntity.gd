@@ -257,15 +257,25 @@ func _skill_heal() -> void:
 
 # --- Helper Methods for Skills ---
 
+## Candidate set for AoE helpers. Pre-match-foundation all entities lived under
+## the Players container; spawn routing now places them under typed containers
+## (Players/Mobs/Souls/Totems). Scanning all four preserves the exact pre-change
+## candidate set (players + mobs + souls + totems + pets).
+func _get_spawned_entities() -> Array:
+	var entities: Array = []
+	for container_name in [&"Players", &"Mobs", &"Souls", &"Totems"]:
+		var container := get_tree().root.find_child(container_name, true, false)
+		if container:
+			entities.append_array(container.get_children())
+	return entities
+
 func _apply_damage_to(target: Node, amount: int) -> void:
 	var hurtbox = target.get_node_or_null("HurtboxComponent")
 	if hurtbox and hurtbox.has_method("receive_hit_data"):
 		hurtbox.receive_hit_data(amount, self)
 
 func _apply_aoe_damage(pos: Vector3, radius: float, amount: int) -> void:
-	var players_node = get_tree().root.find_child("Players", true, false)
-	if not players_node: return
-	for child in players_node.get_children():
+	for child in _get_spawned_entities():
 		if child.is_in_group(&"mobs") and child.global_position.distance_to(pos) <= radius:
 			_apply_damage_to(child, amount)
 
@@ -275,9 +285,7 @@ func _apply_heal_to(target: Node, amount: int) -> void:
 		health.heal(amount)
 
 func _apply_aoe_heal(pos: Vector3, radius: float, amount: int) -> void:
-	var players_node = get_tree().root.find_child("Players", true, false)
-	if not players_node: return
-	for child in players_node.get_children():
+	for child in _get_spawned_entities():
 		var is_friend = child.is_in_group(&"players") or child.is_in_group(&"pets")
 		if is_friend and child.global_position.distance_to(pos) <= radius:
 			_apply_heal_to(child, amount)
@@ -289,18 +297,14 @@ func _apply_stun_to(target: Node, duration: float) -> void:
 		state.stun_remaining_time = duration
 
 func _apply_aoe_stun(pos: Vector3, radius: float, duration: float) -> void:
-	var players_node = get_tree().root.find_child("Players", true, false)
-	if not players_node: return
-	for child in players_node.get_children():
+	for child in _get_spawned_entities():
 		if child.global_position.distance_to(pos) <= radius:
 			var is_friendly = child.name == str(owner_id) or (child.get("owner_id") == owner_id)
 			if not is_friendly:
 				_apply_stun_to(child, duration)
 
 func _apply_aoe_taunt(pos: Vector3, radius: float) -> void:
-	var players_node = get_tree().root.find_child("Players", true, false)
-	if not players_node: return
-	for child in players_node.get_children():
+	for child in _get_spawned_entities():
 		if child.global_position.distance_to(pos) <= radius:
 			var ai = child.get_node_or_null("AIComponent")
 			if ai and child != self:

@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://oo3ob2rb2lct"]
+
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://dgluayoy35il2" path="res://assets/models/enemies/kogmaw/deep_sea_kog'maw.glb" id="2_model"]
+
+[node name="KogMawDmg" type="Node3D"]
+script = ExtResource("1_actor")
+anim_idle = "Idle1"
+anim_run = "Run"
+anim_attack = "Attack1"
+anim_death = "Death"
+
+[node name="Model" parent="." instance=ExtResource("2_model")]
+transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)
+
+[node name="Sockets" type="Node3D" parent="Model"]
+
+[node name="WeaponMain" type="Marker3D" parent="Model/Sockets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50, 0)
+
+[node name="Chest" type="Marker3D" parent="Model/Sockets"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
+
+[node name="Feet" type="Marker3D" parent="Model/Sockets"]

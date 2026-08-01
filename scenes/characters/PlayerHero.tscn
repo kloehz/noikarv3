@@ -3,17 +3,22 @@
 [ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
 [ext_resource type="PackedScene" uid="uid://b3ms2o4mufeko" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
 [ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_ovqw5"]
-[ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="3_rw1vp"]
-
-[sub_resource type="Resource" id="Resource_x7733"]
-script = ExtResource("3_rw1vp")
-metadata/_custom_type_script = "uid://dubhplo6iij4o"
+[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="4_projectile"]
 
 [sub_resource type="Resource" id="Resource_626ej"]
 script = ExtResource("2_ovqw5")
-shape_data = SubResource("Resource_x7733")
-aoe_radius = 0.0
-base_damage = 50.0
+attack_type = 1
+projectile_scene = ExtResource("4_projectile")
+projectile_speed = 32.0
+charge_duration = 1.0
+minimum_charge_multiplier = 1.0
+maximum_charge_multiplier = 2.5
+aim_fov = 56.0
+base_damage = 26.0
+cooldown = 0.45
+startup_time = 0.05
+active_time = 0.01
+recovery_time = 0.12
 metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
 
 [node name="PlayerHero" type="Node3D" unique_id=884139682]

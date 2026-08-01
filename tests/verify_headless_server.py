@@ -30,13 +30,20 @@ def check_environment(project_path: Path) -> list:
     """Check that environment is configured for headless server testing."""
     issues = []
 
-    # Check for dedicated_server feature flag in project
+    # Project feature tags are required by the editor at project-load time.
+    # Dedicated-server detection belongs to headless runtime or export tags,
+    # not to the editor-compatible project feature list.
     project_godot = project_path / "project.godot"
     if project_godot.exists():
         content = project_godot.read_text()
-        if "dedicated_server" not in content:
+        required_features = 'config/features=PackedStringArray("4.7", "Mobile")'
+        if required_features not in content:
             issues.append(
-                "project.godot: 'dedicated_server' feature tag not configured"
+                "project.godot: expected editor-compatible 4.7/Mobile features"
+            )
+        if "dedicated_server" in content:
+            issues.append(
+                "project.godot: dedicated_server must be an export tag, not a required project feature"
             )
     else:
         issues.append("project.godot not found")
@@ -46,7 +53,7 @@ def check_environment(project_path: Path) -> list:
     if game_manager.exists():
         content = game_manager.read_text()
         checks = [
-            ("OS.has_feature", "dedicated_server check"),
+            ("OS.has_feature(\"dedicated_server\")", "dedicated-server export check"),
             ("DisplayServer.get_name", "headless display detection"),
             ("_is_headless_environment", "environment detection method"),
             ("_start_as_server", "server startup method"),

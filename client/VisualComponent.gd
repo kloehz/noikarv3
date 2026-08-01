@@ -13,6 +13,8 @@ extends Node
 var _actor: CharacterActor
 var _anim_lock_time: float = 0.0
 var _preview_mesh: MeshInstance3D
+var _aim_reticle: Control
+var _base_camera_fov: float = 75.0
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -129,6 +131,7 @@ func _process(delta: float) -> void:
 	_handle_attack_debug_visuals()
 	_handle_summon_preview()
 	_handle_networked_attack_vfx()
+	_handle_local_aim_presentation(delta)
 	
 	if _anim_lock_time > 0:
 		_anim_lock_time -= delta
@@ -178,6 +181,29 @@ func _handle_summon_preview() -> void:
 	var forward = -entity.global_transform.basis.z
 	_preview_mesh.global_position = entity.global_position + (forward * 2.0)
 	_preview_mesh.global_rotation = entity.global_rotation
+
+func _handle_local_aim_presentation(delta: float) -> void:
+	if not entity or not entity.is_multiplayer_authority():
+		return
+	var combat = entity.get_node_or_null("CombatComponent")
+	var logic = entity.get_node_or_null("LogicComponent")
+	var camera = entity.get_node_or_null("CameraPivot/Camera3D") as Camera3D
+	var attack = combat.get("_primary") as AttackDefinition if combat else null
+	if not combat or not logic or not camera or not attack or not combat.call("_uses_charged_projectile", attack):
+		return
+	var aiming: bool = logic.get("is_shooting")
+	if _aim_reticle == null:
+		var hud = get_tree().root.find_child("HUD", true, false)
+		if hud:
+			_aim_reticle = preload("res://scenes/ui/AimReticle.tscn").instantiate() as Control
+			hud.add_child(_aim_reticle)
+			_base_camera_fov = camera.fov
+	if _aim_reticle:
+		_aim_reticle.visible = aiming
+		var charge_time: float = combat.get("current_charge_time")
+		_aim_reticle.set("charge_progress", charge_time / attack.charge_duration if aiming else 0.0)
+	var target_fov: float = attack.aim_fov if aiming else _base_camera_fov
+	camera.fov = move_toward(camera.fov, target_fov, delta * 70.0)
 
 func _handle_attack_debug_visuals() -> void:
 	var debug_mesh = get_parent().get_node_or_null("AttackDebugMesh") as MeshInstance3D

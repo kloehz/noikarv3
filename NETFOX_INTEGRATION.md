@@ -12,7 +12,7 @@ Netfox is the chosen networking solution for noikarv-3. This document tracks the
 - `GameManager` with environment detection (`_is_headless_environment()`)
 - `EventBus` signals: `server_started`, `client_connected`
 - Netfox node references (`/root/NetworkManager`, `/root/TickLoop`) in `GameManager`
-- `dedicated_server` feature tag in `project.godot`
+- Headless runtime detection; dedicated-server exports use the `dedicated_server` export feature tag
 
 ### Not Yet Implemented
 - [ ] Netfox addon installation (`res://addons/netfox/`)

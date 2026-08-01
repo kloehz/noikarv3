@@ -13,10 +13,16 @@ signal died
 @export var max_health: int = 100
 @export var entity_name: String = "Entity"
 ## Path to the CharacterActor scene for this entity.
-## IMPORTANT: Player entities default to PlayerHero.tscn (high base_damage).
+## IMPORTANT: Player entities default to Aatrox; selected player identities can
+## replace this actor at runtime through ServerState.character_id.
+const CHARACTER_ACTOR_PATHS: Dictionary = {
+	"warrior": "res://scenes/characters/Aatrox.tscn",
+	"ivern_ranger": "res://scenes/characters/IvernRanger.tscn",
+}
+
+@export var character_actor_path: String = "res://scenes/characters/Aatrox.tscn"
 ## Mob entities use Aatrox.tscn (low base_damage) via EnemyEntity.ENEMY_ACTORS mapping.
 ## Pets use PetDmg.tscn / PetTank.tscn / PetHeal.tscn via PetEntity setup.
-@export var character_actor_path: String = "res://scenes/characters/PlayerHero.tscn"
 #endregion
 
 var character_actor: CharacterActor
@@ -73,6 +79,7 @@ func _ready() -> void:
 		server_state.health_changed.connect(_on_sync_health_changed)
 		server_state.death_changed.connect(_on_sync_death_changed)
 		server_state.name_changed.connect(func(_n): _update_visuals())
+		server_state.character_changed.connect(_on_character_changed)
 		
 		if multiplayer.is_server():
 			server_state.max_health = max_health
@@ -151,6 +158,26 @@ func _load_character_actor() -> void:
 		# --- DATA-DRIVEN COMBAT CONFIGURATION ---
 		_configure_combat_from_actor(character_actor)
 		_configure_ai_from_actor(character_actor)
+
+## Applies a replicated character identity. The server is the only writer of
+## ServerState; clients only react to the synchronized value.
+func select_character(character_id: String) -> void:
+	if multiplayer.is_server() and server_state:
+		server_state.character_id = _validated_character_id(character_id)
+
+func _on_character_changed(character_id: String) -> void:
+	var actor_path: String = CHARACTER_ACTOR_PATHS.get(_validated_character_id(character_id), character_actor_path) as String
+	if actor_path == character_actor_path and character_actor:
+		return
+	character_actor_path = actor_path
+	if is_instance_valid(character_actor):
+		character_actor.queue_free()
+		character_actor = null
+	_load_character_actor()
+	_setup_visuals()
+
+func _validated_character_id(character_id: String) -> String:
+	return character_id if CHARACTER_ACTOR_PATHS.has(character_id) else "warrior"
 
 ## Read AttackDefinition exports from the Actor and configure CombatComponent.
 func _configure_combat_from_actor(actor: CharacterActor) -> void:

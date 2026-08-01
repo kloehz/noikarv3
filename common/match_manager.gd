@@ -12,6 +12,10 @@ const MOB_RESPAWN_DELAY: float = 3.0
 const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 
 @onready var players_container: Node3D = $Players
+@onready var mobs_container: Node3D = $Mobs
+@onready var souls_container: Node3D = $Souls
+## Totems AND pets spawn under this container (keeps Players human-only).
+@onready var totems_container: Node3D = $Totems
 
 # --- CONFIGURATION: ELITE MOBS ---
 @export var elite_respawn_chance: float = 0.4
@@ -25,9 +29,61 @@ var _shutdown_timer: SceneTreeTimer = null
 
 # --- STABLE SPAWN IDs ---
 ## Server-assigned, deterministic per match. Format: {PREFIX}_{seed_hex}_{seq}.
-## match_seed is 0 until Stage 2 introduces real match seeding.
+## match_seed is 0 until the MatchDirector assigns the ROUND_SETUP seed.
 var match_seed: int = 0
 var _spawn_counters: Dictionary = {}
+
+## Sets the deterministic match seed that feeds _next_spawn_id and resets the
+## per-prefix counters so spawn ids stay deterministic within a match.
+func set_match_seed(seed: int) -> void:
+	match_seed = seed
+	_spawn_counters.clear()
+
+## Finds the MatchDirector through its group. Guarded lookups keep solo/free
+## play working when no director exists (design: group + has_method guard).
+func _get_match_director() -> Node:
+	return get_tree().get_first_node_in_group(&"match_director")
+
+## Registers a spawned entity in the director's spawn-sequence team registry.
+## Players register under their roster team; everything else under NONE.
+func _register_spawn(entity: Node) -> void:
+	if not multiplayer.is_server(): return
+	var director := _get_match_director()
+	if director == null or not director.has_method("register_to_team"): return
+	var team: int = TeamId.NONE
+	if entity.name.is_valid_int() and director.has_method("get_team"):
+		team = director.get_team(entity.name.to_int())
+	director.register_to_team(team, StringName(entity.name))
+
+## Removes a despawned player from the director's team registry.
+func _unregister_player(peer_id: int) -> void:
+	if not multiplayer.is_server(): return
+	var director := _get_match_director()
+	if director == null or not director.has_method("unregister_from_team"): return
+	var team: int = TeamId.NONE
+	if director.has_method("get_team"):
+		team = director.get_team(peer_id)
+	director.unregister_from_team(team, StringName(str(peer_id)))
+
+## ROUND_SETUP wiring: pull the assigned match seed into spawn id generation.
+func _on_phase_changed(phase: int) -> void:
+	if not multiplayer.is_server(): return
+	if phase != MatchState.Phase.ROUND_SETUP: return
+	var state := get_node_or_null("MatchState") as MatchState
+	if state:
+		set_match_seed(state.match_seed)
+
+## LOBBY re-assignment wiring: push recomputed roster teams onto already
+## spawned players (design: full recompute updates spawned players).
+func _on_team_assigned() -> void:
+	if not multiplayer.is_server(): return
+	var director := _get_match_director()
+	if director == null or not director.has_method("get_team"): return
+	for child in players_container.get_children():
+		if child.name.is_valid_int():
+			var state = child.get_node_or_null("ServerState")
+			if state:
+				state.team_id = director.get_team(child.name.to_int())
 
 ## Generate the next stable spawn ID for a prefix (MOB_/ELITE_/PET_/SOUL_/TOTEM_).
 ## Example: MOB_00_0007. Prefixes keep group detection in BaseEntity._ready().
@@ -38,6 +94,7 @@ func _next_spawn_id(prefix: String) -> String:
 ## Store peer data like names.
 var peer_data: Dictionary = {}
 var _pending_name: String = ""
+var _pending_character_id: String = "warrior"
 
 func _ready() -> void:
 	add_to_group(&"match_manager")
@@ -45,7 +102,10 @@ func _ready() -> void:
 	EventBus.client_connected.connect(_on_client_connected)
 	EventBus.client_disconnected.connect(_on_client_disconnected)
 	EventBus.player_name_submitted.connect(_on_player_name_submitted)
+	EventBus.player_character_selected.connect(_on_player_character_selected)
 	EventBus.entity_died.connect(_on_entity_died)
+	EventBus.phase_changed.connect(_on_phase_changed)
+	EventBus.team_assigned.connect(_on_team_assigned)
 	
 	# Listen for successful connection to send pending data
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
@@ -72,18 +132,19 @@ func spawn_enemy(enemy_type: String, pos: Vector3, spawn_grace_duration: float =
 	enemy.name = _next_spawn_id("MOB_")
 	enemy.spawn_grace_duration = spawn_grace_duration
 
-	_prepare_spawn_position(enemy, pos)
+	_prepare_spawn_position(enemy, pos, mobs_container)
 
-	players_container.add_child(enemy, true)
+	mobs_container.add_child(enemy, true)
 	_finalize_spawn_position(enemy, pos)
 
 	if enemy.has_method("setup_enemy"):
 		enemy.setup_enemy(enemy_type, pos)
+	_register_spawn(enemy)
 	print("[MatchManager] Enemy %s (%s) spawned at %s" % [enemy.name, enemy_type, pos])
 	return enemy
 
-func _prepare_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
-	entity.position = players_container.to_local(global_pos)
+func _prepare_spawn_position(entity: Node3D, global_pos: Vector3, container: Node3D) -> void:
+	entity.position = container.to_local(global_pos)
 
 func _finalize_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
 	entity.global_position = global_pos
@@ -167,23 +228,45 @@ func _auto_shutdown() -> void:
 func _on_connected_to_server() -> void:
 	if not _pending_name.is_empty():
 		_submit_name_to_server.rpc_id(1, _pending_name)
+	_submit_character_to_server.rpc_id(1, _pending_character_id)
 
 func _on_player_name_submitted(player_name: String) -> void:
 	_pending_name = player_name
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
 		_submit_name_to_server.rpc_id(1, player_name)
 
+func _on_player_character_selected(character_id: String) -> void:
+	_pending_character_id = character_id
+	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
+		_submit_character_to_server.rpc_id(1, character_id)
+
 @rpc("any_peer", "call_local", "reliable")
 func _submit_name_to_server(player_name: String) -> void:
 	var peer_id = multiplayer.get_remote_sender_id()
 	print("[MatchManager] Received name from peer ", peer_id, ": ", player_name)
-	peer_data[peer_id] = {"name": player_name}
+	var data: Dictionary = peer_data.get(peer_id, {})
+	data["name"] = player_name
+	peer_data[peer_id] = data
 	
 	if multiplayer.is_server():
 		# Update player if already exists
 		var player = players_container.get_node_or_null(str(peer_id))
 		if player and player.has_node("ServerState"):
 			player.get_node("ServerState").player_name = player_name
+
+@rpc("any_peer", "call_local", "reliable")
+func _submit_character_to_server(character_id: String) -> void:
+	var peer_id = multiplayer.get_remote_sender_id()
+	if not multiplayer.is_server() or peer_id <= 0:
+		return
+	var player = players_container.get_node_or_null(str(peer_id)) as BaseEntity
+	if not player:
+		return
+	var selected_id = player._validated_character_id(character_id)
+	var data: Dictionary = peer_data.get(peer_id, {})
+	data["character_id"] = selected_id
+	peer_data[peer_id] = data
+	player.select_character(selected_id)
 
 func _on_entity_died(entity: Node3D) -> void:
 	if not multiplayer.is_server(): return
@@ -228,9 +311,10 @@ func _on_entity_died(entity: Node3D) -> void:
 func _spawn_soul(pos: Vector3) -> void:
 	var soul = SOUL_SCENE.instantiate()
 	soul.name = _next_spawn_id("SOUL_")
-	_prepare_spawn_position(soul, pos)
-	players_container.add_child(soul, true)
+	_prepare_spawn_position(soul, pos, souls_container)
+	souls_container.add_child(soul, true)
 	_finalize_spawn_position(soul, pos)
+	_register_spawn(soul)
 	
 	soul.expired.connect(func(): _on_soul_expired(pos))
 
@@ -243,10 +327,11 @@ func _spawn_elite_mob(pos: Vector3) -> void:
 	var elite = ENEMY_SCENE.instantiate()
 	elite.name = _next_spawn_id("ELITE_")
 
-	_prepare_spawn_position(elite, pos)
+	_prepare_spawn_position(elite, pos, mobs_container)
 
-	players_container.add_child(elite, true)
+	mobs_container.add_child(elite, true)
 	_finalize_spawn_position(elite, pos)
+	_register_spawn(elite)
 
 	if elite.has_method("setup_enemy"):
 		elite.setup_enemy("AATROX", pos)
@@ -293,10 +378,11 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	var totem_pos = player.global_position + (forward * 2.0)
 	totem.totem_type = type
 	totem.stored_souls = souls
-	_prepare_spawn_position(totem, totem_pos)
-	
-	players_container.add_child(totem, true)
+	_prepare_spawn_position(totem, totem_pos, totems_container)
+
+	totems_container.add_child(totem, true)
 	_finalize_spawn_position(totem, totem_pos)
+	_register_spawn(totem)
 	print("[SERVER] !!! SUMMONING TOTEM !!! at %s for player %s" % [totem.global_position, player.name])
 	
 	totem.summoned.connect(func(p_type: int, p_souls: int): 
@@ -315,15 +401,16 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	pet.owner_id = owner_id
 	pet.pet_type = type_str
 	pet.power_level = souls
-	_prepare_spawn_position(pet, pos)
+	_prepare_spawn_position(pet, pos, totems_container)
 
 	var server_state = pet.get_node_or_null("ServerState")
 	if server_state:
 		server_state.pet_type_sync = type_str
 		server_state.power_level_sync = souls
-	
-	players_container.add_child(pet, true)
+
+	totems_container.add_child(pet, true)
 	_finalize_spawn_position(pet, pos)
+	_register_spawn(pet)
 	
 	# Initial pet setup on server
 	if pet.has_method("setup_pet"):
@@ -402,21 +489,30 @@ func _spawn_player(peer_id: int) -> void:
 	
 	# Spawn at a safe position (away from dummies)
 	var spawn_pos = Vector3(randf_range(-5, 5), 0.5, randf_range(5, 10))
-	_prepare_spawn_position(player, spawn_pos)
+	_prepare_spawn_position(player, spawn_pos, players_container)
 	
 	players_container.add_child(player, true)
 	_finalize_spawn_position(player, spawn_pos)
-	
+	_register_spawn(player)
+
 	# Initial server-side state setup
 	if multiplayer.is_server():
+		# Apply roster team from the director (NONE pre-assignment / no director)
+		var director := _get_match_director()
+		if director and director.has_method("get_team") and player.has_node("ServerState"):
+			player.get_node("ServerState").team_id = director.get_team(peer_id)
+
 		# Setup name from peer data if available
 		if peer_data.has(peer_id):
 			player.player_name = peer_data[peer_id].name
+			if peer_data[peer_id].has("character_id"):
+				player.select_character(peer_data[peer_id].character_id)
 		
 	print("[MatchManager] Spawned player for peer: ", peer_id, " at ", player.position)
 
 func _despawn_player(peer_id: int) -> void:
 	var player = players_container.get_node_or_null(str(peer_id))
 	if player:
+		_unregister_player(peer_id)
 		player.queue_free()
 		print("[MatchManager] Despawned player for peer: ", peer_id)
