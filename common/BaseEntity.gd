@@ -290,5 +290,28 @@ func apply_stats(new_hp: int) -> void:
 func _update_visuals() -> void:
 	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)
 
+## Linear threat decay rate (per second). Applied on the server only via
+## _process so old aggro fades smoothly when the attacker stops hitting.
+## At 5.0/sec a single 100-damage hit decays to zero in 20s, but two
+## rapid hits keep the mob locked on while the player is active.
+const THREAT_DECAY_PER_SECOND: float = 5.0
+
+## Server-only aggro decay. Runs every visual frame; the cost is a
+## single clamped integer comparison and only fires when threat > 0,
+## so the steady-state cost on idle entities is zero. Clients receive
+## the changing sync_threat through StateSynchronizer and never write
+## their own copy, so the server-only guard is mandatory.
+func _process(delta: float) -> void:
+	if not multiplayer.is_server():
+		return
+	if server_state == null:
+		return
+	if int(server_state.sync_threat) <= 0:
+		return
+	var decay: int = int(THREAT_DECAY_PER_SECOND * delta)
+	if decay <= 0:
+		return
+	server_state.sync_threat = int(server_state.sync_threat) - decay
+
 func _is_server_authority() -> bool:
 	return multiplayer == null or multiplayer.is_server()

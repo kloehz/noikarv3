@@ -16,6 +16,14 @@ const BASE_HP_HEAL: int = 80
 const BASE_HP_DMG: int = 100
 const SKILL_COOLDOWN: float = 4.0
 
+## Flat threat added every time the tank pet's AoE taunt fires. The
+## taunt already forces ai.target = self, but the spike keeps the AI
+## lock sticky: a player who hits for 100 between taunts would
+## otherwise blow past the tank's damage-based threat until the next
+## tick of decay. 200 puts the spike ~2-3x above a typical player
+## melee swing so the tank reliably wins a single attack cycle.
+const TAUNT_THREAT_SPIKE: int = 200
+
 @export var owner_id: int = 1
 @export var pet_type: String = "ATTACK"
 @export var power_level: int = 0
@@ -310,3 +318,9 @@ func _apply_aoe_taunt(pos: Vector3, radius: float) -> void:
 			if ai and child != self:
 				ai.target = self
 				ai.state = 1 # State.CHASE
+				# Force a flat threat spike so the AI keeps targeting the
+				# tank even after a single big player hit briefly outranks
+				# us. Hurts the linear-threat score by enough that the
+				# next 10m of player damage can't knock us off-target.
+				if has_node("ServerState"):
+					get_node("ServerState").sync_threat += TAUNT_THREAT_SPIKE

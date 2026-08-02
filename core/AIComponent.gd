@@ -272,7 +272,12 @@ func _stop_inputs() -> void:
 	logic.is_shooting = false
 
 func _find_nearest_target() -> void:
-	var best_dist = detection_range
+	## Aggro / threat selection. Score = (threat on the candidate) - (distance).
+	## The 1.0 weight on distance means a candidate at 1m with 0 threat
+	## beats nothing, and a candidate at 10m needs 10+ threat to outrank
+	## a closer attacker. Tank pets naturally pull aggro because their
+	## damage writes 1.75x threat (see HurtboxComponent._threat_multiplier_for).
+	var best_score: float = -INF
 	var new_target = null
 	
 	# Determine which groups to search based on MY faction
@@ -304,10 +309,29 @@ func _find_nearest_target() -> void:
 			# Mobs should never target other mobs
 			if _is_mob and potential.is_in_group(&"mobs"):
 				continue
-				
+			
 			var d = entity.global_position.distance_to(potential.global_position)
-			if d < best_dist:
-				best_dist = d
+			if d > detection_range:
+				continue
+			
+			var threat: float = _threat_of(potential)
+			var score: float = threat - d
+			if score > best_score:
+				best_score = score
 				new_target = potential
 	
 	target = new_target
+
+## Reads sync_threat off the candidate's ServerState, defaulting to 0
+## for entities without one. Kept as a helper so future threat sources
+## (healing aggro, proximity bumps, debuffs) can be added here without
+## touching the selection loop.
+func _threat_of(candidate: Node) -> float:
+	if candidate == null:
+		return 0.0
+	if not candidate.has_node("ServerState"):
+		return 0.0
+	var state := candidate.get_node("ServerState") as Node
+	if state == null:
+		return 0.0
+	return float(int(state.get("sync_threat")))
