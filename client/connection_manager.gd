@@ -9,27 +9,27 @@ const GAME_CONNECTION_TIMEOUT_SEC := 12.0
 @onready var character_select_panel: Control = $CharacterSelectPanel
 @onready var connecting_panel: Control = $ConnectingPanel
 @onready var bg_rect: ColorRect = $Background
-@onready var account_edit: LineEdit = $LoginPanel/VBox/AccountEdit
-@onready var password_edit: LineEdit = $LoginPanel/VBox/PasswordEdit
-@onready var login_status: Label = $LoginPanel/VBox/LoginStatus
-@onready var room_id_edit: LineEdit = $RoomPanel/VBox/JoinBox/RoomIDEdit
-@onready var noray_address_edit: LineEdit = $RoomPanel/VBox/SettingsBox/AddressEdit
+@onready var account_edit: LineEdit = $LoginPanel/Card/VBox/AccountEdit
+@onready var password_edit: LineEdit = $LoginPanel/Card/VBox/PasswordEdit
+@onready var login_status: Label = $LoginPanel/Card/VBox/LoginStatus
+@onready var room_id_edit: LineEdit = $RoomPanel/Card/VBox/JoinBox/RoomIDEdit
+@onready var noray_address_edit: LineEdit = $RoomPanel/Card/VBox/SettingsBox/AddressEdit
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
 @onready var room_info: Label = $HUD/RoomInfo
-@onready var room_status: Label = $RoomPanel/VBox/RoomStatus
-@onready var lobby_status: Label = $TeamLobbyPanel/VBox/Status
-@onready var lobby_ready: CheckButton = $TeamLobbyPanel/VBox/Ready
-@onready var start_selection: Button = $TeamLobbyPanel/VBox/StartSelection
-@onready var join_red_button: Button = $TeamLobbyPanel/VBox/TeamChoices/JoinRedButton
-@onready var join_blue_button: Button = $TeamLobbyPanel/VBox/TeamChoices/JoinBlueButton
-@onready var red_roster: Label = $TeamLobbyPanel/VBox/TeamRosters/RedRoster
-@onready var blue_roster: Label = $TeamLobbyPanel/VBox/TeamRosters/BlueRoster
-@onready var selection_roster: Label = $CharacterSelectPanel/VBox/Roster
-@onready var selection_status: Label = $CharacterSelectPanel/VBox/Status
-@onready var selection_ready: CheckButton = $CharacterSelectPanel/VBox/Ready
-@onready var deadline: Label = $CharacterSelectPanel/VBox/Deadline
-@onready var aatrox_button: Button = $CharacterSelectPanel/VBox/Characters/Aatrox
-@onready var ivern_button: Button = $CharacterSelectPanel/VBox/Characters/Ivern
+@onready var room_status: Label = $RoomPanel/Card/VBox/RoomStatus
+@onready var lobby_status: Label = $TeamLobbyPanel/Card/VBox/Status
+@onready var lobby_ready: CheckButton = $TeamLobbyPanel/Card/VBox/Ready
+@onready var start_selection: Button = $TeamLobbyPanel/Card/VBox/StartSelection
+@onready var join_red_button: Button = $TeamLobbyPanel/Card/VBox/TeamChoices/JoinRedButton
+@onready var join_blue_button: Button = $TeamLobbyPanel/Card/VBox/TeamChoices/JoinBlueButton
+@onready var red_roster: Label = $TeamLobbyPanel/Card/VBox/TeamRosters/RedRoster
+@onready var blue_roster: Label = $TeamLobbyPanel/Card/VBox/TeamRosters/BlueRoster
+@onready var selection_roster: Label = $CharacterSelectPanel/Card/VBox/Roster
+@onready var selection_status: Label = $CharacterSelectPanel/Card/VBox/Status
+@onready var selection_ready: CheckButton = $CharacterSelectPanel/Card/VBox/Ready
+@onready var deadline: Label = $CharacterSelectPanel/Card/VBox/Deadline
+@onready var aatrox_button: Button = $CharacterSelectPanel/Card/VBox/Characters/Aatrox
+@onready var ivern_button: Button = $CharacterSelectPanel/Card/VBox/Characters/Ivern
 @onready var boss_health_bar: Control = $HUD/BossHealthBar
 
 var _active_peer: ENetMultiplayerPeer
@@ -91,7 +91,7 @@ func _switch_state(new_state: State) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if new_state == State.IN_GAME else Input.MOUSE_MODE_VISIBLE
 	match new_state:
 		State.LOGIN: account_edit.grab_focus()
-		State.ROOM: $RoomPanel/VBox/HostBox/HostButton.grab_focus()
+		State.ROOM: $RoomPanel/Card/VBox/HostBox/HostButton.grab_focus()
 		State.TEAM_LOBBY: lobby_ready.grab_focus()
 		State.CHARACTER_SELECT: aatrox_button.grab_focus()
 

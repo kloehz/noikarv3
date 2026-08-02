@@ -1,27 +1,242 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=24 format=3]
 
 [ext_resource type="Script" path="res://client/connection_manager.gd" id="1"]
 [ext_resource type="Script" path="res://client/ui/BossHealthBar.gd" id="5_boss_bar"]
-[sub_resource type="StyleBoxFlat" id="button"]
-bg_color = Color(0.2, 0.4, 0.8, 1)
+
+[sub_resource type="StyleBoxFlat" id="panel_card"]
+bg_color = Color(0.04, 0.05, 0.1, 0.82)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.65, 0.95, 0.35)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+content_margin_left = 28.0
+content_margin_top = 26.0
+content_margin_right = 28.0
+content_margin_bottom = 26.0
+shadow_color = Color(0, 0, 0, 0.55)
+shadow_size = 12
+shadow_offset = Vector2(0, 4)
+
+[sub_resource type="StyleBoxFlat" id="button_normal"]
+bg_color = Color(0.18, 0.32, 0.6, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.55, 0.72, 1.0, 0.45)
 corner_radius_top_left = 8
 corner_radius_top_right = 8
-corner_radius_bottom_left = 8
 corner_radius_bottom_right = 8
-[sub_resource type="StyleBoxFlat" id="input"]
-bg_color = Color(0.05, 0.05, 0.1, 0.8)
-[sub_resource type="StyleBoxFlat" id="team_red_button"]
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="button_hover"]
+bg_color = Color(0.28, 0.45, 0.8, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.75, 0.88, 1.0, 0.85)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="button_pressed"]
+bg_color = Color(0.12, 0.22, 0.45, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.55, 0.9, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="button_disabled"]
+bg_color = Color(0.12, 0.14, 0.2, 0.6)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.4, 0.5, 0.4)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="input_normal"]
+bg_color = Color(0.06, 0.07, 0.12, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.45, 0.55, 0.8, 0.45)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="input_focus"]
+bg_color = Color(0.08, 0.1, 0.18, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.85, 1.0, 0.9)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 8.0
+content_margin_right = 12.0
+content_margin_bottom = 8.0
+
+[sub_resource type="StyleBoxFlat" id="team_red_normal"]
 bg_color = Color(0.55, 0.15, 0.15, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
-[sub_resource type="StyleBoxFlat" id="team_blue_button"]
-bg_color = Color(0.15, 0.3, 0.65, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1.0, 0.55, 0.55, 0.55)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="team_red_hover"]
+bg_color = Color(0.78, 0.22, 0.22, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(1.0, 0.75, 0.7, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="team_blue_normal"]
+bg_color = Color(0.15, 0.32, 0.7, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5, 0.7, 1.0, 0.55)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="team_blue_hover"]
+bg_color = Color(0.22, 0.45, 0.95, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.7, 0.88, 1.0, 0.95)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[sub_resource type="StyleBoxFlat" id="char_normal"]
+bg_color = Color(0.08, 0.1, 0.18, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.65, 0.95, 0.5)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 24.0
+content_margin_right = 16.0
+content_margin_bottom = 24.0
+
+[sub_resource type="StyleBoxFlat" id="char_hover"]
+bg_color = Color(0.14, 0.2, 0.35, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.85, 0.92, 1.0, 0.95)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 24.0
+content_margin_right = 16.0
+content_margin_bottom = 24.0
+
+[sub_resource type="StyleBoxFlat" id="char_pressed"]
+bg_color = Color(0.06, 0.08, 0.14, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.6, 0.75, 1.0, 0.9)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+content_margin_left = 16.0
+content_margin_top = 24.0
+content_margin_right = 16.0
+content_margin_bottom = 24.0
+
+[sub_resource type="StyleBoxFlat" id="connecting_panel"]
+bg_color = Color(0.04, 0.05, 0.1, 0.85)
+border_width_left = 2
+border_width_top = 2
+border_color = Color(0.55, 0.7, 1.0, 0.5)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
 
 [node name="ConnectionMenu" type="CanvasLayer"]
 script = ExtResource("1")
@@ -31,46 +246,94 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.1, 0.1, 0.18, 1)
+mouse_filter = 2
+color = Color(0.05, 0.07, 0.12, 1)
 
 [node name="LoginPanel" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-[node name="VBox" type="VBoxContainer" parent="LoginPanel"]
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="LoginPanel"]
+layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -180.0
-offset_top = -150.0
-offset_right = 180.0
-offset_bottom = 150.0
-theme_override_constants/separation = 12
-[node name="Title" type="Label" parent="LoginPanel/VBox"]
+offset_left = -200.0
+offset_top = -190.0
+offset_right = 200.0
+offset_bottom = 190.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("panel_card")
+
+[node name="VBox" type="VBoxContainer" parent="LoginPanel/Card"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 42
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="LoginPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.25, 0.95)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 44
 text = "NOIKARV"
 horizontal_alignment = 1
-[node name="AccountEdit" type="LineEdit" parent="LoginPanel/VBox"]
+
+[node name="Subtitle" type="Label" parent="LoginPanel/Card/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.72, 0.95, 0.85)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.7)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+text = "ARENA PVPVE"
+horizontal_alignment = 1
+
+[node name="AccountEdit" type="LineEdit" parent="LoginPanel/Card/VBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("input_normal")
+theme_override_styles/focus = SubResource("input_focus")
 placeholder_text = "Account"
-[node name="PasswordEdit" type="LineEdit" parent="LoginPanel/VBox"]
+
+[node name="PasswordEdit" type="LineEdit" parent="LoginPanel/Card/VBox"]
 layout_mode = 2
+theme_override_styles/normal = SubResource("input_normal")
+theme_override_styles/focus = SubResource("input_focus")
 placeholder_text = "Password"
 secret = true
-[node name="EnterButton" type="Button" parent="LoginPanel/VBox"]
+
+[node name="EnterButton" type="Button" parent="LoginPanel/Card/VBox"]
 layout_mode = 2
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_font_sizes/font_size = 16
 text = "SIGN IN"
 focus_neighbor_bottom = NodePath("../RegisterButton")
-[node name="RegisterButton" type="Button" parent="LoginPanel/VBox"]
+
+[node name="RegisterButton" type="Button" parent="LoginPanel/Card/VBox"]
 layout_mode = 2
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_font_sizes/font_size = 14
 text = "CREATE ACCOUNT"
 focus_neighbor_top = NodePath("../EnterButton")
-[node name="LoginStatus" type="Label" parent="LoginPanel/VBox"]
+
+[node name="LoginStatus" type="Label" parent="LoginPanel/Card/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.75, 0.55, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="RoomPanel" type="Control" parent="."]
@@ -79,38 +342,103 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-[node name="VBox" type="VBoxContainer" parent="RoomPanel"]
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="RoomPanel"]
+layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -200.0
-offset_top = -150.0
-offset_right = 200.0
-offset_bottom = 150.0
-theme_override_constants/separation = 12
-[node name="HostBox" type="VBoxContainer" parent="RoomPanel/VBox"]
-layout_mode = 2
-[node name="HostButton" type="Button" parent="RoomPanel/VBox/HostBox"]
-layout_mode = 2
-text = "CREATE ROOM"
-[node name="JoinBox" type="VBoxContainer" parent="RoomPanel/VBox"]
-layout_mode = 2
-[node name="RoomIDEdit" type="LineEdit" parent="RoomPanel/VBox/JoinBox"]
-layout_mode = 2
-placeholder_text = "Room code"
-[node name="JoinButton" type="Button" parent="RoomPanel/VBox/JoinBox"]
-layout_mode = 2
-text = "JOIN ROOM"
-[node name="SettingsBox" type="VBoxContainer" parent="RoomPanel/VBox"]
-layout_mode = 2
-[node name="AddressEdit" type="LineEdit" parent="RoomPanel/VBox/SettingsBox"]
-layout_mode = 2
-text = "127.0.0.1"
+offset_left = -220.0
+offset_top = -200.0
+offset_right = 220.0
+offset_bottom = 200.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("panel_card")
 
-[node name="RoomStatus" type="Label" parent="RoomPanel/VBox"]
+[node name="VBox" type="VBoxContainer" parent="RoomPanel/Card"]
 layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.25, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 28
+text = "ROOM"
+horizontal_alignment = 1
+
+[node name="HostBox" type="VBoxContainer" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HostButton" type="Button" parent="RoomPanel/Card/VBox/HostBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_font_sizes/font_size = 16
+text = "CREATE ROOM"
+
+[node name="Divider" type="HSeparator" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/separator_color = Color(0.45, 0.55, 0.8, 0.25)
+
+[node name="JoinBox" type="VBoxContainer" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RoomIDEdit" type="LineEdit" parent="RoomPanel/Card/VBox/JoinBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("input_normal")
+theme_override_styles/focus = SubResource("input_focus")
+placeholder_text = "Room code"
+alignment = 1
+
+[node name="JoinButton" type="Button" parent="RoomPanel/Card/VBox/JoinBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_font_sizes/font_size = 16
+text = "JOIN ROOM"
+
+[node name="Divider2" type="HSeparator" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/separator_color = Color(0.45, 0.55, 0.8, 0.25)
+
+[node name="SettingsBox" type="VBoxContainer" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AddressLabel" type="Label" parent="RoomPanel/Card/VBox/SettingsBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.72, 0.95, 0.85)
+theme_override_font_sizes/font_size = 11
+text = "Server address"
+horizontal_alignment = 1
+
+[node name="AddressEdit" type="LineEdit" parent="RoomPanel/Card/VBox/SettingsBox"]
+layout_mode = 2
+theme_override_styles/normal = SubResource("input_normal")
+theme_override_styles/focus = SubResource("input_focus")
+text = "127.0.0.1"
+alignment = 1
+
+[node name="RoomStatus" type="Label" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.75, 0.55, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="TeamLobbyPanel" type="Control" parent="."]
@@ -119,70 +447,114 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-[node name="VBox" type="VBoxContainer" parent="TeamLobbyPanel"]
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="TeamLobbyPanel"]
+layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -160.0
-offset_right = 220.0
-offset_bottom = 160.0
-theme_override_constants/separation = 12
-[node name="Title" type="Label" parent="TeamLobbyPanel/VBox"]
+offset_left = -240.0
+offset_top = -200.0
+offset_right = 240.0
+offset_bottom = 200.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("panel_card")
+
+[node name="VBox" type="VBoxContainer" parent="TeamLobbyPanel/Card"]
 layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="TeamLobbyPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.25, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 28
 text = "TEAM LOBBY"
 horizontal_alignment = 1
-[node name="TeamChoices" type="HBoxContainer" parent="TeamLobbyPanel/VBox"]
+
+[node name="TeamChoices" type="HBoxContainer" parent="TeamLobbyPanel/Card/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 12
-[node name="JoinRedButton" type="Button" parent="TeamLobbyPanel/VBox/TeamChoices"]
+theme_override_constants/separation = 14
+
+[node name="JoinRedButton" type="Button" parent="TeamLobbyPanel/Card/VBox/TeamChoices"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_styles/normal = SubResource("team_red_button")
-theme_override_styles/hover = SubResource("team_red_button")
-theme_override_styles/pressed = SubResource("team_red_button")
-theme_override_styles/disabled = SubResource("team_red_button")
+theme_override_styles/normal = SubResource("team_red_normal")
+theme_override_styles/hover = SubResource("team_red_hover")
+theme_override_styles/pressed = SubResource("team_red_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("team_red_hover")
 theme_override_font_sizes/font_size = 18
 text = "JOIN RED"
 focus_neighbor_right = NodePath("../JoinBlueButton")
 focus_neighbor_bottom = NodePath("../../Ready")
-[node name="JoinBlueButton" type="Button" parent="TeamLobbyPanel/VBox/TeamChoices"]
+
+[node name="JoinBlueButton" type="Button" parent="TeamLobbyPanel/Card/VBox/TeamChoices"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_styles/normal = SubResource("team_blue_button")
-theme_override_styles/hover = SubResource("team_blue_button")
-theme_override_styles/pressed = SubResource("team_blue_button")
-theme_override_styles/disabled = SubResource("team_blue_button")
+theme_override_styles/normal = SubResource("team_blue_normal")
+theme_override_styles/hover = SubResource("team_blue_hover")
+theme_override_styles/pressed = SubResource("team_blue_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("team_blue_hover")
 theme_override_font_sizes/font_size = 18
 text = "JOIN BLUE"
 focus_neighbor_left = NodePath("../JoinRedButton")
 focus_neighbor_bottom = NodePath("../../Ready")
-[node name="TeamRosters" type="HBoxContainer" parent="TeamLobbyPanel/VBox"]
+
+[node name="TeamRosters" type="HBoxContainer" parent="TeamLobbyPanel/Card/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 12
-[node name="RedRoster" type="Label" parent="TeamLobbyPanel/VBox/TeamRosters"]
-layout_mode = 2
-size_flags_horizontal = 3
-horizontal_alignment = 1
-autowrap_mode = 2
-[node name="BlueRoster" type="Label" parent="TeamLobbyPanel/VBox/TeamRosters"]
+theme_override_constants/separation = 14
+
+[node name="RedRoster" type="Label" parent="TeamLobbyPanel/Card/VBox/TeamRosters"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.85, 0.7, 0.7, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 autowrap_mode = 2
-[node name="Ready" type="CheckButton" parent="TeamLobbyPanel/VBox"]
+
+[node name="BlueRoster" type="Label" parent="TeamLobbyPanel/Card/VBox/TeamRosters"]
 layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.7, 0.8, 1.0, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Ready" type="CheckButton" parent="TeamLobbyPanel/Card/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
 text = "READY"
 focus_neighbor_top = NodePath("../TeamChoices/JoinRedButton")
 focus_neighbor_bottom = NodePath("../StartSelection")
-[node name="StartSelection" type="Button" parent="TeamLobbyPanel/VBox"]
+
+[node name="StartSelection" type="Button" parent="TeamLobbyPanel/Card/VBox"]
 layout_mode = 2
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+theme_override_font_sizes/font_size = 14
 text = "START CHARACTER SELECTION"
 focus_neighbor_top = NodePath("../Ready")
-[node name="Status" type="Label" parent="TeamLobbyPanel/VBox"]
+
+[node name="Status" type="Label" parent="TeamLobbyPanel/Card/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.75, 0.55, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="CharacterSelectPanel" type="Control" parent="."]
@@ -191,45 +563,94 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-[node name="VBox" type="VBoxContainer" parent="CharacterSelectPanel"]
+mouse_filter = 2
+
+[node name="Card" type="PanelContainer" parent="CharacterSelectPanel"]
+layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -180.0
-offset_right = 220.0
-offset_bottom = 180.0
-theme_override_constants/separation = 12
-[node name="Title" type="Label" parent="CharacterSelectPanel/VBox"]
+offset_left = -260.0
+offset_top = -200.0
+offset_right = 260.0
+offset_bottom = 200.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("panel_card")
+
+[node name="VBox" type="VBoxContainer" parent="CharacterSelectPanel/Card"]
 layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Title" type="Label" parent="CharacterSelectPanel/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.25, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 28
 text = "CHARACTER SELECTION"
 horizontal_alignment = 1
-[node name="Deadline" type="Label" parent="CharacterSelectPanel/VBox"]
+
+[node name="Deadline" type="Label" parent="CharacterSelectPanel/Card/VBox"]
 layout_mode = 2
-[node name="Roster" type="Label" parent="CharacterSelectPanel/VBox"]
+theme_override_colors/font_color = Color(1.0, 0.85, 0.5, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+
+[node name="Roster" type="Label" parent="CharacterSelectPanel/Card/VBox"]
 layout_mode = 2
-[node name="Characters" type="HBoxContainer" parent="CharacterSelectPanel/VBox"]
+theme_override_colors/font_color = Color(0.75, 0.85, 1.0, 0.85)
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
+
+[node name="Characters" type="HBoxContainer" parent="CharacterSelectPanel/Card/VBox"]
 layout_mode = 2
-[node name="Aatrox" type="Button" parent="CharacterSelectPanel/VBox/Characters"]
+theme_override_constants/separation = 14
+
+[node name="Aatrox" type="Button" parent="CharacterSelectPanel/Card/VBox/Characters"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "AATROX\nWarrior"
+theme_override_styles/normal = SubResource("char_normal")
+theme_override_styles/hover = SubResource("char_hover")
+theme_override_styles/pressed = SubResource("char_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("char_hover")
+theme_override_font_sizes/font_size = 16
+text = "AATROX
+Warrior"
 focus_neighbor_right = NodePath("../Ivern")
 focus_neighbor_bottom = NodePath("../../Ready")
-[node name="Ivern" type="Button" parent="CharacterSelectPanel/VBox/Characters"]
+
+[node name="Ivern" type="Button" parent="CharacterSelectPanel/Card/VBox/Characters"]
 layout_mode = 2
 size_flags_horizontal = 3
-text = "IVERN\nRanger"
+theme_override_styles/normal = SubResource("char_normal")
+theme_override_styles/hover = SubResource("char_hover")
+theme_override_styles/pressed = SubResource("char_pressed")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("char_hover")
+theme_override_font_sizes/font_size = 16
+text = "IVERN
+Ranger"
 focus_neighbor_left = NodePath("../Aatrox")
 focus_neighbor_bottom = NodePath("../../Ready")
-[node name="Ready" type="CheckButton" parent="CharacterSelectPanel/VBox"]
+
+[node name="Ready" type="CheckButton" parent="CharacterSelectPanel/Card/VBox"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 14
 text = "LOCK IN"
 focus_neighbor_top = NodePath("../Characters/Aatrox")
-[node name="Status" type="Label" parent="CharacterSelectPanel/VBox"]
+
+[node name="Status" type="Label" parent="CharacterSelectPanel/Card/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1.0, 0.75, 0.55, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 12
+horizontal_alignment = 1
 autowrap_mode = 2
 
 [node name="ConnectingPanel" type="PanelContainer" parent="."]
@@ -238,11 +659,21 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -60.0
+offset_top = -56.0
+offset_left = 16.0
+offset_right = -16.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("connecting_panel")
+
 [node name="VBox" type="VBoxContainer" parent="ConnectingPanel"]
 layout_mode = 2
+
 [node name="StatusLabel" type="Label" parent="ConnectingPanel/VBox"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.92, 1.0, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 13
 horizontal_alignment = 1
 
 [node name="HUD" type="Control" parent="."]
@@ -254,6 +685,10 @@ offset_left = 20.0
 offset_top = 20.0
 offset_right = 400.0
 offset_bottom = 50.0
+theme_override_colors/font_color = Color(0.85, 0.92, 1.0, 0.95)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.85)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 14
 text = "ROOM: ---"
 [node name="BossHealthBar" type="Control" parent="HUD"]
 visible = false
@@ -268,14 +703,14 @@ offset_right = 320.0
 offset_bottom = 72.0
 script = ExtResource("5_boss_bar")
 
-[connection signal="pressed" from="LoginPanel/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
-[connection signal="pressed" from="LoginPanel/VBox/RegisterButton" to="." method="_on_register_pressed"]
-[connection signal="pressed" from="RoomPanel/VBox/HostBox/HostButton" to="." method="_on_host_pressed"]
-[connection signal="pressed" from="RoomPanel/VBox/JoinBox/JoinButton" to="." method="_on_join_pressed"]
-[connection signal="pressed" from="TeamLobbyPanel/VBox/TeamChoices/JoinRedButton" to="." method="_on_team_choice_pressed" binds= [1]]
-[connection signal="pressed" from="TeamLobbyPanel/VBox/TeamChoices/JoinBlueButton" to="." method="_on_team_choice_pressed" binds= [2]]
-[connection signal="toggled" from="TeamLobbyPanel/VBox/Ready" to="." method="_on_lobby_ready_toggled"]
-[connection signal="pressed" from="TeamLobbyPanel/VBox/StartSelection" to="." method="_on_start_selection_pressed"]
-[connection signal="pressed" from="CharacterSelectPanel/VBox/Characters/Aatrox" to="." method="_on_character_pressed" binds= ["warrior"]]
-[connection signal="pressed" from="CharacterSelectPanel/VBox/Characters/Ivern" to="." method="_on_character_pressed" binds= ["ivern_ranger"]]
-[connection signal="toggled" from="CharacterSelectPanel/VBox/Ready" to="." method="_on_selection_ready_toggled"]
+[connection signal="pressed" from="LoginPanel/Card/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
+[connection signal="pressed" from="LoginPanel/Card/VBox/RegisterButton" to="." method="_on_register_pressed"]
+[connection signal="pressed" from="RoomPanel/Card/VBox/HostBox/HostButton" to="." method="_on_host_pressed"]
+[connection signal="pressed" from="RoomPanel/Card/VBox/JoinBox/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="TeamLobbyPanel/Card/VBox/TeamChoices/JoinRedButton" to="." method="_on_team_choice_pressed" binds= [1]]
+[connection signal="pressed" from="TeamLobbyPanel/Card/VBox/TeamChoices/JoinBlueButton" to="." method="_on_team_choice_pressed" binds= [2]]
+[connection signal="toggled" from="TeamLobbyPanel/Card/VBox/Ready" to="." method="_on_lobby_ready_toggled"]
+[connection signal="pressed" from="TeamLobbyPanel/Card/VBox/StartSelection" to="." method="_on_start_selection_pressed"]
+[connection signal="pressed" from="CharacterSelectPanel/Card/VBox/Characters/Aatrox" to="." method="_on_character_pressed" binds= ["warrior"]]
+[connection signal="pressed" from="CharacterSelectPanel/Card/VBox/Characters/Ivern" to="." method="_on_character_pressed" binds= ["ivern_ranger"]]
+[connection signal="toggled" from="CharacterSelectPanel/Card/VBox/Ready" to="." method="_on_selection_ready_toggled"]

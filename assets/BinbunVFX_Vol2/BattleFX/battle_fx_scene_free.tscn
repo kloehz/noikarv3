@@ -1,9 +1,8 @@
 [gd_scene format=3 uid="uid://cegb3s68bt15s"]
 
 [ext_resource type="Texture2D" uid="uid://ed44j8f3a8us" path="res://assets/BinbunVFX_Vol2/shared/story_studio_02_1k.hdr" id="1_knvvm"]
-[ext_resource type="Shader" uid="uid://mvwi25cb826n" path="res://assets/BinbunVFX_Vol2/shared/shader/checker.gdshader" id="2_a7ri0"]
+[ext_resource type="Shader" uid="uid://du41b206uoq5q" path="res://assets/BinbunVFX_Vol2/shared/shader/checker.gdshader" id="2_a7ri0"]
 [ext_resource type="PackedScene" uid="uid://b43hdstkltshd" path="res://assets/BinbunVFX_Vol2/BattleFX/effects/shield/vfx_blank_shield_01.tscn" id="4_74w3d"]
-[ext_resource type="PackedScene" uid="uid://b4awoefw00ur7" path="res://assets/BinbunVFX_Vol2/BattleFX/effects/shield/vfx_blank_shield_02.tscn" id="5_1xatj"]
 [ext_resource type="PackedScene" uid="uid://1u2olgyaltw5" path="res://assets/BinbunVFX_Vol2/BattleFX/effects/charge/vfx_blank_charge.tscn" id="9_2yv60"]
 [ext_resource type="PackedScene" uid="uid://dx6gyig48g23b" path="res://assets/BinbunVFX_Vol2/BattleFX/effects/slash/vfx_blank_slash.tscn" id="11_1xatj"]
 [ext_resource type="PackedScene" uid="uid://brji7ckctpjtk" path="res://assets/BinbunVFX_Vol2/BattleFX/effects/swing/vfx_blank_swing.tscn" id="12_ykvge"]
@@ -166,9 +165,6 @@ mesh = SubResource("CapsuleMesh_knvvm")
 secondary_color = Color(0.36862746, 0.36862746, 0.36862746, 1)
 tertiary_color = Color(0.078431375, 0.078431375, 0.078431375, 1)
 noise_texture = SubResource("NoiseTexture2D_x1kf4")
-
-[node name="VFXBlankShield_02" parent="Shield" unique_id=2140119228 instance=ExtResource("5_1xatj")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 1, 0)
 
 [node name="Slash" type="Node3D" parent="." unique_id=788214911]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 5.5)

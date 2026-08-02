@@ -16,6 +16,9 @@ var _preview_mesh: MeshInstance3D
 var _aim_reticle: Control
 var _base_camera_fov: float = 75.0
 
+## Preloaded impact VFX scene used by the replicated hit-event flow.
+const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
+
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		_setup_from_parent()
@@ -40,7 +43,6 @@ func _connect_signals() -> void:
 	print("[DEBUG] VisualComponent %s connecting signals" % entity.name)
 	EventBus.entity_spawned.connect(_on_entity_spawned)
 	EventBus.entity_died.connect(_on_entity_died)
-	EventBus.entity_damaged.connect(_on_entity_damaged)
 
 	var health = entity.get_node_or_null("HealthComponent")
 	if health:
@@ -61,14 +63,22 @@ func _connect_signals() -> void:
 	if server_state:
 		server_state.souls_changed.connect(_on_souls_changed)
 		server_state.heal_received.connect(_on_heal_received)
+		server_state.damage_received.connect(_on_damage_received)
 		_on_souls_changed(server_state.sync_souls)
 
 func _on_souls_changed(amount: int) -> void:
 	# Only update HUD for the local controlled player
 	if not entity.is_multiplayer_authority():
 		return
-		
-	var hud_counter = get_tree().root.find_child("SoulCounter", true, false) as Label
+
+	# SoulCounter is a PanelContainer after the UI rework; the actual text
+	# Label sits two levels deeper at SoulCounter/HBox/Label. Casting the
+	# container itself to Label returned null and silently dropped every
+	# update — players saw "Almas: 0" even though sync_souls was climbing.
+	var panel := get_tree().root.find_child("SoulCounter", true, false)
+	if panel == null:
+		return
+	var hud_counter := panel.get_node_or_null("HBox/Label") as Label
 	if hud_counter:
 		hud_counter.text = "Almas: %d" % amount
 
@@ -302,9 +312,10 @@ func _on_entity_died(p_entity: Node3D) -> void:
 		play_death_effect()
 
 ## Called when entity takes damage - play hit flash/effects.
-func _on_entity_damaged(p_entity: Node3D, _amount: int, _source: Node) -> void:
-	if p_entity == self.entity:
-		_play_hit_effect()
+## Triggered by the replicated ServerState.damage_received signal so every
+## peer (server + clients) renders the hit VFX on the damaged entity.
+func _on_damage_received(_amount: int, _source: Node) -> void:
+	_play_hit_effect()
 
 ## ServerState emits this only for a real, replicated HealthComponent.healed
 ## event; HP changes from spawning, respawning, or sync do not enter here.
@@ -380,7 +391,49 @@ func _play_hit_effect() -> void:
 		_anim_lock_time = 0.3 
 		
 	_apply_hitstop(0.08) # Freeze for 80ms for weight
+	_spawn_hit_vfx()
 	EventBus.visual_effect_requested.emit(entity, "hit")
+
+## Spawn the VFXHit_02 impact scene at the entity's current position.
+## Spawned under the current scene root (not as a child of the entity) so
+## the effect keeps playing if the entity dies or despawns mid-animation.
+## Replicated implicitly: every peer calls this locally when its
+## ServerState.damage_received signal fires.
+func _spawn_hit_vfx() -> void:
+	if not entity or not entity.is_inside_tree():
+		return
+
+	var scene_root := get_tree().current_scene
+	if scene_root == null:
+		return
+
+	var vfx: Node3D = VFX_HIT_02_SCENE.instantiate()
+	if vfx == null:
+		return
+
+	scene_root.add_child(vfx)
+	vfx.global_position = entity.global_position
+	# Raise the impact a touch above the feet so the burst sits on the
+	# entity's torso, matching the source asset's visual reference.
+	vfx.global_position.y += 1.0
+
+	if vfx.has_method("play"):
+		# Stop the VFX after a single playback and free it once the
+		# animation reports finished. The asset's default `one_shot` is
+		# false; setting it here keeps this helper self-contained.
+		vfx.set("one_shot", true)
+		# 2x playback speed → impact resolves in ~0.8s instead of 1.6s.
+		# VFXControllerBB.speed_scale drives both the AnimationPlayer and
+		# the GPU particle systems, so the whole burst stays in sync.
+		vfx.set("speed_scale", 2.0)
+		vfx.play()
+		if vfx.has_signal("finished"):
+			vfx.finished.connect(vfx.queue_free, CONNECT_ONE_SHOT)
+		else:
+			# Fallback: the impact animation is 1.6s; clean up after 2s
+			# even if the script API drifts.
+			var t := get_tree().create_timer(2.0)
+			t.timeout.connect(vfx.queue_free)
 
 func _apply_hitstop(duration: float) -> void:
 	if _actor and _actor.animation_player:
