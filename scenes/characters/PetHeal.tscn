@@ -27,8 +27,9 @@ metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
 
 [node name="PetHeal" type="Node3D" unique_id=727927510]
 script = ExtResource("1_actor")
+visual_forward_yaw = 3.1415927
 suggested_attack_range = 12.0
-suggested_detection_range = 18.0
+suggested_detection_range = 5.0
 suggested_follow_distance = 6.0
 primary_attack = SubResource("Resource_ma8gr")
 

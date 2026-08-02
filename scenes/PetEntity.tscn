@@ -62,7 +62,7 @@ script = ExtResource("11_combat")
 
 [node name="AIComponent" type="Node" parent="."]
 script = ExtResource("12_ai")
-detection_range = 15.0
+detection_range = 5.0
 attack_range = 2.5
 follow_distance = 4.0
 
