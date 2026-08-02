@@ -10,6 +10,7 @@ signal souls_changed(amount: int)
 signal team_changed(new_team: int)
 signal pet_data_received(type: String, level: int)
 signal heal_received(amount: int)
+signal damage_received(amount: int, source: Node)
 signal boss_damage_changed(red_damage: int, blue_damage: int)
 
 @export var max_health: int = 100:
@@ -92,6 +93,18 @@ signal boss_damage_changed(red_damage: int, blue_damage: int)
 		if sync_heal_sequence > 0 and sync_heal_amount > 0:
 			heal_received.emit(sync_heal_amount)
 
+## Server-authored damage event. Bumping the sequence replicates one hit
+## VFX event to every peer; the writer also passes the source so clients
+## can attribute the hit for client-side effects (camera shake, sound).
+@export var sync_damage_amount: int = 0
+@export var sync_damage_source: Node = null
+@export var sync_damage_sequence: int = 0:
+	set(v):
+		if sync_damage_sequence == v: return
+		sync_damage_sequence = v
+		if sync_damage_sequence > 0 and sync_damage_amount > 0:
+			damage_received.emit(sync_damage_amount, sync_damage_source)
+
 @export var pet_type_sync: String = "":
 	set(v):
 		if pet_type_sync == v: return
@@ -128,6 +141,8 @@ func _ready() -> void:
 		sync.add_state(self, "sync_is_dashing")
 		sync.add_state(self, "sync_heal_amount")
 		sync.add_state(self, "sync_heal_sequence")
+		sync.add_state(self, "sync_damage_amount")
+		sync.add_state(self, "sync_damage_sequence")
 		sync.add_state(self, "pet_type_sync")
 		sync.add_state(self, "power_level_sync")
 		if sync.has_method("process_settings"):

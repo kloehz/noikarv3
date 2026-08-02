@@ -123,3 +123,32 @@ func test_server_state_emits_only_explicit_heal_events() -> void:
 
 	state.sync_heal_sequence = 1
 	assert_eq(received.size(), 1, "Repeating the same sequence must not duplicate the VFX event")
+
+## Test: a replicated damage event fires only when the server increments its
+## sequence. Mirrors the heal pattern so hit VFX (VFXHit_02) only renders on
+## real, server-authoritative damage — never on resync or initial state.
+func test_server_state_emits_only_explicit_damage_events() -> void:
+	var state := ServerState.new()
+	var received: Array = []
+	state.damage_received.connect(func(amount: int, source: Node):
+		received.append({"amount": amount, "source": source})
+	)
+
+	state.sync_health = 100
+	assert_eq(received.size(), 0, "Health synchronization alone must not emit a damage VFX event")
+
+	var fake_source := Node.new()
+	state.sync_damage_amount = 25
+	state.sync_damage_source = fake_source
+	state.sync_damage_sequence = 1
+	assert_eq(received.size(), 1, "Incrementing the sequence emits the synced damage amount")
+	assert_eq(received[0]["amount"], 25, "Amount passed to listeners equals the synced amount")
+	assert_eq(received[0]["source"], fake_source, "Source passed to listeners equals the synced source")
+
+	state.sync_damage_sequence = 1
+	assert_eq(received.size(), 1, "Repeating the same sequence must not duplicate the VFX event")
+
+	state.sync_damage_sequence = 2
+	assert_eq(received.size(), 2, "A second distinct sequence emits a new VFX event")
+
+	fake_source.queue_free()
