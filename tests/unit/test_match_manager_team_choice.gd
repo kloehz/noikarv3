@@ -132,3 +132,59 @@ func test_spawn_position_follows_explicit_team_choice() -> void:
 	var team: int = _manager._team_for_player_spawn(2)
 	assert_eq(team, TeamId.BLUE,
 		"Spawn position must respect the explicit choice, not the parity fallback")
+
+## --- Mob difficulty scaling by team size -------------------------------
+## Curve (see MOB_DIFFICULTY_* in match_manager.gd):
+##   1 → 1.0, 2 → 1.2, 3 → 1.4, 4 → 1.5, 5 → 1.6, 6 → 1.7
+## First two extra teammates each contribute +20%; +10% per teammate beyond.
+
+func _seed_team(team: int, count: int) -> void:
+	_manager._lobby.clear()
+	for i in count:
+		var peer_id := (2 if team == TeamId.RED else 100) + i
+		_manager._lobby[peer_id] = _record("Peer%d" % peer_id, team)
+
+func test_mob_difficulty_for_solo_team_returns_one() -> void:
+	_seed_team(TeamId.RED, 1)
+	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.RED), 1.0, 0.0001,
+		"Solo (1 player) must not scale mob stats")
+
+func test_mob_difficulty_curve_matches_spec() -> void:
+	var cases := [
+		[1, 1.0],
+		[2, 1.2],
+		[3, 1.4],
+		[4, 1.5],
+		[5, 1.6],
+		[6, 1.7],
+		[8, 1.9],
+	]
+	for case in cases:
+		var size: int = case[0]
+		var expected: float = case[1]
+		_seed_team(TeamId.RED, size)
+		var actual: float = _manager._mob_difficulty_for_team(TeamId.RED)
+		assert_almost_eq(actual, expected, 0.0001,
+			"Team size %d must yield difficulty %.2f (got %.4f)" % [size, expected, actual])
+
+func test_mob_difficulty_for_none_team_returns_one() -> void:
+	# Boss / free-play elites go through TeamId.NONE; they keep their own
+	# scaling (BOSS_HP_MULTIPLIER) and must not get the team-size multiplier.
+	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.NONE), 1.0, 0.0001,
+		"NONE team (boss/elites) must not pick up the team-size curve")
+	_seed_team(TeamId.BLUE, 5)
+	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.NONE), 1.0, 0.0001,
+		"NONE team must stay at 1.0 even when the lobby is full")
+
+func test_mob_difficulty_uses_correct_team_roster() -> void:
+	# RED has 3 players, BLUE has 5 — each side's mobs scale by their own
+	# opposing roster, not the combined lobby size.
+	_manager._lobby.clear()
+	for i in 3:
+		_manager._lobby[10 + i] = _record("R%d" % i, TeamId.RED)
+	for i in 5:
+		_manager._lobby[50 + i] = _record("B%d" % i, TeamId.BLUE)
+	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.RED), 1.4, 0.0001,
+		"3 RED players → +40% mob stats")
+	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.BLUE), 1.6, 0.0001,
+		"5 BLUE players → +60% mob stats")

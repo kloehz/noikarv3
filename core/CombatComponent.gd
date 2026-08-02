@@ -21,6 +21,12 @@ var _active_attack: AttackDefinition  # Currently executing attack
 @export var damage: int = 0
 @export var knockback_force: float = 12.0
 
+## Server-applied damage multiplier (default 1.0). Set at mob spawn time by
+## MatchManager based on the opposing team's size so bigger lobbies face
+## tougher mobs. Applied multiplicatively on top of attack_def.base_damage
+## (and after shape_data.damage_multiplier) for both melee and projectiles.
+@export var difficulty: float = 1.0
+
 # --- Node references ---
 var entity: Node
 var logic: Node
@@ -336,7 +342,7 @@ func _execute_melee_hitscan(attack_def: AttackDefinition) -> void:
 	if not _melee_shapecast:
 		push_error("[CombatComponent] %s: No ShapeCast3D for melee attack!" % entity.name)
 		return
-	
+
 	_melee_shapecast.force_shapecast_update()
 
 	if _melee_shapecast.is_colliding():
@@ -346,23 +352,25 @@ func _execute_melee_hitscan(attack_def: AttackDefinition) -> void:
 			final_damage = damage
 		if attack_def.shape_data:
 			final_damage *= attack_def.shape_data.damage_multiplier
-		
+		final_damage = _apply_difficulty(final_damage)
+
 		for i in range(hit_count):
 			var collider = _melee_shapecast.get_collider(i)
 			_handle_hit(collider, int(final_damage), attack_def.knockback_force)
 
-## Legacy fallback for entities without AttackDefinition
+## Legacy fallback for entities without an AttackDefinition
 func _execute_melee_legacy() -> void:
 	if not _melee_shapecast:
 		return
-	
+
 	_melee_shapecast.force_shapecast_update()
-	
+
 	if _melee_shapecast.is_colliding():
 		var hit_count = _melee_shapecast.get_collision_count()
+		var scaled_damage = _apply_difficulty(float(damage))
 		for i in range(hit_count):
 			var collider = _melee_shapecast.get_collider(i)
-			_handle_hit(collider, damage, knockback_force)
+			_handle_hit(collider, int(scaled_damage), knockback_force)
 
 # ============================================================
 # PROJECTILE
@@ -431,6 +439,7 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 	if damage > 0:
 		projectile_damage = damage
 	projectile_damage *= damage_multiplier
+	projectile_damage = _apply_difficulty(projectile_damage)
 
 	# Initialize projectile
 	if projectile.has_method("initialize"):
@@ -498,3 +507,10 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 		# 	kb_dir.y = 0  # Keep horizontal
 		# 	target_state.knockback_velocity = kb_dir * hit_knockback
 		# 	target_state.knockback_remaining_time = 0.25
+
+## Apply the team-size difficulty multiplier. Guards against zero/negative
+## values so a misconfigured spawn payload never zeroes out a mob's damage.
+func _apply_difficulty(amount: float) -> float:
+	if difficulty <= 0.0:
+		return amount
+	return amount * difficulty

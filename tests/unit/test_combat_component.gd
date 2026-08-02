@@ -40,3 +40,25 @@ func test_projectile_spawn_offset_without_socket_anchors_to_entity() -> void:
 	assert_almost_eq(spawn_position.x, expected.x, 0.0001)
 	assert_almost_eq(spawn_position.y, expected.y, 0.0001)
 	assert_almost_eq(spawn_position.z, expected.z, 0.0001)
+
+## Difficulty is a pure multiplicative pass-through so a misconfigured
+## spawn payload (zero/negative) can never zero out a mob's damage.
+func test_apply_difficulty_multiplies_amount() -> void:
+	_combat.difficulty = 1.4
+	assert_almost_eq(_combat._apply_difficulty(50.0), 70.0, 0.0001,
+		"+40% difficulty must scale 50 → 70")
+	assert_almost_eq(_combat._apply_difficulty(0.0), 0.0, 0.0001,
+		"Zero damage stays zero")
+
+func test_apply_difficulty_identity_at_one() -> void:
+	_combat.difficulty = 1.0
+	assert_almost_eq(_combat._apply_difficulty(123.0), 123.0, 0.0001,
+		"Default difficulty (1.0) is identity")
+
+func test_apply_difficulty_guards_against_zero_and_negative() -> void:
+	_combat.difficulty = 0.0
+	assert_almost_eq(_combat._apply_difficulty(80.0), 80.0, 0.0001,
+		"Zero difficulty falls back to identity (never zero the damage)")
+	_combat.difficulty = -1.5
+	assert_almost_eq(_combat._apply_difficulty(80.0), 80.0, 0.0001,
+		"Negative difficulty falls back to identity")

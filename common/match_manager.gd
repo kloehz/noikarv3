@@ -15,13 +15,26 @@ const MOBS_PER_STAGE: int = 10
 ## Radius around the team stage anchor where mobs scatter at spawn. Square-root
 ## sampling on the radial distance gives uniform area distribution so mobs
 ## don't cluster near the center.
-const STAGE_SCATTER_RADIUS: float = 10.0
+const STAGE_SCATTER_RADIUS: float = 20.0
 const BOSS_SCALE: float = 3.0
 const BOSS_HP_MULTIPLIER: float = 2.0
 
 ## Mob type per stage index (positions come from map markers MobStage1/2/3).
 const STAGE_TYPES: Array[String] = ["HECARIM_TANK", "IVERN_HEAL", "KOGMAW_DMG"]
 const BOSS_DEFINITION := { "type": "AATROX", "prefix": "BOSS_" }
+
+## Per-team-member mob scaling curve. With `n` players on the opposing team:
+##   n=1 → 1.0 (+0%)   — solo / training
+##   n=2 → 1.2 (+20%)
+##   n=3 → 1.4 (+40%)
+##   n=4 → 1.5 (+50%)
+##   n=5 → 1.6 (+60%)
+##   n=6 → 1.7 (+70%)  …
+## First two extra teammates each contribute +20%; additional teammates
+## contribute +10% each ("soft cap" curve so 5v5 doesn't melt squads).
+const MOB_DIFFICULTY_PER_EXTRA_FIRST: float = 0.2
+const MOB_DIFFICULTY_PER_EXTRA_AFTER: float = 0.1
+const MOB_DIFFICULTY_EXTRA_THRESHOLD: int = 3
 
 ## Lobby team-choice cooldown: after switching team, READY stays locked for this
 ## many ticks (server-side). Mirrored client-side as a 3s visual lock.
@@ -120,6 +133,23 @@ func _team_member_count(team: int) -> int:
 		if int(record.get("team", TeamId.NONE)) == team:
 			count += 1
 	return count
+
+## Difficulty multiplier applied to mob HP and damage based on how many
+## players are fighting that team. Returns 1.0 for NONE (boss / free-play
+## elites — boss has its own BOSS_HP_MULTIPLIER path) and for solo matches.
+## See MOB_DIFFICULTY_* constants above for the full curve.
+func _mob_difficulty_for_team(team: int) -> float:
+	if team != TeamId.RED and team != TeamId.BLUE:
+		return 1.0
+	var team_size: int = _team_member_count(team)
+	if team_size <= 1:
+		return 1.0
+	var diff: float = 1.0
+	var extra: int = team_size - 1
+	diff += MOB_DIFFICULTY_PER_EXTRA_FIRST * float(mini(extra, MOB_DIFFICULTY_EXTRA_THRESHOLD - 1))
+	if extra > MOB_DIFFICULTY_EXTRA_THRESHOLD - 1:
+		diff += MOB_DIFFICULTY_PER_EXTRA_AFTER * float(extra - (MOB_DIFFICULTY_EXTRA_THRESHOLD - 1))
+	return diff
 
 ## Returns true if the peer switched teams within the cooldown window. The
 ## peer is locked out of READY until the window expires (server-enforced).
@@ -347,7 +377,8 @@ func _on_boss_damaged(amount: int, source: Node, _boss: Node, server_state: Serv
 ## death; pass TeamId.NONE for free-play elites / bosses. Returns null when
 ## the scene cannot be instantiated.
 func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE) -> Node:
-	var spawn_data := _enemy_spawn_data(enemy_type, pos, prefix, actor_scale, spawn_grace_duration, team)
+	var difficulty: float = _mob_difficulty_for_team(team)
+	var spawn_data := _enemy_spawn_data(enemy_type, pos, prefix, actor_scale, spawn_grace_duration, team, difficulty)
 	var enemy: EnemyEntity
 	var mob_spawner := get_node_or_null("MobSpawner") as MultiplayerSpawner
 	if mob_spawner:
@@ -359,7 +390,8 @@ func _spawn_named_enemy(enemy_type: String, pos: Vector3, prefix: String, actor_
 		return null
 	_finalize_spawn_position(enemy, pos)
 	_register_spawn(enemy)
-	print("[MatchManager] %s (%s, team=%d) spawned at %s" % [enemy.name, enemy_type, team, pos])
+	_apply_mob_scaling(enemy, difficulty)
+	print("[MatchManager] %s (%s, team=%d) spawned at %s (difficulty=%.2f)" % [enemy.name, enemy_type, team, pos, difficulty])
 	return enemy
 
 ## MultiplayerSpawner calls this on every peer before it inserts the node into
@@ -374,15 +406,34 @@ func _spawn_enemy_from_spawn_data(spawn_data: Dictionary) -> Node:
 	var server_state: ServerState = enemy.get_node_or_null("ServerState") as ServerState
 	if server_state:
 		server_state.team_id = team_id
+	var combat: Node = enemy.get_node_or_null("CombatComponent")
+	if combat:
+		combat.difficulty = float(spawn_data.get("difficulty", 1.0))
 	return enemy
 
-func _enemy_spawn_data(enemy_type: String, global_pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE) -> Dictionary:
+## Server-side HP scaling for team-tagged mobs. Difficulty is replicated on
+## the CombatComponent via the spawn payload; HP is written into ServerState
+## here so the existing state synchronizer carries the new max_health to
+## every client without needing a new property. Free-play elites and the
+## boss skip this path (they keep their default stats + their own multipliers).
+func _apply_mob_scaling(enemy: Node, difficulty: float) -> void:
+	if not multiplayer.is_server(): return
+	if difficulty <= 1.0: return
+	if not is_instance_valid(enemy): return
+	var ss: ServerState = enemy.get_node_or_null("ServerState") as ServerState
+	if ss == null or ss.team_id == TeamId.NONE: return
+	var scaled_hp: int = int(round(float(enemy.max_health) * difficulty))
+	enemy.apply_stats(scaled_hp)
+	print("[MatchManager] %s scaled x%.2f (%d HP) for team %d" % [enemy.name, difficulty, scaled_hp, ss.team_id])
+
+func _enemy_spawn_data(enemy_type: String, global_pos: Vector3, prefix: String, actor_scale: float = 1.0, spawn_grace_duration: float = 0.0, team: int = TeamId.NONE, difficulty: float = 1.0) -> Dictionary:
 	return {
 		"name": _next_spawn_id(prefix),
 		"enemy_type": enemy_type,
 		"actor_scale": actor_scale,
 		"spawn_grace_duration": spawn_grace_duration,
 		"team_id": team,
+		"difficulty": difficulty,
 		"local_position": mobs_container.to_local(global_pos),
 	}
 
@@ -941,7 +992,7 @@ func _setup_elite_logic(elite: Node3D) -> void:
 	if not is_instance_valid(elite): return
 	
 	# Scale HP
-	var elite_hp = int(100 * elite_hp_multiplier)
+	var elite_hp = int(1000 * elite_hp_multiplier)
 	var health = elite.get_node_or_null("HealthComponent")
 	if health:
 		elite.max_health = elite_hp
@@ -1007,6 +1058,13 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	if server_state:
 		server_state.pet_type_sync = pet_type
 		server_state.power_level_sync = souls
+		if multiplayer.is_server():
+			if _lobby.has(owner_id):
+				server_state.team_id = int(_lobby[owner_id]["team"])
+			else:
+				var director := _get_match_director()
+				if director and director.has_method("get_team"):
+					server_state.team_id = director.get_team(owner_id)
 
 	totems_container.add_child(pet, true)
 	_finalize_spawn_position(pet, pos)
