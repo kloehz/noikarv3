@@ -1,10 +1,10 @@
 [gd_scene format=3 uid="uid://b8ukjib0taqrg"]
 
-[ext_resource type="Shader" uid="uid://ddaykxb1ucbsl" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="1_3ytvb"]
-[ext_resource type="Script" uid="uid://cmpof68vvmhk2" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_fm4iy"]
-[ext_resource type="Shader" uid="uid://dkenjalb0a7f6" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/streaks.gdshader" id="2_fm4iy"]
-[ext_resource type="Script" uid="uid://bwmucxp58uvvt" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="3_vj1h5"]
-[ext_resource type="Shader" uid="uid://bndvdknhjeps4" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/four_point_star.gdshader" id="5_3jdin"]
+[ext_resource type="Shader" uid="uid://dorhbm4gl5rag" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="1_3ytvb"]
+[ext_resource type="Script" uid="uid://bigrla2ej5x5q" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_fm4iy"]
+[ext_resource type="Shader" uid="uid://nhn2m21csnpg" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/streaks.gdshader" id="2_fm4iy"]
+[ext_resource type="Script" uid="uid://cam48ejdycj0y" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="3_vj1h5"]
+[ext_resource type="Shader" uid="uid://beyy0t1f4vvu7" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/four_point_star.gdshader" id="5_3jdin"]
 
 [sub_resource type="Animation" id="Animation_fm4iy"]
 length = 0.001

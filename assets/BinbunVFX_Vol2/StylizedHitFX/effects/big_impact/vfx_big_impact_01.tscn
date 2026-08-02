@@ -1,12 +1,12 @@
 [gd_scene format=3 uid="uid://dpntm33m1fs4l"]
 
-[ext_resource type="Script" uid="uid://cmpof68vvmhk2" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_2yumw"]
-[ext_resource type="Shader" uid="uid://8mnb5nsi3n2" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_sphere.gdshader" id="2_bskiu"]
-[ext_resource type="Shader" uid="uid://c3vn75lshe3xo" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_slash.gdshader" id="3_5wh8n"]
-[ext_resource type="Shader" uid="uid://bssccbrmdo0rm" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_core.gdshader" id="4_4awib"]
-[ext_resource type="Shader" uid="uid://ddaykxb1ucbsl" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="5_s5ly8"]
-[ext_resource type="Script" uid="uid://bwmucxp58uvvt" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="6_jdbgp"]
-[ext_resource type="Shader" uid="uid://n0hv5j1ofiye" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/flare.gdshader" id="7_bskiu"]
+[ext_resource type="Script" uid="uid://bigrla2ej5x5q" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_2yumw"]
+[ext_resource type="Shader" uid="uid://lyrxqwkw4y23" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_sphere.gdshader" id="2_bskiu"]
+[ext_resource type="Shader" uid="uid://cadmw6hvan7vp" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_slash.gdshader" id="3_5wh8n"]
+[ext_resource type="Shader" uid="uid://wsdul8bg00gv" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_core.gdshader" id="4_4awib"]
+[ext_resource type="Shader" uid="uid://dorhbm4gl5rag" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="5_s5ly8"]
+[ext_resource type="Script" uid="uid://cam48ejdycj0y" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="6_jdbgp"]
+[ext_resource type="Shader" uid="uid://bqjg161kvftdj" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/flare.gdshader" id="7_bskiu"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_15hw4"]
 noise_type = 2

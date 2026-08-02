@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://dp6fn641cy82u"]
 
-[ext_resource type="Script" uid="uid://cmpof68vvmhk2" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_q6427"]
-[ext_resource type="Shader" uid="uid://8mnb5nsi3n2" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_sphere.gdshader" id="2_luq7r"]
-[ext_resource type="Shader" uid="uid://c3vn75lshe3xo" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_slash.gdshader" id="3_fbxes"]
-[ext_resource type="Shader" uid="uid://bssccbrmdo0rm" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_core.gdshader" id="5_vj3r5"]
-[ext_resource type="Script" uid="uid://bwmucxp58uvvt" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="6_q6427"]
-[ext_resource type="Shader" uid="uid://ddaykxb1ucbsl" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="7_3ufwk"]
+[ext_resource type="Script" uid="uid://bigrla2ej5x5q" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/script/VFXImpactBB.gd" id="1_q6427"]
+[ext_resource type="Shader" uid="uid://lyrxqwkw4y23" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_sphere.gdshader" id="2_luq7r"]
+[ext_resource type="Shader" uid="uid://cadmw6hvan7vp" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_slash.gdshader" id="3_fbxes"]
+[ext_resource type="Shader" uid="uid://wsdul8bg00gv" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/impact_core.gdshader" id="5_vj3r5"]
+[ext_resource type="Script" uid="uid://cam48ejdycj0y" path="res://assets/BinbunVFX_Vol2/shared/script/VFXOmniLightBB.gd" id="6_q6427"]
+[ext_resource type="Shader" uid="uid://dorhbm4gl5rag" path="res://assets/BinbunVFX_Vol2/StylizedHitFX/shader/glow.gdshader" id="7_3ufwk"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_71ved"]
 noise_type = 2
