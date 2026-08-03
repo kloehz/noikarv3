@@ -448,7 +448,8 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 			attack_def.projectile_speed,
 			projectile_damage,
 			owner_id,
-			attack_def.knockback_force
+			attack_def.knockback_force,
+			entity
 		)
 
 	# Don't let the projectile collide with its own owner immediately. Both the

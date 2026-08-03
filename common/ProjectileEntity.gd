@@ -17,15 +17,17 @@ extends CharacterBody3D
 var _direction: Vector3 = Vector3.FORWARD
 var _lifetime_remaining: float = 3.0
 var _has_hit: bool = false
+var _owner_entity: Node = null
 
 ## Initialize the projectile after spawning.
 ## Called by CombatComponent on the server before adding to the tree.
-func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id: int, p_knockback: float = 8.0) -> void:
+func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id: int, p_knockback: float = 8.0, p_owner_entity: Node = null) -> void:
 	_direction = direction.normalized()
 	speed = p_speed
 	damage = p_damage
 	owner_entity_id = p_owner_id
 	knockback = p_knockback
+	_owner_entity = p_owner_entity
 	_lifetime_remaining = lifetime
 
 func _ready() -> void:
@@ -100,8 +102,10 @@ func _try_hit(collider: Node) -> bool:
 	if target.is_in_group(&"pets"):
 		return false
 
-	# Apply damage
-	hurtbox.receive_hit_data(int(damage), self)
+	# Damage attribution must use the shooter, not this temporary projectile.
+	# Threat tables are keyed by combat entities, so using `self` would leave
+	# mobs with a key they can never resolve to a player or pet target.
+	hurtbox.receive_hit_data(int(damage), _owner_entity)
 	
 	# Apply knockback via ServerState
 	if target.has_node("ServerState"):

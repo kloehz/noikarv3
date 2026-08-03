@@ -291,6 +291,20 @@ func test_threat_pulls_aggro_beyond_detection_range() -> void:
 	assert_eq(ai.target, far_player,
 		"1 threat from a 100m attacker pulls aggro past the detection_range leash")
 
+func test_projectile_damage_pulls_aggro_beyond_detection_range() -> void:
+	var far_player := await _spawn_player(2, Vector3(0, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 100))
+	var projectile_scene: PackedScene = load("res://scenes/ProjectileEntity.tscn")
+	var projectile: ProjectileEntity = projectile_scene.instantiate() as ProjectileEntity
+	_manager.get_node("Projectiles").add_child(projectile, true)
+	await get_tree().process_frame
+	projectile.initialize(Vector3.FORWARD, 20.0, 1.0, 2, 0.0, far_player)
+	assert_true(projectile._try_hit(mob), "Projectile damages the mob")
+	var ai := _ai(mob)
+	ai.tick(0.2)
+	assert_eq(ai.target, far_player,
+		"A projectile hit gives its distant shooter aggro, not the projectile node")
+
 func test_threat_holder_outranks_close_idle_attacker() -> void:
 	var close_player := await _spawn_player(2, Vector3(0, 0, 0))
 	var far_player := await _spawn_player(3, Vector3(0, 0, 0))
