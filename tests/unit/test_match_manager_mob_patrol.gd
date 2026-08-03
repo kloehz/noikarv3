@@ -166,3 +166,15 @@ func test_patrol_speed_factor_clamps_out_of_range() -> void:
 	ai._move_towards(Vector3(0, 0, -10), -0.3)
 	assert_eq(logic_node.input_axis, Vector2.ZERO,
 		"Negative speed_factor must clamp to zero, never move backwards")
+
+func test_mob_flanks_nearby_frontline_instead_of_stacking() -> void:
+	var rear_mob: Node = _manager._spawn_named_enemy("HECARIM_TANK", Vector3.ZERO, "MOB_", 1.0, 0.0, TeamId.RED)
+	_manager._spawn_named_enemy("HECARIM_TANK", Vector3(-0.6, 0, -1.2), "MOB_", 1.0, 0.0, TeamId.RED)
+	_manager._spawn_named_enemy("HECARIM_TANK", Vector3(0.6, 0, -1.2), "MOB_", 1.0, 0.0, TeamId.RED)
+	await get_tree().process_frame
+	var ai: Node = rear_mob.get_node("AIComponent")
+	var steering: Vector3 = ai._steer_around_nearby_mobs(Vector3.FORWARD)
+	assert_gt(absf(steering.x), 0.01,
+		"A mob blocked by a symmetric frontline must choose a lateral flank path")
+	assert_lt(steering.z, 0.0,
+		"Flanking must still make progress toward the target")

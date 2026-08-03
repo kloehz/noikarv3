@@ -30,6 +30,9 @@ enum State { IDLE, PATROL, CHASE, ATTACK, FOLLOW_OWNER }
 ## sprint when a target enters detection_range.
 @export var patrol_speed_factor: float = 0.4
 
+const MOB_AVOIDANCE_RADIUS: float = 2.4
+const MOB_AVOIDANCE_STRENGTH: float = 1.2
+
 var entity: BaseEntity
 var logic: Node
 
@@ -265,7 +268,8 @@ func _logic_follow() -> void:
 		_stop_inputs()
 
 func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
-	var dir = (pos - entity.global_position).normalized()
+	var dir := (pos - entity.global_position).normalized()
+	dir = _steer_around_nearby_mobs(dir)
 
 	# Point the character at the target
 	var target_yaw = atan2(-dir.x, -dir.z)
@@ -280,6 +284,40 @@ func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	# Vector2(0, -1) sprint.
 	logic.input_axis = Vector2(0, -1) * clampf(speed_factor, 0.0, 1.0)
 
+## Mobs retain physical collisions, so their steering must account for nearby
+## allies. A blocked mob gets a stable side preference and flanks the frontline
+## instead of continuously walking into it.
+func _steer_around_nearby_mobs(direction: Vector3) -> Vector3:
+	if not _is_mob or direction == Vector3.ZERO:
+		return direction
+
+	var separation := Vector3.ZERO
+	var blocker_weight := 0.0
+	for other in get_tree().get_nodes_in_group(&"mobs"):
+		if other == entity or not is_instance_valid(other) or other.get("sync_is_dead"):
+			continue
+		var other_entity := other as Node3D
+		if other_entity == null:
+			continue
+		var offset: Vector3 = other_entity.global_position - entity.global_position
+		offset.y = 0.0
+		var distance: float = offset.length()
+		if distance <= 0.001 or distance >= MOB_AVOIDANCE_RADIUS:
+			continue
+		var proximity: float = 1.0 - distance / MOB_AVOIDANCE_RADIUS
+		var other_direction: Vector3 = offset / distance
+		separation -= other_direction * proximity
+		if other_direction.dot(direction) > 0.4:
+			blocker_weight += proximity
+
+	if blocker_weight > 0.0:
+		var lateral := Vector3(-direction.z, 0.0, direction.x)
+		if (entity.name.hash() & 1) == 0:
+			lateral = -lateral
+		separation += lateral * blocker_weight
+
+	return (direction + separation * MOB_AVOIDANCE_STRENGTH).normalized()
+
 func _look_at_target(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()
 	var target_yaw = atan2(-dir.x, -dir.z)
@@ -291,17 +329,10 @@ func _stop_inputs() -> void:
 	logic.is_shooting = false
 
 func _find_nearest_target() -> void:
-	## Aggro / threat selection. Mobs are PASSIVE: they only aggro on
-	## a candidate that has written threat to their own table. A player
-	## that walks through a wave without hitting anything keeps the
-	## wave in PATROL/IDLE — only the mob that took damage picks a
-	## target. This matches the user's expected "I hit one mob, only
-	## that one chases me" behavior.
-	##
-	## Threat sources (sync_threat_table entry > 0) always outrank
-	## non-threat candidates and bypass detection_range, so a long-
-	## range attacker (e.g. 50m projectile) can't snipe a short-range
-	## mob (e.g. 15m detection) for free.
+	## Aggro / threat selection. Mobs acquire any hostile target within
+	## detection_range. Threat sources always outrank proximity targets
+	## and bypass detection_range, so a long-range attacker (e.g. a 50m
+	## projectile) cannot snipe a short-range mob for free.
 	##
 	## Tank pets naturally pull aggro because their damage writes 1.75x
 	## threat (see HurtboxComponent._threat_multiplier_for).
@@ -347,11 +378,14 @@ func _find_nearest_target() -> void:
 
 			var score: float
 			if _is_mob:
-				# Mobs are passive until THIS mob takes damage. Their threat
-				# source bypasses detection_range so ranged hits still pull.
-				if threat <= 0.0:
+				if threat > 0.0:
+					# A damaged mob keeps its aggro target even if another hostile
+					# walks closer. Distance only resolves equal-threat ties.
+					score = 1000000.0 + threat - d * 0.001
+				elif d <= detection_range:
+					score = -d
+				else:
 					continue
-				score = threat - d * 0.001
 			else:
 				# Pets do not own the mob's threat table. They acquire nearby
 				# mobs by sight, then damage them so the mob gains pet threat.

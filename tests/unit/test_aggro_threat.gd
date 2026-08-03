@@ -1,12 +1,10 @@
 extends GutTest
 
-## Contract coverage for the threat/aggro system. Threat is per-mob: each
-## mob keeps its own attacker -> threat table and reads from it when
-## picking a target. This means only the mobs that actually took damage
-## from a player aggro on that player — the rest of the wave keeps
-## doing whatever they were doing. Tank pets naturally pull aggro on
-## each mob they hit because their damage writes 1.75x + 0.05 per
-## power_level onto the mob's table.
+## Contract coverage for the threat/aggro system. Mobs aggro nearby hostile
+## targets, while their per-mob attacker -> threat table overrides proximity
+## so tanks can hold aggro. Tank pets naturally pull aggro on each mob they
+## hit because their damage writes 1.75x + 0.05 per power_level onto the
+## mob's table.
 
 const THREAT_DECAY_PER_SECOND: float = 5.0
 
@@ -158,14 +156,27 @@ func test_zero_entries_are_erased_from_table() -> void:
 	assert_eq(state.sync_threat_table.size(), 0,
 		"All zero entries are erased after decay brings them down")
 
-## THE BUG FIX: hitting one mob does NOT aggro the rest of the wave.
-## Each mob has its own table. Other mobs that weren't hit see no
-## threat on the attacker and don't switch to chase them.
-func test_hitting_one_mob_does_not_aggro_the_whole_wave() -> void:
+func test_nearby_player_aggros_and_is_attacked_without_dealing_damage() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
-	# Two mobs in the same area. Only the one we hit should aggro.
+	var mob := await _spawn_mob("AATROX", Vector3(1, 0, 0))
+	var ai := _ai(mob)
+	assert_lt(mob.global_position.distance_to(player.global_position), ai.attack_range,
+		"Player starts within the mob's attack range")
+	ai.tick(0.2)
+	assert_eq(ai.target, player, "Mob acquires a nearby player without threat")
+	assert_eq(ai.state, 2, "Mob starts chasing after proximity aggro")
+	ai.tick(0.2)
+	assert_eq(ai.state, 3, "Mob enters attack state at attack range")
+	ai.tick(0.2)
+	assert_true(mob.get_node("LogicComponent").is_shooting, "Mob fires while attacking")
+
+## Threat remains isolated per mob, even though nearby mobs now acquire
+## proximity aggro independently.
+func test_distant_bystander_does_not_acquire_unrelated_threat() -> void:
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	# Keep the bystander beyond sight so it cannot choose the player by proximity.
 	var hit_mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
-	var bystander_mob := await _spawn_mob("AATROX", Vector3(4, 0, 0))
+	var bystander_mob := await _spawn_mob("AATROX", Vector3(100, 0, 0))
 	await _damage(hit_mob, player, 50)
 	# Hit mob's table knows about the player; bystander mob's table does
 	# not — even though they're standing next to each other.
@@ -173,13 +184,13 @@ func test_hitting_one_mob_does_not_aggro_the_whole_wave() -> void:
 		"Hit mob has the attacker in its threat table")
 	assert_eq(_threat_of(bystander_mob, "2"), 0,
 		"Bystander mob has no entry for the attacker")
-	# _find_nearest_target runs on each mob independently.
+	# _find_nearest_target reads each mob's own threat table independently.
 	_ai(hit_mob)._find_nearest_target()
 	_ai(bystander_mob)._find_nearest_target()
 	assert_eq(_ai(hit_mob).target, player,
 		"Hit mob aggroes on the player")
 	assert_ne(_ai(bystander_mob).target, player,
-		"Bystander mob does NOT aggro on the player")
+		"Distant bystander has no aggro target without proximity or threat")
 
 func test_damage_acquires_mob_target_on_regular_ai_tick() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
