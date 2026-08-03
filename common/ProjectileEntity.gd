@@ -82,25 +82,24 @@ func _try_hit(collider: Node) -> bool:
 		hurtbox = collider
 	elif collider.has_node("HurtboxComponent"):
 		hurtbox = collider.get_node("HurtboxComponent")
-	
+
 	if not hurtbox:
 		# Hit a wall or non-damageable object — still stop
 		return true
-	
+
 	var target = hurtbox.get_parent()
-	
+
 	# Don't hit the owner
 	if str(owner_entity_id) == target.name:
 		return false
-	
-	# Don't hit owner's pets
-	if target.is_in_group(&"pets") and target.get("owner_id") == owner_entity_id:
+
+	# Never hit any pet, regardless of owner. Pets are cross-team
+	# completely invisible to each other so melee and projectile damage
+	# stay inside the same team vs the opposing team. The projectile
+	# just phases through friendly pets and keeps traveling.
+	if target.is_in_group(&"pets"):
 		return false
-	
-	# Don't hit friendly pets (if projectile is from a pet)
-	# The owner_entity_id for pet projectiles is the pet's owner (player)
-	# so the check above covers this case.
-	
+
 	# Apply damage
 	hurtbox.receive_hit_data(int(damage), self)
 	

@@ -307,6 +307,10 @@ func _apply_stun_to(target: Node, duration: float) -> void:
 func _apply_aoe_stun(pos: Vector3, radius: float, duration: float) -> void:
 	for child in _get_spawned_entities():
 		if child.global_position.distance_to(pos) <= radius:
+			# Pets are never stunned by other pets' AoE stuns. Same
+			# cross-team invisibility as melee / projectile damage.
+			if child.is_in_group(&"pets"):
+				continue
 			var is_friendly = child.name == str(owner_id) or (child.get("owner_id") == owner_id)
 			if not is_friendly:
 				_apply_stun_to(child, duration)
@@ -314,8 +318,13 @@ func _apply_aoe_stun(pos: Vector3, radius: float, duration: float) -> void:
 func _apply_aoe_taunt(pos: Vector3, radius: float) -> void:
 	for child in _get_spawned_entities():
 		if child.global_position.distance_to(pos) <= radius:
+			# Skip self (no self-taunt) and skip any pet. Pets' AI only
+			# chases mobs; redirecting an enemy pet at us would just make
+			# pets fight each other off-screen of the player's intent.
+			if child == self or child.is_in_group(&"pets"):
+				continue
 			var ai = child.get_node_or_null("AIComponent")
-			if ai and child != self:
+			if ai:
 				ai.target = self
 				ai.state = 1 # State.CHASE
 				# Force a flat threat spike so the AI keeps targeting the
