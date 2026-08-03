@@ -179,6 +179,7 @@ func _pick_patrol_point() -> Vector3:
 	return _patrol_center + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 
 func _logic_chase() -> void:
+	_refresh_threat_target()
 	if not is_instance_valid(target) or target.get("sync_is_dead"):
 		target = null
 		# Pets go back to following owner, mobs to idle
@@ -208,6 +209,7 @@ func _logic_chase() -> void:
 	_move_towards(target.global_position)
 
 func _logic_attack() -> void:
+	_refresh_threat_target()
 	if not is_instance_valid(target) or target.get("sync_is_dead"):
 		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
@@ -222,6 +224,15 @@ func _logic_attack() -> void:
 	_look_at_target(target.global_position)
 	logic.input_axis = Vector2.ZERO
 	logic.is_shooting = true
+
+## Re-evaluate active combat targets too. Restricting this to IDLE/PATROL
+## meant a mob kept its first victim forever, even when a pet earned more
+## threat by continuing to damage it.
+func _refresh_threat_target() -> void:
+	if _target_search_timer > 0:
+		return
+	_find_nearest_target()
+	_target_search_timer = _target_search_interval
 
 func _logic_follow() -> void:
 	if not is_instance_valid(owner_node):
@@ -334,22 +345,19 @@ func _find_nearest_target() -> void:
 			# see 0 threat and stay passive.
 			var threat: float = _threat_of_potential_on_self(potential)
 
-			# === PASSIVE MOB RULE ===
-			# Without an entry in our threat table, we do NOT pick this
-			# candidate. This is the "only the hit mob aggros" rule:
-			# a player walking past a wave of mobs without attacking
-			# never causes the wave to aggro. A long-range attacker who
-			# is outside detection_range can only pull aggro if they
-			# have actually written threat (which the damage path
-			# already did before this point).
-			if threat <= 0.0:
-				continue
-
-			# Threat source: score = threat minus a tiny distance
-			# tiebreaker. Distance only matters when multiple threat
-			# sources are competing; a far threat source still outranks
-			# any non-threat candidate (which we already filtered above).
-			var score: float = threat - d * 0.001
+			var score: float
+			if _is_mob:
+				# Mobs are passive until THIS mob takes damage. Their threat
+				# source bypasses detection_range so ranged hits still pull.
+				if threat <= 0.0:
+					continue
+				score = threat - d * 0.001
+			else:
+				# Pets do not own the mob's threat table. They acquire nearby
+				# mobs by sight, then damage them so the mob gains pet threat.
+				if d > detection_range:
+					continue
+				score = -d
 			if score > best_score:
 				best_score = score
 				new_target = potential

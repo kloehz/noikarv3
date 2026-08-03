@@ -210,7 +210,10 @@ case "$cmd" in
 		pattern="${1:-.}"
 		echo "Running GUT tests matching: $pattern"
 		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
-			-s addons/gut/gut_cmdln.gd -gselect="$pattern" -gexit
+			-s addons/gut/gut_cmdln.gd \
+			-gdir=res://tests/unit,res://tests/integration \
+			-ginclude_subdirs \
+			-gselect="$pattern" -gexit
 		;;
 	*)
 		echo "Unknown command: $cmd"

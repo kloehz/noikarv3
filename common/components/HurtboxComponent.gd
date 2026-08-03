@@ -56,8 +56,7 @@ func _apply_threat(damage_amount: int, source: Node) -> void:
 	if mult <= 0.0:
 		return
 	var attacker_name: String = str(source.name)
-	var current: int = int(victim_state.sync_threat_table.get(attacker_name, 0))
-	victim_state.sync_threat_table[attacker_name] = current + int(damage_amount * mult)
+	victim_state.add_threat(attacker_name, int(damage_amount * mult))
 
 ## Returns the threat multiplier the attacker contributes to the aggro
 ## total. Players, projectiles and non-tank pets are 1.0. Tank pets

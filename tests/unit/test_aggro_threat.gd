@@ -181,6 +181,27 @@ func test_hitting_one_mob_does_not_aggro_the_whole_wave() -> void:
 	assert_ne(_ai(bystander_mob).target, player,
 		"Bystander mob does NOT aggro on the player")
 
+func test_damage_acquires_mob_target_on_regular_ai_tick() -> void:
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
+	await _damage(mob, player, 1)
+	var ai := _ai(mob)
+	ai.tick(0.2)
+	assert_eq(ai.target, player,
+		"A damaged mob acquires its attacker during the normal AI tick")
+	assert_eq(ai.state, 2, "A damaged mob transitions from idle to chase")
+
+func test_pet_acquires_mob_target_on_regular_ai_tick() -> void:
+	var owner := await _spawn_player(2, Vector3(0, 0, 0))
+	var pet := await _spawn_tank_pet(2, owner, Vector3(2, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(4, 0, 0))
+	await _damage(mob, pet, 1)
+	var pet_ai := _ai(pet)
+	pet_ai.tick(0.2)
+	assert_eq(pet_ai.target, mob,
+		"A pet that damages a mob keeps it as its regular AI target")
+	assert_eq(pet_ai.state, 2, "A pet with a mob target transitions to chase")
+
 func test_mob_targets_highest_threat_attacker() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var owner := await _spawn_player(3, Vector3(-5, 0, 0))
@@ -211,6 +232,23 @@ func test_tank_pulls_aggro_after_player_stops_hitting() -> void:
 	_ai(mob)._find_nearest_target()
 	assert_eq(_ai(mob).target, tank,
 		"Tank pet pulls aggro after writing enough threat to outrank the player")
+
+func test_active_mob_retargets_when_an_attacker_overtakes_threat() -> void:
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	var owner := await _spawn_player(3, Vector3(-5, 0, 0))
+	var tank := await _spawn_tank_pet(3, owner, Vector3(-5, 0, 0), 0)
+	var mob := await _spawn_mob("AATROX", Vector3(2, 0, 0))
+	var ai := _ai(mob)
+	await _damage(mob, player, 50)
+	ai._find_nearest_target()
+	assert_eq(ai.target, player, "Mob initially targets the player")
+	for _i in 10:
+		await _damage(mob, tank, 10)
+	ai.state = 2 # AIComponent.State.CHASE
+	ai._target_search_timer = 0.0
+	ai._logic_chase()
+	assert_eq(ai.target, tank,
+		"A mob already chasing a player switches once the tank overtakes threat")
 
 func test_taunt_aoe_writes_flat_threat_spike_per_mob() -> void:
 	var owner := await _spawn_player(3, Vector3(-5, 0, 0))

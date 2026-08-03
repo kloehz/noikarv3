@@ -314,8 +314,7 @@ func _process(delta: float) -> void:
 		return
 	if server_state == null:
 		return
-	var table: Dictionary = server_state.sync_threat_table
-	if table.is_empty():
+	if server_state.sync_threat_table.is_empty():
 		# Reset accumulator so a fresh threat spike starts from a clean
 		# fractional carry-over; otherwise the partial tick left over
 		# from the previous burst would apply to the next hit's decay.
@@ -326,13 +325,7 @@ func _process(delta: float) -> void:
 	if decay <= 0:
 		return
 	_threat_decay_accumulator -= float(decay)
-	for attacker_name in table.keys():
-		var current: int = int(table[attacker_name])
-		var next: int = max(0, current - decay)
-		if next == 0:
-			table.erase(attacker_name)
-		else:
-			table[attacker_name] = next
+	server_state.decay_threat(decay)
 
 func _is_server_authority() -> bool:
 	return multiplayer == null or multiplayer.is_server()

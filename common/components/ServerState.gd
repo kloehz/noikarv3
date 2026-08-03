@@ -98,6 +98,27 @@ signal threat_changed(new_table: Dictionary)
 		sync_threat_table = incoming
 		threat_changed.emit(sync_threat_table)
 
+## Threat tables must be reassigned, rather than mutated in place, so the
+## StateSynchronizer observes every server-side update.
+func add_threat(attacker_name: String, amount: int) -> void:
+	if attacker_name.is_empty() or amount <= 0:
+		return
+	var table: Dictionary = sync_threat_table.duplicate(true)
+	table[attacker_name] = int(table.get(attacker_name, 0)) + amount
+	sync_threat_table = table
+
+func decay_threat(amount: int) -> void:
+	if amount <= 0 or sync_threat_table.is_empty():
+		return
+	var table: Dictionary = sync_threat_table.duplicate(true)
+	for attacker_name in table.keys():
+		var remaining: int = max(0, int(table[attacker_name]) - amount)
+		if remaining == 0:
+			table.erase(attacker_name)
+		else:
+			table[attacker_name] = remaining
+	sync_threat_table = table
+
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
 

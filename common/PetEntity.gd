@@ -334,7 +334,5 @@ func _apply_aoe_taunt(pos: Vector3, radius: float) -> void:
 				# mob's ServerState keyed by our own entity name.
 				if child.has_node("ServerState"):
 					var mob_state: Node = child.get_node("ServerState")
-					var table: Dictionary = mob_state.sync_threat_table
 					var key: String = str(self.name)
-					var current: int = int(table.get(key, 0))
-					table[key] = current + TAUNT_THREAT_SPIKE
+					mob_state.add_threat(key, TAUNT_THREAT_SPIKE)
