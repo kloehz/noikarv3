@@ -296,6 +296,13 @@ func _update_visuals() -> void:
 ## rapid hits keep the mob locked on while the player is active.
 const THREAT_DECAY_PER_SECOND: float = 5.0
 
+## Per-entity fractional decay accumulator. Needed because _process at
+## 60 Hz passes delta ≈ 0.016; `int(5.0 * 0.016)` is 0 and the per-frame
+## truncation would zero the decay forever. Carrying the fraction over
+## frames gives the correct long-run rate (5.0 / sec) without losing
+## the partial-second remainder.
+var _threat_decay_accumulator: float = 0.0
+
 ## Server-only aggro decay. Runs every visual frame; the cost is a
 ## single clamped integer comparison and only fires when threat > 0,
 ## so the steady-state cost on idle entities is zero. Clients receive
@@ -307,10 +314,16 @@ func _process(delta: float) -> void:
 	if server_state == null:
 		return
 	if int(server_state.sync_threat) <= 0:
+		# Reset accumulator so a fresh threat spike starts from a clean
+		# fractional carry-over; otherwise the partial tick left over
+		# from the previous threat would apply to the next hit's decay.
+		_threat_decay_accumulator = 0.0
 		return
-	var decay: int = int(THREAT_DECAY_PER_SECOND * delta)
+	_threat_decay_accumulator += THREAT_DECAY_PER_SECOND * delta
+	var decay: int = int(_threat_decay_accumulator)
 	if decay <= 0:
 		return
+	_threat_decay_accumulator -= float(decay)
 	server_state.sync_threat = int(server_state.sync_threat) - decay
 
 func _is_server_authority() -> bool:

@@ -125,6 +125,20 @@ func test_threat_decays_linearly_on_server() -> void:
 	assert_almost_eq(int(player.get_node("ServerState").sync_threat), 95, 0.001,
 		"One full second of decay removes ~5 threat (5/sec rate)")
 
+func test_threat_decays_at_real_framerate() -> void:
+	## At 60Hz each frame passes delta ≈ 0.016. The accumulator carries
+	## the partial decay forward; over a full second of 60Hz ticks it
+	## still adds up to the configured 5.0/sec rate even though the
+	## per-frame int truncation is zero.
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	player.get_node("ServerState").sync_threat = 100
+	# 60 ticks of 1/60 second each, matching what _process sees at 60Hz.
+	for _i in 60:
+		player._process(1.0 / 60.0)
+	# 60 * 5/60 = 5 threat total, give or take the last carry.
+	assert_almost_eq(int(player.get_node("ServerState").sync_threat), 95, 1.0,
+		"60Hz decay path sums to ~5 threat over a wall-clock second")
+
 func test_threat_does_not_go_negative() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	player.get_node("ServerState").sync_threat = 3
