@@ -1,11 +1,12 @@
 extends GutTest
 
-## Contract coverage for the threat/aggro system. The mob AI now picks
-## its target by (sync_threat - distance), so a player who hits first
-## holds aggro until their threat decays and a tank pet that hits more
-## (or with a multiplier) naturally pulls it back. Threat is written
-## by HurtboxComponent on every damage event and decays linearly on
-## the server every frame.
+## Contract coverage for the threat/aggro system. Threat is per-mob: each
+## mob keeps its own attacker -> threat table and reads from it when
+## picking a target. This means only the mobs that actually took damage
+## from a player aggro on that player — the rest of the wave keeps
+## doing whatever they were doing. Tank pets naturally pull aggro on
+## each mob they hit because their damage writes 1.75x + 0.05 per
+## power_level onto the mob's table.
 
 const THREAT_DECAY_PER_SECOND: float = 5.0
 
@@ -15,7 +16,7 @@ var _director: MatchDirector
 func before_each() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_manager = load("res://common/match_manager.gd").new()
-	for container_name in ["Players", "Mobs", "Souls", "Totems"]:
+	for container_name in ["Players", "Mobs", "Souls", "Totems", "Projectiles"]:
 		var container := Node3D.new()
 		container.name = container_name
 		_manager.add_child(container)
@@ -48,7 +49,7 @@ func _spawn_mob(enemy_type: String, pos: Vector3, team: int = TeamId.RED) -> Nod
 	await get_tree().process_frame
 	return mob
 
-func _spawn_tank_pet(owner_id: int, owner_node: Node, pos: Vector3, power_level: int = 1) -> BaseEntity:
+func _spawn_tank_pet(owner_id: int, owner_node: Node, pos: Vector3, power_level: int = 0) -> Node:
 	var scene: PackedScene = load("res://scenes/PetEntity.tscn")
 	var pet: BaseEntity = scene.instantiate() as BaseEntity
 	pet.name = "PET_%d" % owner_id
@@ -69,17 +70,21 @@ func _damage(mob: Node, source: Node, amount: int) -> void:
 func _ai(mob: Node) -> Node:
 	return mob.get_node("AIComponent")
 
-func test_player_damage_writes_threat_to_attacker() -> void:
+func _threat_of(mob: Node, attacker_name: String) -> int:
+	return int(mob.get_node("ServerState").sync_threat_table.get(attacker_name, 0))
+
+## Sanity: damage is written to the VICTIM's table, not the attacker's.
+func test_damage_writes_threat_to_victim_table() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
-	assert_eq(int(player.get_node("ServerState").sync_threat), 0,
-		"Player starts with zero threat")
 	await _damage(mob, player, 50)
-	assert_eq(int(player.get_node("ServerState").sync_threat), 50,
-		"A 50-damage hit writes 50 threat to the attacker's ServerState")
+	assert_eq(_threat_of(mob, "2"), 50,
+		"Mob's table has 50 threat under attacker name '2'")
+	# Attacker's own table stays empty (threat lives on the victim now).
+	assert_eq(int(player.get_node("ServerState").sync_threat_table.size()), 0,
+		"Attacker's own threat table stays empty — threat is per-victim")
 
-func test_non_tank_pets_write_threat_at_one_x() -> void:
-	## Damage from a non-tank pet (or any non-TANK source) uses 1.0x.
+func test_non_tank_pet_writes_one_x_threat() -> void:
 	var owner := await _spawn_player(2, Vector3(0, 0, 0))
 	var scene: PackedScene = load("res://scenes/PetEntity.tscn")
 	var pet: BaseEntity = scene.instantiate() as BaseEntity
@@ -91,60 +96,90 @@ func test_non_tank_pets_write_threat_at_one_x() -> void:
 	await get_tree().process_frame
 	var mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
 	await _damage(mob, pet, 20)
-	assert_eq(int(pet.get_node("ServerState").sync_threat), 20,
-		"ATTACK pet damage writes 1.0x threat to itself")
+	assert_eq(_threat_of(mob, "PET_2"), 20,
+		"ATTACK pet damage writes 1.0x threat to the mob's table")
 
-func test_tank_pet_writes_threat_at_base_multiplier() -> void:
+func test_tank_pet_writes_base_multiplier_threat() -> void:
 	var owner := await _spawn_player(2, Vector3(0, 0, 0))
 	var pet := await _spawn_tank_pet(2, owner, Vector3(2, 0, 0), 0)
 	var mob := await _spawn_mob("AATROX", Vector3(5, 0, 0))
 	await _damage(mob, pet, 10)
 	# TANK base multiplier is 1.75; level-0 has no bonus.
-	assert_eq(int(pet.get_node("ServerState").sync_threat), int(10 * 1.75),
-		"TANK pet at level 0 writes 1.75x threat per damage")
+	assert_eq(_threat_of(mob, "PET_2"), int(10 * 1.75),
+		"TANK pet at level 0 writes 1.75x threat to the mob's table")
 
 func test_higher_level_tank_writes_more_threat_per_damage() -> void:
 	var owner := await _spawn_player(2, Vector3(0, 0, 0))
 	var pet_l1 := await _spawn_tank_pet(2, owner, Vector3(2, 0, 0), 1)
 	var mob := await _spawn_mob("AATROX", Vector3(5, 0, 0))
 	await _damage(mob, pet_l1, 10)
-	var t_l1: int = int(pet_l1.get_node("ServerState").sync_threat)
 	# Per-level bonus is +0.05, so level-1 -> 1.80 multiplier.
-	assert_eq(t_l1, int(10 * 1.80),
+	assert_eq(_threat_of(mob, "PET_2"), int(10 * 1.80),
 		"TANK pet at level 1 writes 1.80x threat (1.75 base + 0.05 per level)")
 
 func test_threat_decays_linearly_on_server() -> void:
+	# Per-mob threat lives on a Dictionary. We poke a single entry
+	# directly to bypass the server-only writer; the decay path
+	# doesn't care about the source, only the table entries.
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
-	player.get_node("ServerState").sync_threat = 100
+	var state := player.get_node("ServerState")
+	state.sync_threat_table["2"] = 100
 	await get_tree().process_frame
-	assert_eq(int(player.get_node("ServerState").sync_threat), 100,
+	assert_eq(int(state.sync_threat_table.get("2", 0)), 100,
 		"Threat untouched on first frame at 60Hz")
-	# Manually pump the decay like _process would, since Gut doesn't
-	# wait a wall-clock second reliably inside a test.
 	player._process(1.0)
-	assert_almost_eq(int(player.get_node("ServerState").sync_threat), 95, 0.001,
+	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 0.001,
 		"One full second of decay removes ~5 threat (5/sec rate)")
 
 func test_threat_decays_at_real_framerate() -> void:
-	## At 60Hz each frame passes delta ≈ 0.016. The accumulator carries
-	## the partial decay forward; over a full second of 60Hz ticks it
-	## still adds up to the configured 5.0/sec rate even though the
-	## per-frame int truncation is zero.
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
-	player.get_node("ServerState").sync_threat = 100
-	# 60 ticks of 1/60 second each, matching what _process sees at 60Hz.
+	var state := player.get_node("ServerState")
+	state.sync_threat_table["2"] = 100
 	for _i in 60:
 		player._process(1.0 / 60.0)
-	# 60 * 5/60 = 5 threat total, give or take the last carry.
-	assert_almost_eq(int(player.get_node("ServerState").sync_threat), 95, 1.0,
+	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 1.0,
 		"60Hz decay path sums to ~5 threat over a wall-clock second")
 
 func test_threat_does_not_go_negative() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
-	player.get_node("ServerState").sync_threat = 3
+	var state := player.get_node("ServerState")
+	state.sync_threat_table["2"] = 3
 	player._process(10.0)
-	assert_eq(int(player.get_node("ServerState").sync_threat), 0,
+	assert_eq(int(state.sync_threat_table.get("2", 0)), 0,
 		"Decay clamps at 0, never negative")
+
+func test_zero_entries_are_erased_from_table() -> void:
+	# Prevents the table from growing unbounded over a long match.
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	var state := player.get_node("ServerState")
+	state.sync_threat_table["2"] = 3
+	state.sync_threat_table["5"] = 10
+	player._process(10.0)
+	assert_eq(state.sync_threat_table.size(), 0,
+		"All zero entries are erased after decay brings them down")
+
+## THE BUG FIX: hitting one mob does NOT aggro the rest of the wave.
+## Each mob has its own table. Other mobs that weren't hit see no
+## threat on the attacker and don't switch to chase them.
+func test_hitting_one_mob_does_not_aggro_the_whole_wave() -> void:
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	# Two mobs in the same area. Only the one we hit should aggro.
+	var hit_mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
+	var bystander_mob := await _spawn_mob("AATROX", Vector3(4, 0, 0))
+	await _damage(hit_mob, player, 50)
+	# Hit mob's table knows about the player; bystander mob's table does
+	# not — even though they're standing next to each other.
+	assert_eq(_threat_of(hit_mob, "2"), 50,
+		"Hit mob has the attacker in its threat table")
+	assert_eq(_threat_of(bystander_mob, "2"), 0,
+		"Bystander mob has no entry for the attacker")
+	# _find_nearest_target runs on each mob independently.
+	_ai(hit_mob)._find_nearest_target()
+	_ai(bystander_mob)._find_nearest_target()
+	assert_eq(_ai(hit_mob).target, player,
+		"Hit mob aggroes on the player")
+	assert_ne(_ai(bystander_mob).target, player,
+		"Bystander mob does NOT aggro on the player")
 
 func test_mob_targets_highest_threat_attacker() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
@@ -171,30 +206,26 @@ func test_tank_pulls_aggro_after_player_stops_hitting() -> void:
 	var mob := await _spawn_mob("AATROX", Vector3(2, 0, 0))
 	await _damage(mob, player, 50)
 	await _damage(mob, tank, 10)
-	# Wait long enough for player threat to decay below tank threat.
-	# Player starts at 50, tank at 17.5. Tank + 10*1.75 = 35 dmg * (1.75 mult) = ?
-	# Actually each of these is 17.5. Let me just spam tank hits.
 	for _i in 10:
 		await _damage(mob, tank, 10)
-	# tank threat ~ 10 * 10 * 1.75 = 175 (modulo decay, but instant)
-	# player threat = 50, decaying.
 	_ai(mob)._find_nearest_target()
 	assert_eq(_ai(mob).target, tank,
 		"Tank pet pulls aggro after writing enough threat to outrank the player")
 
-func test_taunt_aoe_writes_flat_threat_spike() -> void:
+func test_taunt_aoe_writes_flat_threat_spike_per_mob() -> void:
 	var owner := await _spawn_player(3, Vector3(-5, 0, 0))
 	var tank := await _spawn_tank_pet(3, owner, Vector3(-5, 0, 0), 0)
-	# Add a mob in range so _apply_aoe_taunt has a target to spike against.
-	var mob := await _spawn_mob("AATROX", Vector3(-4, 0, 0))
-	var before: int = int(tank.get_node("ServerState").sync_threat)
+	# Two mobs in the taunt radius. Both should get the spike.
+	var mob_a := await _spawn_mob("AATROX", Vector3(-4, 0, 0))
+	var mob_b := await _spawn_mob("AATROX", Vector3(-3, 0, 0))
 	tank._apply_aoe_taunt(tank.global_position, 8.0)
-	var after: int = int(tank.get_node("ServerState").sync_threat)
-	assert_eq(after - before, 200,
-		"Taunt AoE writes a flat 200-threat spike on the tank so aggro locks")
+	await get_tree().process_frame
+	assert_eq(_threat_of(mob_a, "PET_3"), 200,
+		"First mob's table got the +200 taunt spike under the tank's name")
+	assert_eq(_threat_of(mob_b, "PET_3"), 200,
+		"Second mob's table got the same +200 taunt spike")
 
 func test_ai_score_is_threat_minus_distance() -> void:
-	## Sanity-check the score formula at the boundary.
 	# mob at z=10; close_player at z=8 (distance 2), far_player at z=2 (distance 8).
 	var close_player := await _spawn_player(2, Vector3(0, 0, 8))
 	var far_player := await _spawn_player(3, Vector3(0, 0, 2))
@@ -207,60 +238,55 @@ func test_ai_score_is_threat_minus_distance() -> void:
 		"Equal-threat targets fall to the closer one (distance tiebreaker)")
 
 func test_threat_pulls_aggro_beyond_detection_range() -> void:
-	## Regression: a long-range attacker used to be ignored by mobs because
-	## they sit outside detection_range. With a small threat spike the
-	## mob must still aggro on the far player — otherwise ranged classes
-	## snipe short-range mobs for free.
+	# A long-range attacker used to be ignored because they sat outside
+	# detection_range. With a small threat spike the mob must still
+	# aggro on the far player — otherwise ranged classes snipe
+	# short-range mobs for free.
 	var far_player := await _spawn_player(2, Vector3(0, 0, 0))
-	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 100))  # 100m apart
-	# Mob's detection_range is 10m (EnemyEntity.tscn default) so the
-	# far player is well outside the natural aggro leash.
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 100))
 	var ai := _ai(mob)
 	assert_gt(ai.detection_range, 0)
 	assert_gt(mob.global_position.distance_to(far_player.global_position), ai.detection_range,
 		"Player sits outside the mob's detection_range (test setup)")
-	# Even 1 damage of threat must pull aggro across the whole map.
 	await _damage(mob, far_player, 1)
 	_ai(mob)._find_nearest_target()
 	assert_eq(ai.target, far_player,
 		"1 threat from a 100m attacker pulls aggro past the detection_range leash")
 
 func test_threat_holder_outranks_close_idle_attacker() -> void:
-	## A far threat source (1 threat at 100m) must outrank a close
-	## idle player (0 threat at 2m). Without the threat bypass, the
-	## close idle player would win on distance alone and the long-range
-	## attacker would never be engaged.
 	var close_player := await _spawn_player(2, Vector3(0, 0, 0))
 	var far_player := await _spawn_player(3, Vector3(0, 0, 0))
-	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 2))  # 2m from close_player
-	# 100m from far_player.
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 2))
 	far_player.global_position = Vector3(0, 0, 100)
 	await get_tree().process_frame
 	await _damage(mob, far_player, 1)
-	# close_player has 0 threat. far_player has 1 threat. far_player wins
-	# despite being 100m away.
 	_ai(mob)._find_nearest_target()
 	assert_eq(_ai(mob).target, far_player,
 		"Threat holder outranks close idle attacker regardless of distance")
 
 func test_threat_zero_drops_target_even_when_far() -> void:
-	## A target that was held by threat decays out of the leash once
-	## its threat hits 0. Verifies the inverse of the pull-beyond-leash
-	## rule: the mob chases the threat source, but only as long as the
-	## threat is real.
 	var far_player := await _spawn_player(2, Vector3(0, 0, 0))
 	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 50))
 	far_player.global_position = Vector3(0, 0, 200)
 	await get_tree().process_frame
-	# Write threat, then verify the mob picks far_player.
 	await _damage(mob, far_player, 5)
 	_ai(mob)._find_nearest_target()
 	assert_eq(_ai(mob).target, far_player,
 		"Mob pulls aggro on far threat source")
 	# Now zero the threat (simulating full decay) and re-search.
-	far_player.get_node("ServerState").sync_threat = 0
+	mob.get_node("ServerState").sync_threat_table.erase("2")
 	_ai(mob)._find_nearest_target()
-	# With 0 threat, the far player is beyond detection_range and no
-	# longer a valid candidate. The mob should drop the target.
 	assert_null(_ai(mob).target,
 		"Threat = 0 + beyond leash = no target, mob waits for a closer attacker")
+
+## Per-mob defense: the bystander mob's table is unaffected by damage
+## the player deals to a DIFFERENT mob, even at the same time. Defends
+## against the "whole wave aggros" regression we just fixed.
+func test_damage_to_one_mob_does_not_leak_into_another_mobs_table() -> void:
+	var player := await _spawn_player(2, Vector3(0, 0, 0))
+	var hit_mob := await _spawn_mob("AATROX", Vector3(2, 0, 0))
+	var other_mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
+	await _damage(hit_mob, player, 30)
+	assert_eq(_threat_of(hit_mob, "2"), 30)
+	assert_eq(_threat_of(other_mob, "2"), 0,
+		"The other mob's table is untouched by damage dealt to its neighbour")

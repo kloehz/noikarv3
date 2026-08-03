@@ -12,9 +12,10 @@ signal pet_data_received(type: String, level: int)
 signal heal_received(amount: int)
 signal damage_received(amount: int, source: Node)
 signal boss_damage_changed(red_damage: int, blue_damage: int)
-## Emitted whenever sync_threat changes on the server. Used by debug HUDs;
-## the aggro decision itself is read directly from sync_threat by mob AI.
-signal threat_changed(new_threat: int)
+## Emitted whenever sync_threat_table changes on the server. Used by
+## debug HUDs; the aggro decision itself is read directly from
+## sync_threat_table by mob AI.
+signal threat_changed(new_table: Dictionary)
 
 @export var max_health: int = 100:
 	set(v):
@@ -78,18 +79,24 @@ signal threat_changed(new_threat: int)
 		blue_damage_taken = v
 		boss_damage_changed.emit(red_damage_taken, blue_damage_taken)
 
-## Server-aggregated aggro / threat value. Each successful damage event
-## on this entity's hurtbox increments it by damage * multiplier (see
-## HurtboxComponent._threat_multiplier_for). Decays linearly on the
-## server every frame so old aggro fades if the attacker stops hitting.
-## Replicated to every peer so the AIComponent on the mob can read the
-## current value when picking its target.
-@export var sync_threat: int = 0:
+## Per-attacker threat table owned by THIS entity. The mob's
+## AIComponent reads its OWN table to pick the highest-threat
+## attacker — so only the mobs that actually took damage from a
+## player will aggro on that player. Without this split, the
+## attacker's threat would be visible to every mob in the wave
+## and the entire spawn would chase the same target.
+##
+## Keyed by the attacker's entity name (string). Value is threat
+## points, which combine the raw damage and the attacker's
+## per-class multiplier (see HurtboxComponent._threat_multiplier_for).
+## Decays linearly on the server every frame; entries that hit 0
+## are erased so the table doesn't grow unbounded.
+@export var sync_threat_table: Dictionary = {}:
 	set(v):
-		var clamped: int = maxi(0, v)
-		if sync_threat == clamped: return
-		sync_threat = clamped
-		threat_changed.emit(sync_threat)
+		var incoming: Dictionary = v.duplicate(true)
+		if sync_threat_table == incoming: return
+		sync_threat_table = incoming
+		threat_changed.emit(sync_threat_table)
 
 @export var knockback_velocity: Vector3 = Vector3.ZERO
 @export var knockback_remaining_time: float = 0.0
@@ -150,7 +157,7 @@ func _ready() -> void:
 		sync.add_state(self, "team_id")
 		sync.add_state(self, "red_damage_taken")
 		sync.add_state(self, "blue_damage_taken")
-		sync.add_state(self, "sync_threat")
+		sync.add_state(self, "sync_threat_table")
 		sync.add_state(self, "knockback_velocity")
 		sync.add_state(self, "knockback_remaining_time")
 		sync.add_state(self, "is_stunned")

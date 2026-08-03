@@ -327,9 +327,14 @@ func _apply_aoe_taunt(pos: Vector3, radius: float) -> void:
 			if ai:
 				ai.target = self
 				ai.state = 1 # State.CHASE
-				# Force a flat threat spike so the AI keeps targeting the
-				# tank even after a single big player hit briefly outranks
-				# us. Hurts the linear-threat score by enough that the
-				# next 10m of player damage can't knock us off-target.
-				if has_node("ServerState"):
-					get_node("ServerState").sync_threat += TAUNT_THREAT_SPIKE
+				# Force a flat threat spike on each mob's own table so
+				# the AI keeps targeting the tank even after a single
+				# big player hit briefly outranks us. Threat lives on
+				# the victim (per-mob), so we write the spike on each
+				# mob's ServerState keyed by our own entity name.
+				if child.has_node("ServerState"):
+					var mob_state: Node = child.get_node("ServerState")
+					var table: Dictionary = mob_state.sync_threat_table
+					var key: String = str(self.name)
+					var current: int = int(table.get(key, 0))
+					table[key] = current + TAUNT_THREAT_SPIKE

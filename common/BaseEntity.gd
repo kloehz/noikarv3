@@ -303,20 +303,22 @@ const THREAT_DECAY_PER_SECOND: float = 5.0
 ## the partial-second remainder.
 var _threat_decay_accumulator: float = 0.0
 
-## Server-only aggro decay. Runs every visual frame; the cost is a
-## single clamped integer comparison and only fires when threat > 0,
-## so the steady-state cost on idle entities is zero. Clients receive
-## the changing sync_threat through StateSynchronizer and never write
-## their own copy, so the server-only guard is mandatory.
+## Server-only aggro decay. Runs every visual frame and walks the
+## per-attacker threat table owned by THIS entity. Each attacker
+## entry decays by the same per-second rate; entries that hit 0 are
+## erased so the table doesn't grow unbounded over a long match.
+## Clients receive the changing table through StateSynchronizer and
+## never write their own copy, so the server-only guard is mandatory.
 func _process(delta: float) -> void:
 	if not multiplayer.is_server():
 		return
 	if server_state == null:
 		return
-	if int(server_state.sync_threat) <= 0:
+	var table: Dictionary = server_state.sync_threat_table
+	if table.is_empty():
 		# Reset accumulator so a fresh threat spike starts from a clean
 		# fractional carry-over; otherwise the partial tick left over
-		# from the previous threat would apply to the next hit's decay.
+		# from the previous burst would apply to the next hit's decay.
 		_threat_decay_accumulator = 0.0
 		return
 	_threat_decay_accumulator += THREAT_DECAY_PER_SECOND * delta
@@ -324,7 +326,13 @@ func _process(delta: float) -> void:
 	if decay <= 0:
 		return
 	_threat_decay_accumulator -= float(decay)
-	server_state.sync_threat = int(server_state.sync_threat) - decay
+	for attacker_name in table.keys():
+		var current: int = int(table[attacker_name])
+		var next: int = max(0, current - decay)
+		if next == 0:
+			table.erase(attacker_name)
+		else:
+			table[attacker_name] = next
 
 func _is_server_authority() -> bool:
 	return multiplayer == null or multiplayer.is_server()

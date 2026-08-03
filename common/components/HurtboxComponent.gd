@@ -39,20 +39,25 @@ func receive_hit_data(damage_amount: int, source: Node) -> void:
 	if health_component:
 		health_component.take_damage(damage_amount, source)
 
-## Bumps the attacker's sync_threat by damage * multiplier. TANK pets
-## apply a base + per-level bonus so the role exists to hold aggro;
-## everyone else (players, ATTACK / HEAL pets, projectiles) is 1.0.
-## No-op when the source has no ServerState (e.g. environment damage).
+## Writes the per-attacker threat to THIS victim's ServerState.
+## Threat is keyed by the attacker's entity name, so each mob tracks
+## its own aggro independently. A hit on mob A only writes to
+## mob A's table — mob B (which wasn't hit) keeps an empty table
+## and ignores the threat source. The damage event is still
+## multiplied by the attacker's pet_type (1.75 + level for TANK,
+## 1.0 for everything else) so tank pets pull more aggro per hit.
 func _apply_threat(damage_amount: int, source: Node) -> void:
-	if source == null or not source.has_node("ServerState"):
+	if source == null:
 		return
-	var source_state := source.get_node("ServerState")
-	if source_state == null:
+	if owner_node == null or not owner_node.has_node("ServerState"):
 		return
+	var victim_state := owner_node.get_node("ServerState")
 	var mult: float = _threat_multiplier_for(source)
 	if mult <= 0.0:
 		return
-	source_state.sync_threat = int(source_state.sync_threat) + int(damage_amount * mult)
+	var attacker_name: String = str(source.name)
+	var current: int = int(victim_state.sync_threat_table.get(attacker_name, 0))
+	victim_state.sync_threat_table[attacker_name] = current + int(damage_amount * mult)
 
 ## Returns the threat multiplier the attacker contributes to the aggro
 ## total. Players, projectiles and non-tank pets are 1.0. Tank pets

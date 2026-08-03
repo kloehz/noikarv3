@@ -197,9 +197,8 @@ func _logic_chase() -> void:
 	# stepped back, breaking the aggro lock the threat system just
 	# set up. The mob keeps chasing; once threat decays the next
 	# _find_nearest_target will pick a closer candidate (or null).
-	var target_threat: float = 0.0
-	if target.has_node("ServerState"):
-		target_threat = float(int(target.get_node("ServerState").get("sync_threat")))
+	# Threat lives on THIS mob's own table keyed by the target's name.
+	var target_threat: float = _threat_of_potential_on_self(target)
 	if dist > detection_range and target_threat <= 0.0:
 		target = null
 		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
@@ -281,14 +280,18 @@ func _stop_inputs() -> void:
 	logic.is_shooting = false
 
 func _find_nearest_target() -> void:
-	## Aggro / threat selection. Two-tier scoring:
-	##   - Threat sources (sync_threat > 0) always outrank no-threat
-	##     candidates, even when they sit outside detection_range. Without
-	##     this a long-range attacker (e.g. 50m projectile) could snipe
-	##     a short-range mob (e.g. 15m detection) for free. Distance
-	##     only acts as a tiebreaker among threat sources.
-	##   - Non-threat candidates compete on distance only (negative
-	##     score) and respect the standard detection_range leash.
+	## Aggro / threat selection. Mobs are PASSIVE: they only aggro on
+	## a candidate that has written threat to their own table. A player
+	## that walks through a wave without hitting anything keeps the
+	## wave in PATROL/IDLE — only the mob that took damage picks a
+	## target. This matches the user's expected "I hit one mob, only
+	## that one chases me" behavior.
+	##
+	## Threat sources (sync_threat_table entry > 0) always outrank
+	## non-threat candidates and bypass detection_range, so a long-
+	## range attacker (e.g. 50m projectile) can't snipe a short-range
+	## mob (e.g. 15m detection) for free.
+	##
 	## Tank pets naturally pull aggro because their damage writes 1.75x
 	## threat (see HurtboxComponent._threat_multiplier_for).
 	var best_score: float = -INF
@@ -325,42 +328,44 @@ func _find_nearest_target() -> void:
 				continue
 
 			var d = entity.global_position.distance_to(potential.global_position)
-			var threat: float = _threat_of(potential)
+			# Threat is per-mob: this entity's own sync_threat_table maps
+			# attacker name -> threat. Only the mob that actually took
+			# damage has an entry for a given attacker; bystander mobs
+			# see 0 threat and stay passive.
+			var threat: float = _threat_of_potential_on_self(potential)
 
-			# Detection-range leash applies ONLY to non-threat candidates.
-			# A threat-having attacker must always be considered, even
-			# from outside detection_range, so a long-range player can
-			# not snipe a short-range mob without retaliation.
-			if d > detection_range and threat <= 0.0:
+			# === PASSIVE MOB RULE ===
+			# Without an entry in our threat table, we do NOT pick this
+			# candidate. This is the "only the hit mob aggros" rule:
+			# a player walking past a wave of mobs without attacking
+			# never causes the wave to aggro. A long-range attacker who
+			# is outside detection_range can only pull aggro if they
+			# have actually written threat (which the damage path
+			# already did before this point).
+			if threat <= 0.0:
 				continue
 
-			# Two-tier score: any threat source beats any no-threat source;
-			# among threat sources the closer one wins.
-			var score: float
-			if threat > 0.0:
-				# Tiny distance factor keeps the closer threat source as
-				# the tiebreaker without letting distance dominate the
-				# outcome. A 1-threat candidate at 100m outranks a
-				# 0-threat candidate at 1m, which is the desired behavior.
-				score = threat - d * 0.001
-			else:
-				score = -d
+			# Threat source: score = threat minus a tiny distance
+			# tiebreaker. Distance only matters when multiple threat
+			# sources are competing; a far threat source still outranks
+			# any non-threat candidate (which we already filtered above).
+			var score: float = threat - d * 0.001
 			if score > best_score:
 				best_score = score
 				new_target = potential
 
 	target = new_target
 
-## Reads sync_threat off the candidate's ServerState, defaulting to 0
-## for entities without one. Kept as a helper so future threat sources
-## (healing aggro, proximity bumps, debuffs) can be added here without
-## touching the selection loop.
-func _threat_of(candidate: Node) -> float:
-	if candidate == null:
+## Reads the per-mob threat table on this AI's own entity for the given
+## potential attacker. Returns 0 when either side has no ServerState.
+## Decoupled from the older per-attacker design so the per-mob split
+## stays explicit at the call site.
+func _threat_of_potential_on_self(potential: Node) -> float:
+	if potential == null:
 		return 0.0
-	if not candidate.has_node("ServerState"):
+	if not entity.has_node("ServerState"):
 		return 0.0
-	var state := candidate.get_node("ServerState") as Node
-	if state == null:
+	var table: Dictionary = entity.get_node("ServerState").sync_threat_table
+	if table.is_empty():
 		return 0.0
-	return float(int(state.get("sync_threat")))
+	return float(int(table.get(String(potential.name), 0)))
