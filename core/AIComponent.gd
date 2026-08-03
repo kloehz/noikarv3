@@ -21,10 +21,15 @@ enum State { IDLE, PATROL, CHASE, ATTACK, FOLLOW_OWNER }
 @export var patrol_radius: float = 8.0
 ## Seconds to pause at each patrol waypoint before picking the next one.
 @export var patrol_wait_time: float = 2.0
+## Per-mob variation around patrol_wait_time. Stops a wave from pausing in sync.
+@export var patrol_wait_time_variation: float = 1.0
 ## Seconds the mob must stay IDLE (no target in detection_range) before
 ## PATROL kicks in. Keeps freshly spawned mobs from drifting apart before
 ## players have a chance to walk into range.
 @export var patrol_start_delay: float = 1.5
+## Per-mob variation around patrol_start_delay. Keeps a fresh wave from
+## beginning its first patrol step at the same instant.
+@export var patrol_start_delay_variation: float = 0.75
 ## Fraction of max_speed used while PATROLLING (1.0 = full chase speed).
 ## Kept under 1.0 so the wander looks lazy compared to the focused
 ## sprint when a target enters detection_range.
@@ -52,6 +57,8 @@ var _patrol_center: Vector3 = Vector3.ZERO
 var _patrol_target: Vector3 = Vector3.ZERO
 var _patrol_wait_timer: float = 0.0
 var _idle_timer: float = 0.0
+var _patrol_start_delay: float = -1.0
+var _patrol_wait_duration: float = 0.0
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -83,6 +90,8 @@ func refresh_faction() -> void:
 	_is_mob = entity.is_in_group(&"mobs")
 	_is_pet = entity.is_in_group(&"pets")
 	_faction_cached = true
+	if _is_mob and _patrol_start_delay < 0.0:
+		_randomize_patrol_timing()
 	print("[AI] Faction refreshed for %s (Pet: %s, Mob: %s)" % [entity.name, _is_pet, _is_mob])
 
 ## Anchor for PATROL state. MatchManager calls this at spawn so each mob
@@ -146,10 +155,11 @@ func _logic_idle(delta: float) -> void:
 	# After sitting idle long enough, transition to PATROL so the mob
 	# spreads out instead of standing on its spawn tile.
 	_idle_timer += delta
-	if _idle_timer >= patrol_start_delay:
+	if _idle_timer >= _patrol_start_delay:
 		state = State.PATROL
 		_patrol_target = _pick_patrol_point()
 		_patrol_wait_timer = 0.0
+		_roll_patrol_wait_duration()
 		_idle_timer = 0.0
 
 func _logic_patrol(delta: float) -> void:
@@ -166,9 +176,10 @@ func _logic_patrol(delta: float) -> void:
 	if dist < 1.0:
 		_stop_inputs()
 		_patrol_wait_timer += delta
-		if _patrol_wait_timer >= patrol_wait_time:
+		if _patrol_wait_timer >= _patrol_wait_duration:
 			_patrol_target = _pick_patrol_point()
 			_patrol_wait_timer = 0.0
+			_roll_patrol_wait_duration()
 	else:
 		_move_towards(_patrol_target, patrol_speed_factor)
 		_patrol_wait_timer = 0.0
@@ -180,6 +191,17 @@ func _pick_patrol_point() -> Vector3:
 	var angle: float = randf() * TAU
 	var distance: float = sqrt(randf()) * patrol_radius
 	return _patrol_center + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
+
+func _randomize_patrol_timing() -> void:
+	_patrol_start_delay = maxf(0.2, patrol_start_delay + randf_range(
+		-patrol_start_delay_variation, patrol_start_delay_variation
+	))
+	_roll_patrol_wait_duration()
+
+func _roll_patrol_wait_duration() -> void:
+	_patrol_wait_duration = maxf(0.2, patrol_wait_time + randf_range(
+		-patrol_wait_time_variation, patrol_wait_time_variation
+	))
 
 func _logic_chase() -> void:
 	_refresh_threat_target()
@@ -269,7 +291,7 @@ func _logic_follow() -> void:
 
 func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	var dir := (pos - entity.global_position).normalized()
-	dir = _steer_around_nearby_mobs(dir)
+	dir = _steer_around_nearby_allies(dir)
 
 	# Point the character at the target
 	var target_yaw = atan2(-dir.x, -dir.z)
@@ -284,16 +306,23 @@ func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	# Vector2(0, -1) sprint.
 	logic.input_axis = Vector2(0, -1) * clampf(speed_factor, 0.0, 1.0)
 
-## Mobs retain physical collisions, so their steering must account for nearby
-## allies. A blocked mob gets a stable side preference and flanks the frontline
-## instead of continuously walking into it.
-func _steer_around_nearby_mobs(direction: Vector3) -> Vector3:
-	if not _is_mob or direction == Vector3.ZERO:
+## Mobs and pets retain physical collisions, so their steering must account for
+## nearby allies. A blocked unit gets a stable side preference and flanks the
+## frontline instead of continuously walking into it.
+func _steer_around_nearby_allies(direction: Vector3) -> Vector3:
+	if direction == Vector3.ZERO:
+		return direction
+	var ally_group: StringName
+	if _is_mob:
+		ally_group = &"mobs"
+	elif _is_pet:
+		ally_group = &"pets"
+	else:
 		return direction
 
 	var separation := Vector3.ZERO
 	var blocker_weight := 0.0
-	for other in get_tree().get_nodes_in_group(&"mobs"):
+	for other in get_tree().get_nodes_in_group(ally_group):
 		if other == entity or not is_instance_valid(other) or other.get("sync_is_dead"):
 			continue
 		var other_entity := other as Node3D

@@ -89,8 +89,8 @@ func test_patrol_state_is_idle_on_spawn_and_transitions_after_delay() -> void:
 	ai._idle_timer = 0.0
 	assert_eq(ai.state, ai.State.IDLE,
 		"Setup: mob forced back to IDLE")
-	# Tick just under the delay: still IDLE.
-	ai.tick(ai.patrol_start_delay - 0.1)
+	# Tick just under this mob's randomized delay: still IDLE.
+	ai.tick(ai._patrol_start_delay - 0.1)
 	assert_eq(ai.state, ai.State.IDLE)
 	# Tick across the threshold: switches to PATROL and picks a waypoint.
 	ai.tick(0.2)
@@ -98,6 +98,21 @@ func test_patrol_state_is_idle_on_spawn_and_transitions_after_delay() -> void:
 		"After patrol_start_delay without a target, mob starts patrolling")
 	assert_ne(ai._patrol_target, ai._patrol_center,
 		"PATROL must pick a new waypoint distinct from the anchor")
+
+func test_patrol_timing_stays_within_configured_variation() -> void:
+	var ai_script := load("res://core/AIComponent.gd")
+	var ai = ai_script.new()
+	ai.patrol_start_delay = 1.5
+	ai.patrol_start_delay_variation = 0.75
+	ai.patrol_wait_time = 2.0
+	ai.patrol_wait_time_variation = 1.0
+	for _i in 20:
+		ai._randomize_patrol_timing()
+		assert_gte(ai._patrol_start_delay, 0.75)
+		assert_lte(ai._patrol_start_delay, 2.25)
+		assert_gte(ai._patrol_wait_duration, 1.0)
+		assert_lte(ai._patrol_wait_duration, 3.0)
+	ai.free()
 
 func test_patrol_waypoint_stays_inside_patrol_radius() -> void:
 	var ai_script := load("res://core/AIComponent.gd")
@@ -173,7 +188,7 @@ func test_mob_flanks_nearby_frontline_instead_of_stacking() -> void:
 	_manager._spawn_named_enemy("HECARIM_TANK", Vector3(0.6, 0, -1.2), "MOB_", 1.0, 0.0, TeamId.RED)
 	await get_tree().process_frame
 	var ai: Node = rear_mob.get_node("AIComponent")
-	var steering: Vector3 = ai._steer_around_nearby_mobs(Vector3.FORWARD)
+	var steering: Vector3 = ai._steer_around_nearby_allies(Vector3.FORWARD)
 	assert_gt(absf(steering.x), 0.01,
 		"A mob blocked by a symmetric frontline must choose a lateral flank path")
 	assert_lt(steering.z, 0.0,

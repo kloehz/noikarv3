@@ -71,6 +71,17 @@ func _spawn_pet_at(owner_id: int, pos: Vector3, pet_type: String) -> BaseEntity:
 	await get_tree().process_frame
 	return pet
 
+func test_pet_flanks_nearby_allies_instead_of_stacking() -> void:
+	var rear_pet := await _spawn_tank_pet(2, Vector3.ZERO)
+	await _spawn_tank_pet(3, Vector3(-0.6, 0, -1.2))
+	await _spawn_tank_pet(4, Vector3(0.6, 0, -1.2))
+	var ai: Node = rear_pet.get_node("AIComponent")
+	var steering: Vector3 = ai._steer_around_nearby_allies(Vector3.FORWARD)
+	assert_gt(absf(steering.x), 0.01,
+		"A pet blocked by allied pets must choose a lateral flank path")
+	assert_lt(steering.z, 0.0,
+		"Pet flanking must still make progress toward the target")
+
 ## Melee: pet tanks never deal damage to other pets even at point blank.
 func test_pet_melee_does_not_damage_other_pets() -> void:
 	var owner_a := await _spawn_player(2, Vector3(-5, 0, 0))
