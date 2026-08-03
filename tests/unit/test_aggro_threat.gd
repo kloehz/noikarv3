@@ -205,3 +205,62 @@ func test_ai_score_is_threat_minus_distance() -> void:
 	_ai(mob)._find_nearest_target()
 	assert_eq(_ai(mob).target, close_player,
 		"Equal-threat targets fall to the closer one (distance tiebreaker)")
+
+func test_threat_pulls_aggro_beyond_detection_range() -> void:
+	## Regression: a long-range attacker used to be ignored by mobs because
+	## they sit outside detection_range. With a small threat spike the
+	## mob must still aggro on the far player — otherwise ranged classes
+	## snipe short-range mobs for free.
+	var far_player := await _spawn_player(2, Vector3(0, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 100))  # 100m apart
+	# Mob's detection_range is 10m (EnemyEntity.tscn default) so the
+	# far player is well outside the natural aggro leash.
+	var ai := _ai(mob)
+	assert_gt(ai.detection_range, 0)
+	assert_gt(mob.global_position.distance_to(far_player.global_position), ai.detection_range,
+		"Player sits outside the mob's detection_range (test setup)")
+	# Even 1 damage of threat must pull aggro across the whole map.
+	await _damage(mob, far_player, 1)
+	_ai(mob)._find_nearest_target()
+	assert_eq(ai.target, far_player,
+		"1 threat from a 100m attacker pulls aggro past the detection_range leash")
+
+func test_threat_holder_outranks_close_idle_attacker() -> void:
+	## A far threat source (1 threat at 100m) must outrank a close
+	## idle player (0 threat at 2m). Without the threat bypass, the
+	## close idle player would win on distance alone and the long-range
+	## attacker would never be engaged.
+	var close_player := await _spawn_player(2, Vector3(0, 0, 0))
+	var far_player := await _spawn_player(3, Vector3(0, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 2))  # 2m from close_player
+	# 100m from far_player.
+	far_player.global_position = Vector3(0, 0, 100)
+	await get_tree().process_frame
+	await _damage(mob, far_player, 1)
+	# close_player has 0 threat. far_player has 1 threat. far_player wins
+	# despite being 100m away.
+	_ai(mob)._find_nearest_target()
+	assert_eq(_ai(mob).target, far_player,
+		"Threat holder outranks close idle attacker regardless of distance")
+
+func test_threat_zero_drops_target_even_when_far() -> void:
+	## A target that was held by threat decays out of the leash once
+	## its threat hits 0. Verifies the inverse of the pull-beyond-leash
+	## rule: the mob chases the threat source, but only as long as the
+	## threat is real.
+	var far_player := await _spawn_player(2, Vector3(0, 0, 0))
+	var mob := await _spawn_mob("AATROX", Vector3(0, 0, 50))
+	far_player.global_position = Vector3(0, 0, 200)
+	await get_tree().process_frame
+	# Write threat, then verify the mob picks far_player.
+	await _damage(mob, far_player, 5)
+	_ai(mob)._find_nearest_target()
+	assert_eq(_ai(mob).target, far_player,
+		"Mob pulls aggro on far threat source")
+	# Now zero the threat (simulating full decay) and re-search.
+	far_player.get_node("ServerState").sync_threat = 0
+	_ai(mob)._find_nearest_target()
+	# With 0 threat, the far player is beyond detection_range and no
+	# longer a valid candidate. The mob should drop the target.
+	assert_null(_ai(mob).target,
+		"Threat = 0 + beyond leash = no target, mob waits for a closer attacker")

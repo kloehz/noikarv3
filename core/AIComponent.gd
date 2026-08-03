@@ -184,18 +184,27 @@ func _logic_chase() -> void:
 		# Pets go back to following owner, mobs to idle
 		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
-		
+
 	var dist = entity.global_position.distance_to(target.global_position)
-	
+
 	if dist <= attack_range:
 		state = State.ATTACK
 		return
-		
-	if dist > detection_range:
+
+	# A target stays valid as long as it has threat on the board, even
+	# outside detection_range. Without this, a long-range attacker
+	# would force the mob to switch off the target the moment the mob
+	# stepped back, breaking the aggro lock the threat system just
+	# set up. The mob keeps chasing; once threat decays the next
+	# _find_nearest_target will pick a closer candidate (or null).
+	var target_threat: float = 0.0
+	if target.has_node("ServerState"):
+		target_threat = float(int(target.get_node("ServerState").get("sync_threat")))
+	if dist > detection_range and target_threat <= 0.0:
 		target = null
 		state = State.FOLLOW_OWNER if _is_pet and is_instance_valid(owner_node) else State.IDLE
 		return
-		
+
 	# Move towards target
 	_move_towards(target.global_position)
 
@@ -272,54 +281,74 @@ func _stop_inputs() -> void:
 	logic.is_shooting = false
 
 func _find_nearest_target() -> void:
-	## Aggro / threat selection. Score = (threat on the candidate) - (distance).
-	## The 1.0 weight on distance means a candidate at 1m with 0 threat
-	## beats nothing, and a candidate at 10m needs 10+ threat to outrank
-	## a closer attacker. Tank pets naturally pull aggro because their
-	## damage writes 1.75x threat (see HurtboxComponent._threat_multiplier_for).
+	## Aggro / threat selection. Two-tier scoring:
+	##   - Threat sources (sync_threat > 0) always outrank no-threat
+	##     candidates, even when they sit outside detection_range. Without
+	##     this a long-range attacker (e.g. 50m projectile) could snipe
+	##     a short-range mob (e.g. 15m detection) for free. Distance
+	##     only acts as a tiebreaker among threat sources.
+	##   - Non-threat candidates compete on distance only (negative
+	##     score) and respect the standard detection_range leash.
+	## Tank pets naturally pull aggro because their damage writes 1.75x
+	## threat (see HurtboxComponent._threat_multiplier_for).
 	var best_score: float = -INF
 	var new_target = null
-	
+
 	# Determine which groups to search based on MY faction
 	var hostile_groups: Array[StringName] = []
 	var my_owner_id = entity.get("owner_id") if entity.has_method("get") else 0
-	
+
 	if _is_pet:
 		hostile_groups = [&"mobs"]
 	elif _is_mob:
 		hostile_groups = [&"players", &"pets"]
 	else:
-		# Unknown faction, can't find targets
+		# Unknown faction, can't find target
 		target = new_target
 		return
-	
+
 	# Search ALL entities in hostile groups (not just Players container)
 	for group_name in hostile_groups:
 		for potential in get_tree().get_nodes_in_group(group_name):
 			if potential == entity: continue
 			if not is_instance_valid(potential): continue
 			if potential.get("sync_is_dead"): continue
-			
+
 			# === ALLY EXCLUSION LOGIC ===
 			# Pets should never target their owner or other pets
 			if _is_pet:
 				if potential.name == str(my_owner_id): continue
 				if potential.is_in_group(&"pets"): continue
-				
+
 			# Mobs should never target other mobs
 			if _is_mob and potential.is_in_group(&"mobs"):
 				continue
-			
+
 			var d = entity.global_position.distance_to(potential.global_position)
-			if d > detection_range:
-				continue
-			
 			var threat: float = _threat_of(potential)
-			var score: float = threat - d
+
+			# Detection-range leash applies ONLY to non-threat candidates.
+			# A threat-having attacker must always be considered, even
+			# from outside detection_range, so a long-range player can
+			# not snipe a short-range mob without retaliation.
+			if d > detection_range and threat <= 0.0:
+				continue
+
+			# Two-tier score: any threat source beats any no-threat source;
+			# among threat sources the closer one wins.
+			var score: float
+			if threat > 0.0:
+				# Tiny distance factor keeps the closer threat source as
+				# the tiebreaker without letting distance dominate the
+				# outcome. A 1-threat candidate at 100m outranks a
+				# 0-threat candidate at 1m, which is the desired behavior.
+				score = threat - d * 0.001
+			else:
+				score = -d
 			if score > best_score:
 				best_score = score
 				new_target = potential
-	
+
 	target = new_target
 
 ## Reads sync_threat off the candidate's ServerState, defaulting to 0
