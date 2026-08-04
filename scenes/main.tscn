@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_statesync"]
 [ext_resource type="Resource" path="res://common/resources/default_match_rules.tres" id="6_rules"]
 [ext_resource type="PackedScene" uid="uid://b6vd7b4f6ubs7" path="res://scenes/maps/lorencia_3d.tscn" id="7_lorencia"]
+[ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_player_health"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_world"]
 sky_top_color = Color(0.15, 0.45, 0.75, 1)
@@ -125,12 +126,37 @@ spawn_path = NodePath("../Projectiles")
 [node name="HUD" type="CanvasLayer" parent="." unique_id=11221122]
 
 [node name="SoulCounter" type="PanelContainer" parent="HUD" unique_id=212813293]
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 180.0
-offset_bottom = 56.0
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -60.0
+offset_right = -20.0
+offset_bottom = -20.0
+grow_horizontal = 0
+grow_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_soul_bg")
+
+[node name="PlayerHealthLabel" type="Label" parent="HUD" unique_id=1916356354]
+offset_left = 20.0
+offset_top = 16.0
+offset_right = 340.0
+offset_bottom = 36.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.82, 0.9, 1, 0.92)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.9)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 13
+text = "VITALIDAD"
+
+[node name="PlayerHealthBar" parent="HUD" unique_id=2062910579 instance=ExtResource("8_player_health")]
+offset_left = 20.0
+offset_top = 38.0
+offset_right = 340.0
+offset_bottom = 78.0
+mouse_filter = 2
 
 [node name="HBox" type="HBoxContainer" parent="HUD/SoulCounter" unique_id=1156214351]
 layout_mode = 2

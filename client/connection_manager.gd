@@ -228,7 +228,7 @@ func _on_connected_to_server() -> void:
 	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
 
 func _on_game_server_authenticated(_username: String) -> void:
-	room_info.text = "ROOM: " + _current_oid
+	room_info.text = "SALA: " + _current_oid
 
 func _on_room_admission_rejected(reason: String) -> void:
 	room_status.text = reason

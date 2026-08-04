@@ -11,7 +11,6 @@
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
-[ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="12_health_bar_2d"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -28,9 +27,6 @@ albedo_color = Color(1, 1, 0, 0.6)
 
 [sub_resource type="SphereMesh" id="SphereMesh_debug"]
 material = SubResource("StandardMaterial3D_debug")
-
-[sub_resource type="ViewportTexture" id="ViewportTexture_health"]
-viewport_path = NodePath("HealthViewport")
 
 [node name="BaseEntity" type="CharacterBody3D" unique_id=2131335616]
 script = ExtResource("1_base_entity")
@@ -96,20 +92,6 @@ entity = NodePath("..")
 
 [node name="HealthComponent" type="Node3D" parent="." unique_id=2012485610]
 script = ExtResource("4_health_comp")
-
-[node name="HealthViewport" type="SubViewport" parent="." unique_id=999888777]
-transparent_bg = true
-handle_input_locally = false
-size = Vector2i(105, 14)
-render_target_update_mode = 4
-
-[node name="HealthBar2D" parent="HealthViewport" unique_id=309968043 instance=ExtResource("12_health_bar_2d")]
-
-[node name="HealthBar3D" type="Sprite3D" parent="." unique_id=111222333]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
-billboard = 1
-no_depth_test = true
-texture = SubResource("ViewportTexture_health")
 
 [node name="NameLabel" type="Label3D" parent="." unique_id=12121212]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)

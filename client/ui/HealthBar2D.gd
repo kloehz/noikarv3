@@ -21,6 +21,9 @@ func _ensure_init() -> void:
 	if not health_bar: health_bar = $HealthBar
 	if not catchup_bar: catchup_bar = $CatchupBar
 	if not hp_text: hp_text = $HPText
+	# The same scene serves compact world-space bars and the larger player HUD.
+	# Size the label from the Control height instead of maintaining two scenes.
+	hp_text.add_theme_font_size_override("font_size", maxi(10, roundi(size.y * 0.55)))
 
 	# Create unique copies for this specific health bar
 	_health_style = health_bar.get_theme_stylebox("fill").duplicate()
@@ -59,6 +62,7 @@ func _ensure_init() -> void:
 func update_health(current: int, maximum: int) -> void:
 	_ensure_init()
 	if not health_bar: return
+	hp_text.add_theme_font_size_override("font_size", maxi(10, roundi(size.y * 0.55)))
 
 	# Update text
 	if hp_text:

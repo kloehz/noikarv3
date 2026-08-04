@@ -83,10 +83,15 @@ func _on_souls_changed(amount: int) -> void:
 		hud_counter.text = "Almas: %d" % amount
 
 func _on_health_changed(current: int, maximum: int) -> void:
-	# Update new Pro Health Bar (2D node inside SubViewport)
+	# World-space bars remain for mobs and pets. The local player's health is
+	# presented in the screen HUD so it stays visible while moving the camera.
 	var health_bar_2d = entity.get_node_or_null("HealthViewport/HealthBar2D")
 	if health_bar_2d and health_bar_2d.has_method("update_health"):
 		health_bar_2d.update_health(current, maximum)
+	if entity.is_multiplayer_authority():
+		var player_health_hud := get_tree().root.find_child("PlayerHealthBar", true, false)
+		if player_health_hud and player_health_hud.has_method("update_health"):
+			player_health_hud.update_health(current, maximum)
 	
 	# Legacy Label support (now hidden in TSCN)
 	var health_label = get_parent().get_node_or_null("HealthLabel") as Label3D
