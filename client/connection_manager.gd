@@ -71,6 +71,8 @@ func _ready() -> void:
 	EventBus.room_admission_rejected.connect(_on_room_admission_rejected)
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
+	account_edit.text_submitted.connect(_on_login_field_submitted)
+	password_edit.text_submitted.connect(_on_login_field_submitted)
 	_switch_state(State.LOGIN)
 	var tween := create_tween().set_loops()
 	tween.tween_property(bg_rect, "color", Color("1a1a2e"), 4.0)
@@ -98,6 +100,9 @@ func _switch_state(new_state: State) -> void:
 func _on_enter_lobby_pressed() -> void:
 	var result: Dictionary = await AuthService.login(account_edit.text, password_edit.text)
 	_finish_auth(result)
+
+func _on_login_field_submitted(_text: String) -> void:
+	_on_enter_lobby_pressed()
 
 func _on_register_pressed() -> void:
 	var result: Dictionary = await AuthService.register(account_edit.text, password_edit.text)

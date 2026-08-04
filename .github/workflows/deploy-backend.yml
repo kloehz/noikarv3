@@ -1,0 +1,76 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noikar-backend-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - run: go test ./...
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_DEPLOY_PATH: ${{ vars.NOIKAR_VPS_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment configuration
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_DEPLOY_PATH"
+          case "$VPS_DEPLOY_PATH" in /*) ;; *) exit 1 ;; esac
+      - uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      - name: Pin VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Sync backend source
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_PATH/backend'"
+          rsync -az --delete \
+            --exclude=.env \
+            --exclude=.git \
+            backend/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/backend/"
+      - name: Rebuild and verify backend
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$VPS_DEPLOY_PATH/backend"
+          test -f .env
+          docker compose -f docker-compose.production.yml up -d --build --remove-orphans
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f docker-compose.production.yml logs --tail=100 api
+          exit 1
+          REMOTE

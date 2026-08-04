@@ -1,0 +1,101 @@
+name: Deploy World Runtime
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - backend/**
+      - docs/**
+      - openspec/**
+      - tests/**
+      - .github/workflows/deploy-backend.yml
+      - DEPLOYMENT.md
+      - "**/*.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: noikar-world-runtime-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot editor and export templates
+        run: |
+          set -euo pipefail
+          godot_version=4.7-stable
+          curl --fail --location --silent --show-error \
+            --output godot.zip \
+            "https://github.com/godotengine/godot/releases/download/$godot_version/Godot_v${godot_version}_linux.x86_64.zip"
+          unzip -q godot.zip
+          chmod +x Godot_v${godot_version}_linux.x86_64
+          curl --fail --location --silent --show-error \
+            --output templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/$godot_version/Godot_v${godot_version}_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.stable"
+          unzip -q templates.tpz -d "$HOME/.local/share/godot/export_templates/4.7.stable"
+      - name: Export dedicated server
+        run: |
+          ./Godot_v4.7-stable_linux.x86_64 --headless --path . \
+            --export-release "Dedicated Server (Linux)" build/world/noikar-server.x86_64
+          test -x build/world/noikar-server.x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noikar-world-runtime
+          path: build/world/
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_DEPLOY_PATH: ${{ vars.NOIKAR_VPS_PATH }}
+      RELEASE_VERSION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: noikar-world-runtime
+          path: build/world
+      - name: Validate deployment configuration
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_DEPLOY_PATH"
+          case "$VPS_DEPLOY_PATH" in /*) ;; *) exit 1 ;; esac
+      - uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      - name: Pin VPS host key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Sync dedicated-server runtime
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
+          set -euo pipefail
+          mkdir -p "$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION"
+          REMOTE
+          rsync -az --delete build/world/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION/"
+          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
+          set -euo pipefail
+          world_dir="$VPS_DEPLOY_PATH/world"
+          release_path="$world_dir/releases/$RELEASE_VERSION"
+          ln -sfn "$release_path" "$world_dir/current.next"
+          mv -Tf "$world_dir/current.next" "$world_dir/current"
+          REMOTE
+      - name: Verify dedicated-server runtime
+        run: |
+          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          test -x "$VPS_DEPLOY_PATH/world/current/noikar-server.x86_64"
+          test -f "$VPS_DEPLOY_PATH/world/current/noikar-server.pck"
+          REMOTE

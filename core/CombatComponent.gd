@@ -50,9 +50,11 @@ enum AttackState { READY, STARTUP, ACTIVE, RECOVERY }
 ## the correct projectile/melee on ACTIVE without replicating a resource.
 @export var _active_attack_slot: int = 0  # 0 = none, 1 = primary, 2 = secondary
 @export var _active_damage_multiplier: float = 1.0
-## Set by the server on the tick it dispatches a spawn. Cleared on recovery.
-## Prevents re-spawning the same projectile during rollback resimulation.
-var _active_spawned_this_attack: bool = false
+## Server-only event ledger. Rollback restores component state, so a mutable
+## boolean cannot prove whether a world side effect already happened.
+const MAX_RECORDED_ATTACK_EVENTS: int = 256
+var _dispatched_attack_events: Dictionary = {}
+var _dispatched_attack_event_order: Array[String] = []
 
 # --- Hit deduplication: prevents multiple collisions hitting the same target ---
 var _hit_entities_this_attack: Array[Node] = []
@@ -176,12 +178,14 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 		current_attack_state = AttackState.READY
 		_active_attack = null
 		return
+	if entity and entity.has_method("is_spawn_grace_active") and entity.is_spawn_grace_active():
+		return
 
 	# Tick cooldowns
 	if _primary_cooldown > 0: _primary_cooldown -= delta
 	if _secondary_cooldown > 0: _secondary_cooldown -= delta
 
-	_update_attack_state(delta)
+	_update_attack_state(delta, _tick)
 
 	# Only owner or server can start attacks
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
@@ -238,9 +242,8 @@ func _get_owner_camera() -> Camera3D:
 			return cam
 	return entity.get_node_or_null("Camera3D")
 
-func _update_attack_state(delta: float) -> void:
+func _update_attack_state(delta: float, tick: int) -> void:
 	if current_attack_state == AttackState.READY:
-		_active_spawned_this_attack = false
 		return
 
 	_state_timer -= delta
@@ -251,7 +254,7 @@ func _update_attack_state(delta: float) -> void:
 				current_attack_state = AttackState.ACTIVE
 				_state_timer = _active_attack.active_time if _active_attack else 0.3
 				_hit_entities_this_attack.clear()  # Reset hit list for this attack
-				_on_attack_active()
+				_on_attack_active(tick)
 			AttackState.ACTIVE:
 				current_attack_state = AttackState.RECOVERY
 				_state_timer = _active_attack.recovery_time if _active_attack else 0.3
@@ -259,7 +262,6 @@ func _update_attack_state(delta: float) -> void:
 				current_attack_state = AttackState.READY
 				_hit_entities_this_attack.clear()
 				_active_attack = null
-				_active_spawned_this_attack = false
 
 # ============================================================
 # ATTACK START
@@ -299,15 +301,16 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_mu
 # ATTACK ACTIVE FRAME — Dispatch based on type
 # ============================================================
 
-func _on_attack_active() -> void:
+func _on_attack_active(tick: int) -> void:
 	if not multiplayer.is_server():
 		return
 
-	# Server dispatches the spawn for any replicated state machine. Idempotent:
-	# multiple resimulations of the same ACTIVE tick must spawn only once.
-	if _active_spawned_this_attack:
+	# sync_attack_count is rollback state and identifies this attack instance.
+	# The ledger deliberately is not rollback state: it records an irreversible
+	# server side effect and suppresses replays after restored simulation state.
+	var event_id := "%s:%d:%d" % [entity.name, sync_attack_count, tick]
+	if not _record_attack_event(event_id):
 		return
-	_active_spawned_this_attack = true
 
 	# Resolve the slot to a concrete AttackDefinition. The server may have
 	# resimulated this state without carrying the resource reference, so look
@@ -333,6 +336,17 @@ func _on_attack_active() -> void:
 	else:
 		# Legacy fallback: use the static ShapeCast3D with @export damage
 		_execute_melee_legacy()
+
+## Returns true exactly once for each irreversible server-side attack event.
+func _record_attack_event(event_id: String) -> bool:
+	if _dispatched_attack_events.has(event_id):
+		return false
+	_dispatched_attack_events[event_id] = true
+	_dispatched_attack_event_order.append(event_id)
+	if _dispatched_attack_event_order.size() > MAX_RECORDED_ATTACK_EVENTS:
+		var expired_id: String = _dispatched_attack_event_order.pop_front()
+		_dispatched_attack_events.erase(expired_id)
+	return true
 
 # ============================================================
 # MELEE HITSCAN

@@ -94,6 +94,8 @@ func _ready() -> void:
 	_setup_visuals()
 	_setup_netfox()
 	_setup_health_component()
+	if multiplayer.is_server() and not NetworkTime.after_tick.is_connected(_on_authoritative_tick):
+		NetworkTime.after_tick.connect(_on_authoritative_tick)
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
 	# Update local max_health if server changed it
@@ -290,26 +292,19 @@ func apply_stats(new_hp: int) -> void:
 func _update_visuals() -> void:
 	if has_node("VisualComponent"): $VisualComponent.update_name(player_name)
 
-## Linear threat decay rate (per second). Applied on the server only via
-## _process so old aggro fades smoothly when the attacker stops hitting.
+## Linear threat decay rate (per second). Applied on NetworkTime.after_tick
+## so aggro follows the authoritative simulation clock.
 ## At 5.0/sec a single 100-damage hit decays to zero in 20s, but two
 ## rapid hits keep the mob locked on while the player is active.
 const THREAT_DECAY_PER_SECOND: float = 5.0
 
-## Per-entity fractional decay accumulator. Needed because _process at
-## 60 Hz passes delta ≈ 0.016; `int(5.0 * 0.016)` is 0 and the per-frame
-## truncation would zero the decay forever. Carrying the fraction over
-## frames gives the correct long-run rate (5.0 / sec) without losing
-## the partial-second remainder.
+## Per-entity fractional decay accumulator. A tick contributes less than one
+## point at the configured rate, so retain the fraction until it is due.
 var _threat_decay_accumulator: float = 0.0
 
-## Server-only aggro decay. Runs every visual frame and walks the
-## per-attacker threat table owned by THIS entity. Each attacker
-## entry decays by the same per-second rate; entries that hit 0 are
-## erased so the table doesn't grow unbounded over a long match.
-## Clients receive the changing table through StateSynchronizer and
-## never write their own copy, so the server-only guard is mandatory.
-func _process(delta: float) -> void:
+## Server-only aggro decay. The victim owns its threat table; each entry fades
+## on a network tick and is replicated through ServerState.
+func _on_authoritative_tick(_delta: float, _tick: int) -> void:
 	if not multiplayer.is_server():
 		return
 	if server_state == null:
@@ -320,7 +315,9 @@ func _process(delta: float) -> void:
 		# from the previous burst would apply to the next hit's decay.
 		_threat_decay_accumulator = 0.0
 		return
-	_threat_decay_accumulator += THREAT_DECAY_PER_SECOND * delta
+	if NetworkTime.tickrate <= 0:
+		return
+	_threat_decay_accumulator += THREAT_DECAY_PER_SECOND / float(NetworkTime.tickrate)
 	var decay: int = int(_threat_decay_accumulator)
 	if decay <= 0:
 		return

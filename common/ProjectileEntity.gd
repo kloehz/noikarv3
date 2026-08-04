@@ -4,7 +4,8 @@ extends CharacterBody3D
 
 ## Standalone networked projectile entity.
 ## Spawned server-side by CombatComponent, replicated via MultiplayerSpawner.
-## Movement and hit detection run inside _rollback_tick() for Netfox compatibility.
+## Projectiles are server-owned. Clients interpolate replicated state but never
+## simulate movement, collision, damage, or despawn side effects.
 ##
 ## Rollback properties: global_position, velocity
 
@@ -44,6 +45,8 @@ func _ready() -> void:
 		look_at(global_position + _direction, Vector3.UP)
 
 func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
+	if not multiplayer.is_server() or not is_fresh:
+		return
 	if _has_hit:
 		return
 	
@@ -62,10 +65,7 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 			_despawn()
 		return
 	
-	# --- HIT DETECTION (Server only) ---
-	if not is_fresh or not multiplayer.is_server():
-		return
-	
+	# --- HIT DETECTION ---
 	var collision_count = get_slide_collision_count()
 	for i in range(collision_count):
 		var collision = get_slide_collision(i)

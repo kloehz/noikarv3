@@ -156,6 +156,14 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 	if not entity or entity.get("sync_is_dead"): 
 		input_axis = Vector2.ZERO
 		return
+	# RollbackSynchronizer dispatches every rollback-aware descendant itself.
+	# Entity-root grace guards cannot stop this component, so enforce grace here
+	# before AI, dash, or movement mutates simulated state.
+	if entity.has_method("is_spawn_grace_active") and entity.is_spawn_grace_active():
+		input_axis = Vector2.ZERO
+		is_shooting = false
+		current_velocity = Vector3.ZERO
+		return
 	
 	# Handle Stun — temporarily disabled for playtesting (re-enable when wanted)
 	# if _server_state and _server_state.is_stunned:

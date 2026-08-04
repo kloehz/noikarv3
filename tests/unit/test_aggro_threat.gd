@@ -125,24 +125,26 @@ func test_threat_decays_linearly_on_server() -> void:
 	await get_tree().process_frame
 	assert_eq(int(state.sync_threat_table.get("2", 0)), 100,
 		"Threat untouched on first frame at 60Hz")
-	player._process(1.0)
+	for tick in 60:
+		player._on_authoritative_tick(1.0 / 60.0, tick)
 	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 0.001,
 		"One full second of decay removes ~5 threat (5/sec rate)")
 
-func test_threat_decays_at_real_framerate() -> void:
+func test_threat_decays_at_tickrate() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var state := player.get_node("ServerState")
 	state.sync_threat_table["2"] = 100
-	for _i in 60:
-		player._process(1.0 / 60.0)
+	for tick in 60:
+		player._on_authoritative_tick(1.0 / 60.0, tick)
 	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 1.0,
-		"60Hz decay path sums to ~5 threat over a wall-clock second")
+		"60 authoritative ticks remove ~5 threat independent of render FPS")
 
 func test_threat_does_not_go_negative() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var state := player.get_node("ServerState")
 	state.sync_threat_table["2"] = 3
-	player._process(10.0)
+	for tick in 600:
+		player._on_authoritative_tick(1.0 / 60.0, tick)
 	assert_eq(int(state.sync_threat_table.get("2", 0)), 0,
 		"Decay clamps at 0, never negative")
 
@@ -152,7 +154,8 @@ func test_zero_entries_are_erased_from_table() -> void:
 	var state := player.get_node("ServerState")
 	state.sync_threat_table["2"] = 3
 	state.sync_threat_table["5"] = 10
-	player._process(10.0)
+	for tick in 600:
+		player._on_authoritative_tick(1.0 / 60.0, tick)
 	assert_eq(state.sync_threat_table.size(), 0,
 		"All zero entries are erased after decay brings them down")
 

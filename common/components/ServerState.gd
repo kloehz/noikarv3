@@ -89,7 +89,7 @@ signal threat_changed(new_table: Dictionary)
 ## Keyed by the attacker's entity name (string). Value is threat
 ## points, which combine the raw damage and the attacker's
 ## per-class multiplier (see HurtboxComponent._threat_multiplier_for).
-## Decays linearly on the server every frame; entries that hit 0
+## Decays linearly on authoritative network ticks; entries that hit 0
 ## are erased so the table doesn't grow unbounded.
 @export var sync_threat_table: Dictionary = {}:
 	set(v):

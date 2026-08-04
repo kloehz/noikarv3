@@ -95,6 +95,9 @@ func _set_hurtbox_enabled(is_enabled: bool) -> void:
 		hurtbox.monitorable = is_enabled
 		hurtbox.monitoring = is_enabled
 
+func is_spawn_grace_active() -> bool:
+	return _spawn_grace_active
+
 ## Reconfigures a live server enemy. Normal spawns must use configure_enemy
 ## before add_child so MultiplayerSpawner replicates the correct identity.
 func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:

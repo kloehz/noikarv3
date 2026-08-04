@@ -1,21 +1,21 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene format=3 uid="uid://c5wgry7yk5cwr"]
 
-[ext_resource type="Script" path="res://common/PetEntity.gd" id="1_pet"]
-[ext_resource type="Script" path="res://common/components/HealthComponent.gd" id="2_health"]
-[ext_resource type="Script" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
-[ext_resource type="Script" path="res://common/components/ServerState.gd" id="4_server_state"]
-[ext_resource type="Script" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
-[ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
+[ext_resource type="Script" uid="uid://dsaxbm42fp6eb" path="res://common/PetEntity.gd" id="1_pet"]
+[ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="2_health"]
+[ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
+[ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="4_server_state"]
+[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
+[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
-[ext_resource type="PackedScene" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
+[ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
-[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
+[ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
 [ext_resource type="Script" path="res://core/AIComponent.gd" id="12_ai"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_pet"]
-radius = 0.4
-height = 1.2
+radius = 0.5522461
+height = 1.7729003
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_pet_atk"]
 radius = 1.5
@@ -37,93 +37,92 @@ properties/3/path = NodePath(".:power_level")
 properties/3/spawn = true
 properties/3/replication_mode = 1
 
-[node name="PetEntity" type="CharacterBody3D"]
+[node name="PetEntity" type="CharacterBody3D" unique_id=1755079396]
 collision_layer = 2
 collision_mask = 3
 script = ExtResource("1_pet")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1127374017]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.786084, 0)
 shape = SubResource("CapsuleShape3D_pet")
 
-[node name="ShapeCast3D" type="ShapeCast3D" parent="."]
+[node name="ShapeCast3D" type="ShapeCast3D" parent="." unique_id=1005833532]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -1)
 shape = SubResource("SphereShape3D_pet_atk")
 target_position = Vector3(0, 0, 0)
 max_results = 8
 collide_with_areas = true
 
-[node name="LogicComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+[node name="LogicComponent" type="Node" parent="." unique_id=970837763 node_paths=PackedStringArray("entity")]
 script = ExtResource("9_logic")
 entity = NodePath("..")
 
-[node name="CombatComponent" type="Node" parent="."]
+[node name="CombatComponent" type="Node" parent="." unique_id=1748740251]
 script = ExtResource("11_combat")
 
-[node name="AIComponent" type="Node" parent="."]
+[node name="AIComponent" type="Node" parent="." unique_id=487362747]
 script = ExtResource("12_ai")
 detection_range = 5.0
 attack_range = 2.5
-follow_distance = 4.0
 
-[node name="VisualComponent" type="Node" parent="." node_paths=PackedStringArray("entity")]
+[node name="VisualComponent" type="Node" parent="." unique_id=777861438 node_paths=PackedStringArray("entity")]
 script = ExtResource("7_visual")
 entity = NodePath("..")
 
-[node name="HealthComponent" type="Node3D" parent="."]
+[node name="HealthComponent" type="Node3D" parent="." unique_id=534365348]
 script = ExtResource("2_health")
 
-[node name="HealthViewport" type="SubViewport" parent="."]
+[node name="HealthViewport" type="SubViewport" parent="." unique_id=220488282]
 transparent_bg = true
 handle_input_locally = false
 size = Vector2i(105, 14)
 render_target_update_mode = 4
 
-[node name="HealthBar2D" parent="HealthViewport" instance=ExtResource("8_health_bar")]
+[node name="HealthBar2D" parent="HealthViewport" unique_id=566397165 instance=ExtResource("8_health_bar")]
 
-[node name="HealthBar3D" type="Sprite3D" parent="."]
+[node name="HealthBar3D" type="Sprite3D" parent="." unique_id=2103390875]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4, 0)
 billboard = 1
 no_depth_test = true
 texture = SubResource("ViewportTexture_pet_health")
 
-[node name="NameLabel" type="Label3D" parent="."]
+[node name="NameLabel" type="Label3D" parent="." unique_id=422915033]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
 billboard = 1
 no_depth_test = true
 text = "PET"
 font_size = 24
-outline_size = 12
 
-[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+[node name="HurtboxComponent" type="Area3D" parent="." unique_id=1062795119 node_paths=PackedStringArray("health_component")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22226423, 0)
 collision_layer = 8
 collision_mask = 0
 script = ExtResource("3_hurtbox")
 health_component = NodePath("../HealthComponent")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HurtboxComponent" unique_id=916873521]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7003662, 0)
 shape = SubResource("CapsuleShape3D_pet")
 
-[node name="ServerState" type="Node" parent="."]
+[node name="ServerState" type="Node" parent="." unique_id=678919387]
 script = ExtResource("4_server_state")
 
-[node name="StateSynchronizer" type="Node" parent="ServerState" node_paths=PackedStringArray("root")]
+[node name="StateSynchronizer" type="Node" parent="ServerState" unique_id=48199021 node_paths=PackedStringArray("root")]
 script = ExtResource("5_state_sync")
 root = NodePath("..")
 properties = Array[String]([":sync_health", ":sync_is_dead", ":pet_type_sync", ":power_level_sync"])
 
-[node name="RollbackSynchronizer" type="Node" parent="." node_paths=PackedStringArray("root")]
+[node name="RollbackSynchronizer" type="Node" parent="." unique_id=185521340 node_paths=PackedStringArray("root")]
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 enable_prediction = true
-state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count", "LogicComponent:is_dashing", "LogicComponent:dash_direction"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "LogicComponent:is_dashing", "LogicComponent:dash_direction", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
-[node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
+[node name="TickInterpolator" type="Node" parent="." unique_id=1933293119 node_paths=PackedStringArray("root")]
 script = ExtResource("10_interpolator")
 root = NodePath("..")
 properties = Array[String]([":global_position", ":quaternion"])
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=197722023]
 replication_config = SubResource("SceneReplicationConfig_pet")
