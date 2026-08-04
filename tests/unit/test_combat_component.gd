@@ -62,3 +62,20 @@ func test_apply_difficulty_guards_against_zero_and_negative() -> void:
 	_combat.difficulty = -1.5
 	assert_almost_eq(_combat._apply_difficulty(80.0), 80.0, 0.0001,
 		"Negative difficulty falls back to identity")
+
+func test_attack_cooldown_range_is_deterministic_and_bounded() -> void:
+	var attack := AttackDefinition.new()
+	attack.cooldown = 0.8
+	attack.cooldown_min = 0.7
+	attack.cooldown_max = 1.1
+	var first := attack.get_cooldown("PET_2_ATTACK", 5)
+	var repeated := attack.get_cooldown("PET_2_ATTACK", 5)
+	assert_gte(first, 0.7)
+	assert_lte(first, 1.1)
+	assert_almost_eq(first, repeated, 0.000001,
+		"Same entity and attack sequence must resolve identically on every peer")
+
+func test_fixed_attack_cooldown_remains_unchanged() -> void:
+	var attack := AttackDefinition.new()
+	attack.cooldown = 1.25
+	assert_almost_eq(attack.get_cooldown("MOB_1", 1), 1.25, 0.000001)

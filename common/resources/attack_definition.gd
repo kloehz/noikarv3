@@ -52,6 +52,11 @@ enum AttackType { MELEE_HITSCAN, PROJECTILE, AOE_DELAYED }
 
 ## Cooldown between uses (seconds).
 @export var cooldown: float = 0.7
+## Optional lower bound for a varied attack cadence. Leave both range values
+## at zero to use the fixed cooldown above.
+@export var cooldown_min: float = 0.0
+## Optional upper bound for a varied attack cadence.
+@export var cooldown_max: float = 0.0
 
 ## Knockback force applied to hit targets.
 @export var knockback_force: float = 12.0
@@ -68,3 +73,17 @@ enum AttackType { MELEE_HITSCAN, PROJECTILE, AOE_DELAYED }
 
 ## Recovery time after the active window (backswing).
 @export var recovery_time: float = 0.3
+
+## Returns a repeatable value in the configured cooldown range. The key must
+## identify the entity and attack sequence so server and clients choose the
+## same cadence without advancing a shared random-number generator.
+func get_cooldown(entity_key: String, attack_sequence: int) -> float:
+	var lower := cooldown_min if cooldown_min > 0.0 else cooldown
+	var upper := cooldown_max if cooldown_max > 0.0 else cooldown
+	lower = maxf(0.0, lower)
+	upper = maxf(lower, upper)
+	if is_equal_approx(lower, upper):
+		return lower
+	var seed := ("%s:%d" % [entity_key, attack_sequence]).hash()
+	var ratio := float(seed & 0xffff) / 65535.0
+	return lerpf(lower, upper, ratio)

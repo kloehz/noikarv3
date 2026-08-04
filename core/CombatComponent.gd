@@ -292,10 +292,11 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_mu
 	attack_started.emit()
 
 	# Set cooldown
+	var resolved_cooldown := attack_def.get_cooldown(str(entity.name), sync_attack_count)
 	if is_primary:
-		_primary_cooldown = attack_def.cooldown
+		_primary_cooldown = resolved_cooldown
 	else:
-		_secondary_cooldown = attack_def.cooldown
+		_secondary_cooldown = resolved_cooldown
 
 # ============================================================
 # ATTACK ACTIVE FRAME — Dispatch based on type
