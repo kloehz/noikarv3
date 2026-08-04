@@ -64,3 +64,23 @@ func test_player_damage_behavior_is_unchanged() -> void:
 	visual._play_hit_effect()
 	assert_eq(actor.get_current_animation(), "Hit",
 		"Players retain the current hurt-animation behavior until explicitly redesigned")
+
+func test_every_tiered_pet_actor_resolves_an_attack_clip() -> void:
+	for scene_path in [
+		"res://scenes/characters/pets/dps/PetDpsT1Vladimir.tscn",
+		"res://scenes/characters/pets/dps/PetDpsT2Gwen.tscn",
+		"res://scenes/characters/pets/dps/PetDpsT3Jax.tscn",
+		"res://scenes/characters/pets/dps/PetDpsT4Ezreal.tscn",
+		"res://scenes/characters/pets/tank/PetTankT1Alistar.tscn",
+		"res://scenes/characters/pets/tank/PetTankT2Garen.tscn",
+		"res://scenes/characters/pets/tank/PetTankT3Thresh.tscn",
+		"res://scenes/characters/pets/tank/PetTankT4Galio.tscn",
+		"res://scenes/characters/pets/support/PetSupT1Yuumi.tscn",
+		"res://scenes/characters/pets/support/PetSupT2Bard.tscn",
+		"res://scenes/characters/pets/support/PetSupT3Janna.tscn",
+		"res://scenes/characters/pets/support/PetSupT4Nami.tscn",
+	]:
+		var actor: CharacterActor = load(scene_path).instantiate()
+		add_child_autofree(actor)
+		await get_tree().process_frame
+		assert_ne(actor.resolve_animation_name("Attack"), "", "%s needs a playable attack clip" % scene_path)
