@@ -59,6 +59,7 @@ jobs:
           ./Godot_v4.7-stable_linux.x86_64 --headless --path . --import
       - name: Export dedicated server
         run: |
+          mkdir -p build/world
           ./Godot_v4.7-stable_linux.x86_64 --headless --path . \
             --export-release "Dedicated Server (Linux)" build/world/noikar-server.x86_64
           test -x build/world/noikar-server.x86_64
