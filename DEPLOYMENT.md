@@ -56,9 +56,21 @@ Pushing backend changes to `main` runs tests, syncs the backend source with
 Pushing dedicated-server source changes exports a Linux dedicated-server build
 in CI and syncs only that artifact to `${NOIKAR_VPS_PATH}/world/releases`. It
 then atomically switches `${NOIKAR_VPS_PATH}/world/current` to the new release,
-so rooms already running retain their previous runtime. Godot strips visual
-resources from this export, so the VPS does not receive client meshes,
-materials, textures, or audio assets.
+so rooms already running retain their previous runtime. The server export
+excludes `res://assets/models/**` and `res://MODELS_TEST/**`: combat/AI data
+lives in `CharacterSpec` resources (`common/resources/specs/`), so the headless
+runtime never loads actor scenes or meshes and the `.pck` stays around 7 MB.
+
+## Local world-runtime deploy (fast iteration)
+
+`./deploy-world-local.sh` exports the same Linux preset with the local Godot
+install and rsyncs the artifact straight to the VPS using the same
+releases/current-symlink layout as CI. It finishes in about a minute thanks to
+the warm local `.godot` import cache, making it the fastest way to iterate on
+runtime changes before pushing. Pass `--smoke` to also boot the binary on the
+VPS for a few seconds. `VPS_HOST`, `VPS_USER`, `VPS_DEPLOY_PATH`, and
+`GODOT_BIN` can be overridden through the environment. CI remains the official
+pipeline for anything merged to `main`.
 
 Noray is deployed independently from `noikar-noray` because it has its own
 source repository and release cadence. Its published Docker image does not
