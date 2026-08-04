@@ -46,6 +46,9 @@ jobs:
           key: godot-import-${{ runner.os }}-${{ hashFiles('assets/**', 'project.godot', 'export_presets.cfg') }}
           restore-keys: |
             godot-import-${{ runner.os }}-
+      - name: Import project resources
+        run: |
+          ./Godot_v4.7-stable_linux.x86_64 --headless --path . --import
       - name: Export dedicated server
         run: |
           ./Godot_v4.7-stable_linux.x86_64 --headless --path . \
