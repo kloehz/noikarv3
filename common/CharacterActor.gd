@@ -86,6 +86,20 @@ func play_animation(anim_name: String, blend: float = 0.2) -> void:
 	if actual_anim != "" and animation_player.current_animation != actual_anim:
 		animation_player.play(actual_anim, blend)
 
+## Lets presentation code observe the concrete clip without duplicating the
+## importer-library lookup used by play_animation().
+func resolve_animation_name(anim_name: String) -> String:
+	return _resolve_animation_name(anim_name)
+
+func get_animation_length(anim_name: String) -> float:
+	if not animation_player:
+		return 0.0
+	var actual_anim := _resolve_animation_name(anim_name)
+	if actual_anim == "":
+		return 0.0
+	var animation := animation_player.get_animation(actual_anim)
+	return animation.length if animation else 0.0
+
 ## Resolves a standard alias to the exact AnimationPlayer playback name.
 ## Named animation libraries require the library/clip form for current_animation.
 func _resolve_animation_name(anim_name: String) -> String:

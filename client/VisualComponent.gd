@@ -12,6 +12,12 @@ extends Node
 ## Current active character actor (model + animations)
 var _actor: CharacterActor
 var _anim_lock_time: float = 0.0
+var _attack_visual_active: bool = false
+var _attack_visual_token: int = 0
+var _protected_attack_animation: String = ""
+var _hit_flash_actor: CharacterActor
+var _hit_flash_materials: Array[StandardMaterial3D] = []
+var _hit_flash_tween: Tween
 var _preview_mesh: MeshInstance3D
 var _aim_reticle: Control
 var _base_camera_fov: float = 75.0
@@ -169,6 +175,11 @@ func setup_with_actor(actor: CharacterActor) -> void:
 	_actor = actor
 	if _actor:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
+		_attack_visual_active = false
+		_protected_attack_animation = ""
+		_setup_hit_flash_overlays()
+		if _actor.animation_player and not _actor.animation_player.animation_finished.is_connected(_on_actor_animation_finished):
+			_actor.animation_player.animation_finished.connect(_on_actor_animation_finished)
 		if entity:
 			var mesh = entity.get_node_or_null("MeshInstance3D")
 			if mesh: mesh.visible = false
@@ -191,12 +202,15 @@ func play_shoot_effect() -> void:
 	if not _actor: 
 		_play_fallback_punch()
 		return
-		
-	# Force restart if already playing to show rapid attacks
+
+	if _uses_attack_priority():
+		_begin_protected_attack()
+		return
+
+	# Force restart if already playing to show rapid player attacks.
 	if _actor.animation_player:
 		_actor.animation_player.stop()
-	
-	_actor.play_animation("Attack") 
+	_actor.play_animation("Attack")
 	_anim_lock_time = 0.5 # Wait 0.5s before allowing Idle/Run to override
 
 func _process(delta: float) -> void:
@@ -284,6 +298,8 @@ func _update_movement_animations() -> void:
 
 	# CRITICAL: If dead, don't play movement/idle animations
 	if entity.get("sync_is_dead"):
+		return
+	if _attack_visual_active:
 		return
 
 	# Some headless tests strip the actor's GLB meshes, leaving the
@@ -431,14 +447,85 @@ func play_spawn_effect() -> void:
 
 ## Play hit/damage visual effect.
 func _play_hit_effect() -> void:
-	if _actor:
+	var has_attack_priority := _uses_attack_priority()
+	if has_attack_priority:
+		_play_hit_flash()
+
+	# Pets, mobs, and bosses keep rendering impact feedback during an attack,
+	# but their protected attack animation owns the actor until its clip ends.
+	if _actor and (not has_attack_priority or not _attack_visual_active):
 		_actor.play_animation("Hit")
 		# Short lock to ensure hit animation is visible
-		_anim_lock_time = 0.3 
-		
-	_apply_hitstop(0.08) # Freeze for 80ms for weight
+		_anim_lock_time = 0.3
+
+	if not has_attack_priority:
+		_apply_hitstop(0.08) # Freeze for 80ms for player feedback
 	_spawn_hit_vfx()
 	EventBus.visual_effect_requested.emit(entity, "hit")
+
+func _uses_attack_priority() -> bool:
+	return entity != null and (entity.is_in_group(&"pets") or entity.is_in_group(&"mobs"))
+
+func _begin_protected_attack() -> void:
+	if not _actor or not _actor.animation_player:
+		return
+	var attack_animation := _actor.resolve_animation_name("Attack")
+	if attack_animation.is_empty():
+		return
+
+	_attack_visual_token += 1
+	_attack_visual_active = true
+	_protected_attack_animation = attack_animation
+	# An attack is an explicit combat action, so it preempts a hit reaction.
+	_actor.animation_player.stop()
+	_actor.play_animation("Attack", 0.0)
+
+	var token := _attack_visual_token
+	var clip_length := _actor.get_animation_length("Attack")
+	if clip_length > 0.0:
+		get_tree().create_timer(clip_length + 0.1).timeout.connect(_finish_protected_attack.bind(token))
+	else:
+		# Imported actors without a readable clip must still release movement.
+		get_tree().create_timer(0.5).timeout.connect(_finish_protected_attack.bind(token))
+
+func _on_actor_animation_finished(animation_name: StringName) -> void:
+	if _attack_visual_active and String(animation_name) == _protected_attack_animation:
+		_finish_protected_attack(_attack_visual_token)
+
+func _finish_protected_attack(token: int) -> void:
+	if token != _attack_visual_token:
+		return
+	_attack_visual_active = false
+	_protected_attack_animation = ""
+
+func _setup_hit_flash_overlays() -> void:
+	if _hit_flash_actor == _actor:
+		return
+	_hit_flash_actor = _actor
+	_hit_flash_materials.clear()
+	if not _actor:
+		return
+	for node in _actor.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		if mesh == null or mesh.material_overlay:
+			continue
+		var overlay := StandardMaterial3D.new()
+		overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		overlay.albedo_color = Color(1.0, 1.0, 1.0, 0.0)
+		mesh.material_overlay = overlay
+		_hit_flash_materials.append(overlay)
+
+func _play_hit_flash() -> void:
+	if _hit_flash_materials.is_empty():
+		return
+	if is_instance_valid(_hit_flash_tween):
+		_hit_flash_tween.kill()
+	for material in _hit_flash_materials:
+		material.albedo_color = Color(1.0, 1.0, 1.0, 0.35)
+	_hit_flash_tween = create_tween().set_parallel(true)
+	for material in _hit_flash_materials:
+		_hit_flash_tween.tween_property(material, "albedo_color:a", 0.0, 0.1)
 
 ## Spawn the VFXHit_02 impact scene at the entity's current position.
 ## Spawned under the current scene root (not as a child of the entity) so
