@@ -55,6 +55,16 @@ func test_pet_attack_finishes_and_releases_visual_priority() -> void:
 	assert_false(visual._attack_visual_active,
 		"The completed attack clip must release the visual lock")
 
+func test_pet_attack_lock_ignores_early_animation_finished_signal() -> void:
+	var setup := await _make_visual(&"pets")
+	var visual = setup[0]
+	var actor: CharacterActor = setup[1]
+
+	visual.play_shoot_effect()
+	actor.animation_player.animation_finished.emit(&"Attack")
+	assert_true(visual._attack_visual_active,
+		"Only the measured clip duration may release an attack lock")
+
 func test_player_damage_behavior_is_unchanged() -> void:
 	var setup := await _make_visual()
 	var visual = setup[0]

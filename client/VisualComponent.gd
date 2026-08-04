@@ -14,7 +14,6 @@ var _actor: CharacterActor
 var _anim_lock_time: float = 0.0
 var _attack_visual_active: bool = false
 var _attack_visual_token: int = 0
-var _protected_attack_animation: String = ""
 var _hit_flash_actor: CharacterActor
 var _hit_flash_materials: Array[StandardMaterial3D] = []
 var _hit_flash_tween: Tween
@@ -176,10 +175,7 @@ func setup_with_actor(actor: CharacterActor) -> void:
 	if _actor:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		_attack_visual_active = false
-		_protected_attack_animation = ""
 		_setup_hit_flash_overlays()
-		if _actor.animation_player and not _actor.animation_player.animation_finished.is_connected(_on_actor_animation_finished):
-			_actor.animation_player.animation_finished.connect(_on_actor_animation_finished)
 		if entity:
 			var mesh = entity.get_node_or_null("MeshInstance3D")
 			if mesh: mesh.visible = false
@@ -475,28 +471,28 @@ func _begin_protected_attack() -> void:
 
 	_attack_visual_token += 1
 	_attack_visual_active = true
-	_protected_attack_animation = attack_animation
 	# An attack is an explicit combat action, so it preempts a hit reaction.
 	_actor.animation_player.stop()
-	_actor.play_animation("Attack", 0.0)
+	_actor.animation_player.speed_scale = 1.0
+	_actor.animation_player.play(attack_animation, 0.0)
+	# AnimationPlayer applies play() on its next process tick. Advance once so
+	# the measured lock begins with the visible attack frame, not a frame later.
+	_actor.animation_player.advance(0.0)
 
 	var token := _attack_visual_token
 	var clip_length := _actor.get_animation_length("Attack")
 	if clip_length > 0.0:
-		get_tree().create_timer(clip_length + 0.1).timeout.connect(_finish_protected_attack.bind(token))
+		# The measured animation duration is the single timing source, so no
+		# signal or transition can shorten the protected attack window.
+		get_tree().create_timer(clip_length).timeout.connect(_finish_protected_attack.bind(token))
 	else:
 		# Imported actors without a readable clip must still release movement.
 		get_tree().create_timer(0.5).timeout.connect(_finish_protected_attack.bind(token))
-
-func _on_actor_animation_finished(animation_name: StringName) -> void:
-	if _attack_visual_active and String(animation_name) == _protected_attack_animation:
-		_finish_protected_attack(_attack_visual_token)
 
 func _finish_protected_attack(token: int) -> void:
 	if token != _attack_visual_token:
 		return
 	_attack_visual_active = false
-	_protected_attack_animation = ""
 
 func _setup_hit_flash_overlays() -> void:
 	if _hit_flash_actor == _actor:
