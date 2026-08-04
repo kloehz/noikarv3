@@ -15,9 +15,20 @@ var _anim_lock_time: float = 0.0
 var _preview_mesh: MeshInstance3D
 var _aim_reticle: Control
 var _base_camera_fov: float = 75.0
+## Tracks the last soul amount rendered in the HUD so the pulse animation
+## only fires on increment (not on every replication tick).
+var _last_hud_souls: int = 0
 
 ## Preloaded impact VFX scene used by the replicated hit-event flow.
 const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
+
+## Maps the replicated ServerState.character_id to the HUD label name shown
+## above the local player's HP bar. Falls back to the raw id if a new
+## champion is added before the map is updated.
+const CHAMPION_DISPLAY_NAMES: Dictionary = {
+	"warrior": "Aatrox",
+	"ivern_ranger": "Ivern",
+}
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -64,7 +75,9 @@ func _connect_signals() -> void:
 		server_state.souls_changed.connect(_on_souls_changed)
 		server_state.heal_received.connect(_on_heal_received)
 		server_state.damage_received.connect(_on_damage_received)
+		server_state.character_changed.connect(_on_character_changed)
 		_on_souls_changed(server_state.sync_souls)
+		_on_character_changed(server_state.character_id)
 
 func _on_souls_changed(amount: int) -> void:
 	# Only update HUD for the local controlled player
@@ -81,6 +94,51 @@ func _on_souls_changed(amount: int) -> void:
 	var hud_counter := panel.get_node_or_null("HBox/Label") as Label
 	if hud_counter:
 		hud_counter.text = "Almas: %d" % amount
+	# Only fire the pulse on net increment — replicated ticks may deliver the
+	# same value, and the initial sync call shouldn't burst the animation.
+	if amount > _last_hud_souls:
+		_play_soul_pulse(panel)
+	_last_hud_souls = amount
+
+## Triggered by ServerState.character_changed on every client (the value is
+## replicated, not authority-only). Drives the HUD label above the local
+## player's HP bar so it reflects whichever champion they picked.
+func _on_character_changed(character_id: String) -> void:
+	if not entity.is_multiplayer_authority():
+		return
+	var label := get_tree().root.find_child("PlayerHealthLabel", true, false) as Label
+	if label == null:
+		return
+	label.text = CHAMPION_DISPLAY_NAMES.get(character_id, character_id.capitalize())
+
+## Short celebratory pulse on the soul icon + number when the local player
+## gains a soul. Icon scales up and tints brighter, then eases back; the
+## label does a quick brightness flash. Existing tweens on the same nodes
+## are killed so rapid pickups don't stack and accumulate transform drift.
+func _play_soul_pulse(panel: Node) -> void:
+	var icon := panel.get_node_or_null("HBox/Icon") as Control
+	var hud_counter := panel.get_node_or_null("HBox/Label") as Label
+	if icon:
+		if icon.has_meta("soul_pulse_tween"):
+			var prev: Tween = icon.get_meta("soul_pulse_tween")
+			if is_instance_valid(prev): prev.kill()
+		icon.pivot_offset = icon.size * 0.5
+		var tween := icon.create_tween().set_parallel(true)
+		tween.tween_property(icon, "scale", Vector2.ONE * 1.35, 0.08) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(icon, "modulate", Color(1.6, 1.6, 2.2, 1.0), 0.08)
+		tween.chain().tween_property(icon, "scale", Vector2.ONE, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+		tween.tween_property(icon, "modulate", Color(1, 1, 1, 1), 0.22)
+		icon.set_meta("soul_pulse_tween", tween)
+	if hud_counter:
+		if hud_counter.has_meta("soul_label_tween"):
+			var prev: Tween = hud_counter.get_meta("soul_label_tween")
+			if is_instance_valid(prev): prev.kill()
+		var tween := hud_counter.create_tween()
+		tween.tween_property(hud_counter, "modulate", Color(1.5, 1.7, 2.2, 1.0), 0.06)
+		tween.tween_property(hud_counter, "modulate", Color(1, 1, 1, 1), 0.18)
+		hud_counter.set_meta("soul_label_tween", tween)
 
 func _on_health_changed(current: int, maximum: int) -> void:
 	# World-space bars remain for mobs and pets. The local player's health is

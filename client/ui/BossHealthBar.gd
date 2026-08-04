@@ -15,7 +15,7 @@ extends Control
 @export var red_color: Color = Color(0.85, 0.2, 0.2, 0.95)
 @export var blue_color: Color = Color(0.2, 0.45, 0.9, 0.95)
 ## How tall the bar is in pixels (the width is fixed via custom_minimum_size).
-@export var bar_height: float = 22.0
+@export var bar_height: float = 28.0
 ## Spacing between the bar and its label.
 @export var label_gap: float = 4.0
 ## Duration of the damage flash on the team that just landed a hit.
@@ -31,7 +31,7 @@ var _prev_red: float = 0.0
 var _prev_blue: float = 0.0
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(640, bar_height + label_gap + 16)
+	custom_minimum_size = Vector2(720, bar_height + label_gap + 16)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	queue_redraw()
 

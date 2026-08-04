@@ -95,11 +95,9 @@ func _try_hit(collider: Node) -> bool:
 	if str(owner_entity_id) == target.name:
 		return false
 
-	# Never hit any pet, regardless of owner. Pets are cross-team
-	# completely invisible to each other so melee and projectile damage
-	# stay inside the same team vs the opposing team. The projectile
-	# just phases through friendly pets and keeps traveling.
-	if target.is_in_group(&"pets"):
+	# Pets cannot damage other pets, but enemy projectiles must still hit
+	# pets through their regular CharacterBody3D collision shape.
+	if target.is_in_group(&"pets") and _owner_entity and _owner_entity.is_in_group(&"pets"):
 		return false
 
 	# Damage attribution must use the shooter, not this temporary projectile.

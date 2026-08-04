@@ -268,6 +268,10 @@ func _render_snapshot() -> void:
 	_apply_ready_cooldown()
 	if not lobby_ready.disabled:
 		lobby_ready.set_pressed_no_signal(bool(_snapshot.get("self_lobby_ready", false)))
+	var selected_character := str(_snapshot.get("self_character_id", ""))
+	if not selected_character.is_empty():
+		_selected_character = selected_character
+	_set_character_selection(selected_character)
 	selection_ready.set_pressed_no_signal(bool(_snapshot.get("self_selection_ready", false)))
 	start_selection.visible = bool(_snapshot.get("is_host", false))
 	lobby_status.text = str(_snapshot.get("rejection", ""))
@@ -373,8 +377,13 @@ func _on_start_selection_pressed() -> void:
 
 func _on_character_pressed(character_id: String) -> void:
 	_selected_character = character_id
+	_set_character_selection(character_id)
 	selection_status.text = "Selected " + character_id
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, character_id, false)
+
+func _set_character_selection(character_id: String) -> void:
+	aatrox_button.set_pressed_no_signal(character_id == "warrior")
+	ivern_button.set_pressed_no_signal(character_id == "ivern_ranger")
 
 func _on_selection_ready_toggled(ready: bool) -> void:
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, _selected_character, ready)

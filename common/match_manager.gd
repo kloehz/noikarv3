@@ -821,7 +821,7 @@ func _snapshot_for(peer_id: int, rejection: String = "") -> Dictionary:
 			blue_members.append(member_payload)
 		if record["team"] == recipient["team"]:
 			team_members.append(member_payload)
-	return { "phase": _get_match_director().match_state.phase, "deadline_tick": _get_match_director().match_state.selection_deadline_tick, "team": recipient["team"], "is_host": recipient["is_host"], "self_lobby_ready": recipient["lobby_ready"], "self_selection_ready": recipient["selection_ready"], "members": team_members, "red_members": red_members, "blue_members": blue_members, "rejection": rejection }
+	return { "phase": _get_match_director().match_state.phase, "deadline_tick": _get_match_director().match_state.selection_deadline_tick, "team": recipient["team"], "is_host": recipient["is_host"], "self_lobby_ready": recipient["lobby_ready"], "self_character_id": recipient["character_id"], "self_selection_ready": recipient["selection_ready"], "members": team_members, "red_members": red_members, "blue_members": blue_members, "rejection": rejection }
 
 func _broadcast_lobby_snapshots() -> void:
 	if not multiplayer.is_server(): return

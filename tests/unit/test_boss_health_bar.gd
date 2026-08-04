@@ -7,6 +7,7 @@ extends GutTest
 ## - BossHealthBar.set_damage clamps the percentages and stores them.
 
 const MOBS_PER_STAGE: int = 10
+const BOSS_SCALE: float = 3.0
 
 var _manager: Node3D
 var _director: MatchDirector
@@ -122,3 +123,12 @@ func test_boss_health_bar_set_damage_clamps_percentages() -> void:
 	bar.set_damage(5, 5, 0)
 	assert_eq(bar._red_pct, 1.0)
 	assert_eq(bar._blue_pct, 1.0)
+
+func test_boss_model_scale_applies_to_body_and_hurtbox_shapes() -> void:
+	var boss := _spawn_boss_for_test()
+	var body_shape: CollisionShape3D = boss.get_node("CollisionShape3D") as CollisionShape3D
+	var hurtbox_shape: CollisionShape3D = boss.get_node("HurtboxComponent/CollisionShape3D") as CollisionShape3D
+	assert_eq(body_shape.scale, Vector3.ONE * BOSS_SCALE)
+	assert_eq(hurtbox_shape.scale, Vector3.ONE * BOSS_SCALE)
+	assert_almost_eq(body_shape.position.y, 0.9 * BOSS_SCALE, 0.001,
+		"Scaled body collider keeps its feet aligned with the scaled model")

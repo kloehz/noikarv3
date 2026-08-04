@@ -90,14 +90,21 @@ func test_actual_netfox_peer_leave_removes_lobby_member() -> void:
 func test_snapshot_ready_state_updates_without_emitting_user_toggle() -> void:
 	var menu: CanvasLayer = load("res://scenes/connection_menu.tscn").instantiate()
 	add_child_autofree(menu)
-	var ready: CheckButton = menu.get_node("TeamLobbyPanel/VBox/Ready")
-	var selection_ready: CheckButton = menu.get_node("CharacterSelectPanel/VBox/Ready")
+	var ready: CheckButton = menu.get_node("TeamLobbyPanel/Card/VBox/Ready")
+	var selection_ready: CheckButton = menu.get_node("CharacterSelectPanel/Card/VBox/Ready")
 	var toggle_count := 0
 	ready.toggled.connect(func(_pressed: bool) -> void: toggle_count += 1)
 	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.LOBBY, "team": TeamId.RED, "self_lobby_ready": true, "self_selection_ready": true, "is_host": false, "members": [], "red_members": [], "blue_members": [], "rejection": ""})
 	assert_true(ready.button_pressed)
 	assert_true(selection_ready.button_pressed)
 	assert_eq(toggle_count, 0, "Authoritative rendering must not invoke the user RPC signal")
+
+func test_ui_renders_the_authoritative_ivern_selection() -> void:
+	var menu: CanvasLayer = load("res://scenes/connection_menu.tscn").instantiate()
+	add_child_autofree(menu)
+	menu._on_lobby_snapshot_received({"phase": MatchState.Phase.CHARACTER_SELECT, "team": TeamId.RED, "self_lobby_ready": true, "self_character_id": "ivern_ranger", "self_selection_ready": false, "is_host": false, "members": [], "red_members": [], "blue_members": [], "rejection": ""})
+	assert_false(menu.aatrox_button.button_pressed, "Aatrox is not highlighted when Ivern is selected")
+	assert_true(menu.ivern_button.button_pressed, "Ivern is highlighted from the authoritative selection")
 
 func test_empty_creator_ticket_cannot_request_noray_host() -> void:
 	assert_eq(Noray.request_host(""), ERR_INVALID_PARAMETER)
@@ -106,7 +113,7 @@ func test_admission_rejection_returns_safe_room_message() -> void:
 	var menu: CanvasLayer = load("res://scenes/connection_menu.tscn").instantiate()
 	add_child_autofree(menu)
 	menu._on_room_admission_rejected("Room is full")
-	assert_eq(menu.get_node("RoomPanel/VBox/RoomStatus").text, "Room is full")
+	assert_eq(menu.get_node("RoomPanel/Card/VBox/RoomStatus").text, "Room is full")
 	assert_eq(menu.current_state, menu.State.ROOM)
 
 func test_backend_validated_creator_event_establishes_host_identity() -> void:

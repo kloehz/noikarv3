@@ -27,6 +27,10 @@ const CHARACTER_ACTOR_PATHS: Dictionary = {
 
 var character_actor: CharacterActor
 
+## Original collision transforms are retained so model scaling can be applied
+## repeatedly without compounding the collider size or offset.
+var _collision_shape_base_transforms: Dictionary[int, Transform3D] = {}
+
 #region Network Sync Variables (Proxy properties)
 var player_name: String:
 	get: return server_state.player_name if server_state else "Player"
@@ -167,6 +171,26 @@ func _load_character_actor() -> void:
 		# --- DATA-DRIVEN COMBAT CONFIGURATION ---
 		_configure_combat_from_actor(character_actor)
 		_configure_ai_from_actor(character_actor)
+
+## Scales a character model and every collision shape owned by this entity.
+## Collider offsets must scale too, otherwise tall models sink their hit volume
+## toward the ground when enlarged.
+func set_model_scale(scale_factor: float) -> void:
+	var applied_scale := maxf(scale_factor, 0.01)
+	if is_instance_valid(character_actor):
+		character_actor.scale = Vector3.ONE * applied_scale
+	for node in find_children("*", "CollisionShape3D", true, false):
+		var collision_shape := node as CollisionShape3D
+		if collision_shape == null:
+			continue
+		var instance_id := collision_shape.get_instance_id()
+		if not _collision_shape_base_transforms.has(instance_id):
+			_collision_shape_base_transforms[instance_id] = collision_shape.transform
+		var base_transform: Transform3D = _collision_shape_base_transforms[instance_id]
+		collision_shape.transform = Transform3D(
+			base_transform.basis.scaled(Vector3.ONE * applied_scale),
+			base_transform.origin * applied_scale
+		)
 
 ## Applies a replicated character identity. The server is the only writer of
 ## ServerState; clients only react to the synchronized value.

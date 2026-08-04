@@ -127,8 +127,7 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 	print("[Enemy] %s spawned at %s (type: %s)" % [name, global_position, enemy_type])
 
 func _finish_enemy_setup() -> void:
-	if is_instance_valid(character_actor):
-		character_actor.scale = Vector3.ONE * actor_scale
+	set_model_scale(actor_scale)
 
 	# Re-link VisualComponent
 	if has_node("VisualComponent"):

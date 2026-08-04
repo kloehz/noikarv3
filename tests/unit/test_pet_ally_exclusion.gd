@@ -112,11 +112,10 @@ func test_pet_projectile_does_not_damage_other_pets() -> void:
 	var dmg_pet := await _spawn_pet_at(3, Vector3(-2, 0, 0), "ATTACK")
 	# Build a projectile owned by tank_a heading toward dmg_pet.
 	var proj_scene: PackedScene = load("res://scenes/ProjectileEntity.tscn")
-	var proj: Node = proj_scene.instantiate()
-	proj.owner_entity_id = tank_a.owner_id
-	proj.damage = 100
+	var proj: ProjectileEntity = proj_scene.instantiate() as ProjectileEntity
 	_manager.get_node("Projectiles").add_child(proj, true)
 	await get_tree().process_frame
+	proj.initialize(Vector3.RIGHT, 10.0, 100.0, tank_a.owner_id, 0.0, tank_a)
 	proj.global_position = tank_a.global_position
 	await get_tree().process_frame
 	# Manually pump _try_hit against the dmg_pet's hurtbox (simulating
@@ -128,6 +127,22 @@ func test_pet_projectile_does_not_damage_other_pets() -> void:
 	assert_false(hit, "Projectile fired by tank A reports no valid hit on pet B")
 	assert_eq(int(dmg_pet.get_node("HealthComponent").current_health), hp_before,
 		"Cross-team pet projectile did not damage the other pet")
+
+## Enemy projectiles must damage pets when their body collider is hit first.
+func test_mob_projectile_damages_pet() -> void:
+	var pet := await _spawn_tank_pet(2, Vector3.ZERO)
+	var mob := await _spawn_mob("AATROX", Vector3(3, 0, 0))
+	var proj_scene: PackedScene = load("res://scenes/ProjectileEntity.tscn")
+	var proj: ProjectileEntity = proj_scene.instantiate() as ProjectileEntity
+	_manager.get_node("Projectiles").add_child(proj, true)
+	await get_tree().process_frame
+	proj.initialize(Vector3.LEFT, 10.0, 100.0, -1, 0.0, mob)
+	var health: HealthComponent = pet.get_node("HealthComponent") as HealthComponent
+	var hp_before: int = health.current_health
+
+	assert_true(proj._try_hit(pet), "Mob projectile registers a pet body collision as a valid hit")
+	assert_eq(health.current_health, hp_before - 100,
+		"Mob projectile applies damage to the pet's HurtboxComponent")
 
 ## AoE stun: tank pet's stun never lands on any pet.
 func test_pet_aoe_stun_skips_pets() -> void:
