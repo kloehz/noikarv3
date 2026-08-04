@@ -38,7 +38,15 @@ jobs:
             --output templates.tpz \
             "https://github.com/godotengine/godot/releases/download/$godot_version/Godot_v${godot_version}_export_templates.tpz"
           mkdir -p "$HOME/.local/share/godot/export_templates/4.7.stable"
-          unzip -q templates.tpz -d "$HOME/.local/share/godot/export_templates/4.7.stable"
+          templates_dir="$HOME/.local/share/godot/export_templates/4.7.stable"
+          unzip -q templates.tpz -d "$templates_dir"
+          # The official .tpz nests everything under a top-level "templates/"
+          # folder; Godot expects the binaries directly inside 4.7.stable/.
+          if [ -d "$templates_dir/templates" ]; then
+            mv "$templates_dir/templates/"* "$templates_dir/"
+            rmdir "$templates_dir/templates"
+          fi
+          test -f "$templates_dir/linux_release.x86_64"
       - name: Cache Godot import data
         uses: actions/cache@v4
         with:
