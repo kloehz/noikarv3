@@ -56,6 +56,7 @@ func _ready() -> void:
 	_complete_ritual()
 
 func _setup_charge_vfx() -> void:
+	_make_charge_materials_unique()
 	var palette: Dictionary = TYPE_COLORS.get(totem_type, TYPE_COLORS[TotemType.ATTACK])
 	_vfx.set("primary_color", palette["primary"])
 	_vfx.set("secondary_color", palette["secondary"])
@@ -63,6 +64,14 @@ func _setup_charge_vfx() -> void:
 	_vfx.set("emission", palette["emission"])
 	_vfx.set("one_shot", true)
 	_vfx.call("play")
+
+## Packed-scene ShaderMaterials are shared by default. Each totem must own its
+## copies, otherwise configuring a later summon recolors an active earlier VFX.
+func _make_charge_materials_unique() -> void:
+	for child in _vfx.get_children():
+		if child is GPUParticles3D or child is MeshInstance3D:
+			if child.material_override:
+				child.material_override = child.material_override.duplicate()
 
 func add_souls(amount: int) -> void:
 	if not _is_active: return

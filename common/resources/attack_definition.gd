@@ -21,6 +21,11 @@ enum AttackType { MELEE_HITSCAN, PROJECTILE, AOE_DELAYED }
 ## Speed of the projectile (units/sec). Only used when attack_type == PROJECTILE.
 @export var projectile_speed: float = 20.0
 
+## Per-attack vertical correction after the standard projectile origin is
+## calculated. Keeps unusual rigs, such as Ezreal's raised weapon socket,
+## from firing above valid targets without changing other projectile actors.
+@export var projectile_height_offset: float = 0.0
+
 ## Holding the primary input charges a projectile when this is greater than zero.
 ## A zero duration preserves the immediate-fire behavior used by existing actors.
 @export var charge_duration: float = 0.0

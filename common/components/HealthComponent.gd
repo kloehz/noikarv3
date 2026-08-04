@@ -25,6 +25,7 @@ var current_health: int:
 			health_changed.emit(current_health, max_health)
 
 var _invincible: bool = false
+var _damage_immune: bool = false
 
 func _ready() -> void:
 	# Initialize on all to avoid flicker, server will sync the real value
@@ -32,7 +33,7 @@ func _ready() -> void:
 
 ## Take damage from a source. Returns actual damage dealt.
 func take_damage(amount: int, source: Node = null) -> int:
-	if _invincible or current_health <= 0:
+	if _invincible or _damage_immune or current_health <= 0:
 		return 0
 	
 	var actual := mini(amount, current_health)
@@ -62,6 +63,11 @@ func heal(amount: int) -> int:
 ## Reset health to max.
 func reset_health() -> void:
 	current_health = max_health
+
+## Blocks every damage path, including direct AoE damage that does not use
+## physics collisions. Used by short entity spawn-grace windows.
+func set_damage_immune(enabled: bool) -> void:
+	_damage_immune = enabled
 
 ## Start invincibility period.
 func _start_invincibility() -> void:

@@ -31,13 +31,26 @@ func receive_hit(hitbox: HitboxComponent) -> void:
 	_apply_threat(hitbox.damage, hitbox.owner_node)
 
 	if health_component:
-		health_component.take_damage(hitbox.damage, hitbox.owner_node)
+		var damage_dealt := health_component.take_damage(hitbox.damage, hitbox.owner_node)
+		_react_to_damage_source(hitbox.owner_node, damage_dealt)
 
 ## Receive direct damage data (useful for Raycasts).
 func receive_hit_data(damage_amount: int, source: Node) -> void:
 	_apply_threat(damage_amount, source)
 	if health_component:
-		health_component.take_damage(damage_amount, source)
+		var damage_dealt := health_component.take_damage(damage_amount, source)
+		_react_to_damage_source(source, damage_dealt)
+
+## A damaged pet should defend itself even when it was merely following its
+## owner. This only reacts to mobs; pets still never retaliate against pets.
+func _react_to_damage_source(source: Node, damage_dealt: int) -> void:
+	if damage_dealt <= 0 or owner_node == null or not owner_node.is_in_group(&"pets"):
+		return
+	if source == null or not source.is_in_group(&"mobs"):
+		return
+	var ai := owner_node.get_node_or_null("AIComponent")
+	if ai and ai.has_method("engage_attacker"):
+		ai.engage_attacker(source)
 
 ## Writes the per-attacker threat to THIS victim's ServerState.
 ## Threat is keyed by the attacker's entity name, so each mob tracks

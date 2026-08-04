@@ -289,6 +289,21 @@ func _logic_follow() -> void:
 	else:
 		_stop_inputs()
 
+## Immediately switches a pet from following to chasing the mob that landed a
+## real hit. HurtboxComponent has already recorded the threat on this pet, so
+## later target refreshes keep this attacker even outside sight range.
+func engage_attacker(attacker: Node) -> void:
+	if not _faction_cached:
+		refresh_faction()
+	if not _is_pet or attacker == null or not attacker.is_in_group(&"mobs"):
+		return
+	if attacker.get("sync_is_dead"):
+		return
+	target = attacker as Node3D
+	if target:
+		state = State.CHASE
+		_target_search_timer = 0.0
+
 func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	var dir := (pos - entity.global_position).normalized()
 	dir = _steer_around_nearby_allies(dir)
@@ -416,11 +431,15 @@ func _find_nearest_target() -> void:
 				else:
 					continue
 			else:
-				# Pets do not own the mob's threat table. They acquire nearby
-				# mobs by sight, then damage them so the mob gains pet threat.
-				if d > detection_range:
+				# Pets own threat only when a mob damages them. That reactive
+				# threat keeps their counterattack target valid beyond sight range;
+				# otherwise they acquire nearby mobs by sight as before.
+				if threat > 0.0:
+					score = 1000000.0 + threat - d * 0.001
+				elif d <= detection_range:
+					score = -d
+				else:
 					continue
-				score = -d
 			if score > best_score:
 				best_score = score
 				new_target = potential

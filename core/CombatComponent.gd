@@ -423,6 +423,7 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 			if weapon_socket:
 				socket_pos = weapon_socket.global_position
 		spawn_pos = spawn_pos_for(direction, socket_pos)
+	spawn_pos.y += attack_def.projectile_height_offset
 
 	var projectile = attack_def.projectile_scene.instantiate()
 

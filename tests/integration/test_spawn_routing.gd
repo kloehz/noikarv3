@@ -35,6 +35,16 @@ func _make_main(with_director: bool = true, roster: Array[int] = [1, 2, 3, 4]) -
 		var container := Node3D.new()
 		container.name = container_name
 		main.add_child(container)
+	var map := Node3D.new()
+	map.name = "Map"
+	var spawn_points := Node3D.new()
+	spawn_points.name = "SpawnPoints"
+	for marker_name in ["TeamRedSpawn", "TeamBlueSpawn"]:
+		var marker := Marker3D.new()
+		marker.name = marker_name
+		spawn_points.add_child(marker)
+	map.add_child(spawn_points)
+	main.add_child(map)
 	var state := MatchState.new()
 	state.name = "MatchState"
 	main.add_child(state)
@@ -213,14 +223,27 @@ func test_team_id_from_roster_at_spawn() -> void:
 
 	_main._spawn_player(1)
 	_main._spawn_player(2)
-	assert_eq(_players().get_node("1").get_node("ServerState").team_id, TeamId.RED,
+	var red_player := _players().get_node("1") as BaseEntity
+	var blue_player := _players().get_node("2") as BaseEntity
+	assert_eq(red_player.get_node("ServerState").team_id, TeamId.RED,
 		"Peer 1 spawns RED per roster")
-	assert_eq(_players().get_node("2").get_node("ServerState").team_id, TeamId.BLUE,
+	assert_eq(blue_player.get_node("ServerState").team_id, TeamId.BLUE,
 		"Peer 2 spawns BLUE per roster")
+	assert_eq(red_player.collision_layer, BaseEntity.RED_COLLISION_LAYER)
+	assert_eq(red_player.collision_mask, BaseEntity.WORLD_COLLISION_LAYER | BaseEntity.BLUE_COLLISION_LAYER | BaseEntity.NEUTRAL_COLLISION_LAYER)
+	assert_eq(blue_player.collision_layer, BaseEntity.BLUE_COLLISION_LAYER)
+	assert_eq(blue_player.collision_mask, BaseEntity.WORLD_COLLISION_LAYER | BaseEntity.RED_COLLISION_LAYER | BaseEntity.NEUTRAL_COLLISION_LAYER)
 
 	var mob: Node = _main.spawn_enemy("AATROX", Vector3.ZERO)
 	assert_eq(mob.get_node("ServerState").team_id, TeamId.NONE,
 		"Mobs stay NONE at this stage")
+	assert_eq(mob.collision_layer, BaseEntity.NEUTRAL_COLLISION_LAYER,
+		"Mobs are hostile neutrals regardless of wave-accounting team")
+	var soul_count_before := _souls().get_child_count()
+	_main._spawn_soul(Vector3.ZERO)
+	var soul := _souls().get_child(soul_count_before) as Area3D
+	assert_eq(soul.collision_mask, BaseEntity.RED_COLLISION_LAYER | BaseEntity.BLUE_COLLISION_LAYER,
+		"Souls detect both faction-layered player bodies")
 
 ## Test: LOBBY recompute pushes updated teams onto already-spawned players.
 func test_team_assigned_refreshes_spawned_players() -> void:
@@ -236,6 +259,8 @@ func test_team_assigned_refreshes_spawned_players() -> void:
 	_director._on_roster_changed()
 	assert_eq(_players().get_node("3").get_node("ServerState").team_id, TeamId.BLUE,
 		"Full recompute must refresh spawned players' team_id")
+	assert_eq(_players().get_node("3").collision_layer, BaseEntity.BLUE_COLLISION_LAYER,
+		"A team reassignment refreshes the player's collision faction")
 
 ## Test: registry preserves spawn-sequence order on register/unregister, and
 ## MatchManager registers typed spawns (players under their roster team).

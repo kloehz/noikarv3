@@ -8,6 +8,7 @@
 [ext_resource type="Resource" path="res://common/resources/default_match_rules.tres" id="6_rules"]
 [ext_resource type="PackedScene" uid="uid://b6vd7b4f6ubs7" path="res://scenes/maps/lorencia_3d.tscn" id="7_lorencia"]
 [ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_player_health"]
+[ext_resource type="Script" path="res://client/ui/PetHud.gd" id="9_pet_hud"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_world"]
 sky_top_color = Color(0.15, 0.45, 0.75, 1)
@@ -161,6 +162,16 @@ offset_top = 44.0
 offset_right = 340.0
 offset_bottom = 84.0
 mouse_filter = 2
+
+[node name="PetHUD" type="Control" parent="HUD"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_pet_hud")
 
 [node name="HBox" type="HBoxContainer" parent="HUD/SoulCounter" unique_id=1156214351]
 layout_mode = 2

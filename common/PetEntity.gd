@@ -9,6 +9,13 @@ extends BaseEntity
 const LVL_TIER_2: int = 11
 const LVL_TIER_3: int = 26
 
+## Souls required per visual tier. Tiers 1-4 swap the pet model
+## (Alistar/Garen/Thresh/Galio for TANK, etc.) so the same pet role
+## gets a fresh look as the player keeps feeding it. 1-5 → T1,
+## 6-10 → T2, 11-15 → T3, 16+ → T4 (last tier wraps any overflow).
+const SOULS_PER_TIER: int = 5
+const MAX_PET_TIER: int = 4
+
 # --- CONSTANTS: Stats & Balances ---
 const BASE_DMG: int = 12
 const BASE_HP_TANK: int = 250
@@ -63,6 +70,7 @@ func _begin_spawn_grace() -> void:
 	_saved_collision_mask = collision_mask
 	collision_layer = 0
 	collision_mask = 0
+	_set_damage_immune(true)
 	_set_hurtbox_enabled(false)
 	_set_spawn_visibility(false)
 
@@ -74,6 +82,7 @@ func _finish_spawn_grace() -> void:
 	_spawn_grace_active = false
 	collision_layer = _saved_collision_layer
 	collision_mask = _saved_collision_mask
+	_set_damage_immune(false)
 	_set_hurtbox_enabled(true)
 	_set_spawn_visibility(true)
 	if has_node("VisualComponent"):
@@ -88,6 +97,11 @@ func _set_hurtbox_enabled(is_enabled: bool) -> void:
 		hurtbox.monitorable = is_enabled
 		hurtbox.monitoring = is_enabled
 
+func _set_damage_immune(is_immune: bool) -> void:
+	var health = get_node_or_null("HealthComponent")
+	if health and health.has_method("set_damage_immune"):
+		health.set_damage_immune(is_immune)
+
 func is_spawn_grace_active() -> bool:
 	return _spawn_grace_active
 
@@ -98,22 +112,57 @@ func _check_delayed_setup() -> void:
 func _on_pet_data_received(t: String, l: int) -> void:
 	setup_pet(owner_id, t, l)
 
+## Returns 1..MAX_PET_TIER based on invested souls. Clamps 0 to T1 so a
+## freshly spawned pet never picks the "overflow" tier by accident.
+func _compute_pet_tier(souls: int) -> int:
+	if souls <= 0:
+		return 1
+	return clamp(int(ceil(float(souls) / SOULS_PER_TIER)), 1, MAX_PET_TIER)
+
+## Maps a pet role + soul tier to its CharacterActor scene. Falls back to
+## the legacy single-model scenes (PetTank/PetDmg/PetHeal) if the new
+## variant for the requested tier isn't present, so the game still runs
+## before the GLB imports finish on first Godot open.
+func _get_pet_actor_path(p_type: String, tier: int) -> String:
+	var pets_root := "res://scenes/characters/pets/"
+	match p_type:
+		"TANK":
+			match tier:
+				1: return pets_root + "tank/PetTankT1Alistar.tscn"
+				2: return pets_root + "tank/PetTankT2Garen.tscn"
+				3: return pets_root + "tank/PetTankT3Thresh.tscn"
+				_: return pets_root + "tank/PetTankT4Galio.tscn"
+		"ATTACK":
+			match tier:
+				1: return pets_root + "dps/PetDpsT1Vladimir.tscn"
+				2: return pets_root + "dps/PetDpsT2Gwen.tscn"
+				3: return pets_root + "dps/PetDpsT3Jax.tscn"
+				_: return pets_root + "dps/PetDpsT4Ezreal.tscn"
+		"HEAL":
+			match tier:
+				1: return pets_root + "support/PetSupT1Yuumi.tscn"
+				2: return pets_root + "support/PetSupT2Bard.tscn"
+				3: return pets_root + "support/PetSupT3Janna.tscn"
+				_: return pets_root + "support/PetSupT4Nami.tscn"
+	# Fallback to legacy scenes so existing tests / saved pets still load
+	match p_type:
+		"TANK": return "res://scenes/characters/PetTank.tscn"
+		"HEAL": return "res://scenes/characters/PetHeal.tscn"
+	return "res://scenes/characters/PetDmg.tscn"
+
 func setup_pet(p_owner_id: int, p_type: String, p_souls: int) -> void:
 	if _has_setup and pet_type == p_type and power_level == p_souls: return
-	
+
 	owner_id = p_owner_id
 	pet_type = p_type
 	power_level = p_souls
-	
+
 	_has_setup = true
-	
-	# Update path for BaseEntity to load the correct model
-	var actor_path = "res://scenes/characters/PetDmg.tscn"
-	match pet_type:
-		"TANK": actor_path = "res://scenes/characters/PetTank.tscn"
-		"HEAL": actor_path = "res://scenes/characters/PetHeal.tscn"
-	
-	character_actor_path = actor_path
+
+	# Pick the actor scene by role + soul tier. Same stats across tiers;
+	# only the GLB (and a couple of attack-shape tweaks for Thresh /
+	# Vladimir / Ezreal) changes per tier.
+	character_actor_path = _get_pet_actor_path(p_type, _compute_pet_tier(p_souls))
 	
 	# Re-load model via BaseEntity logic
 	if character_actor:

@@ -20,6 +20,11 @@ var _lifetime_remaining: float = 3.0
 var _has_hit: bool = false
 var _owner_entity: Node = null
 
+## World, legacy entity, and all faction entity layers. Entity bodies moved to
+## RED/BLUE/NEUTRAL layers, so retaining only the old mask made shots pass
+## through valid players and pets.
+const TARGET_COLLISION_MASK := 1 | 2 | 16 | 32 | 64
+
 ## Initialize the projectile after spawning.
 ## Called by CombatComponent on the server before adding to the tree.
 func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id: int, p_knockback: float = 8.0, p_owner_entity: Node = null) -> void:
@@ -34,6 +39,7 @@ func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id:
 func _ready() -> void:
 	# Server authority — projectile is controlled by the server
 	set_multiplayer_authority(1)
+	collision_mask = TARGET_COLLISION_MASK
 	_lifetime_remaining = lifetime
 
 	# Set velocity for Netfox rollback sync

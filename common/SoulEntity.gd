@@ -15,6 +15,10 @@ var _timer: float = 0.0
 var _is_collected: bool = false
 
 func _ready() -> void:
+	# Players now occupy faction layers instead of the former shared layer 1.
+	# Set this at runtime as well as in the scene so spawned souls always detect
+	# both teams after a scene cache or hot reload.
+	collision_mask = BaseEntity.RED_COLLISION_LAYER | BaseEntity.BLUE_COLLISION_LAYER
 	if not multiplayer.is_server():
 		set_process(false)
 		return

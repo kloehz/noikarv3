@@ -49,6 +49,14 @@ var sync_health: int:
 # Static cache to avoid repeated load calls across all instances
 static var _actor_scene_cache: Dictionary = {}
 
+## Physics layers reserve the low bits for world/projectiles/hurtboxes. Team
+## layers live above them so entities can collide with opponents while every
+## ally (including the owner's pets) can pass through freely.
+const WORLD_COLLISION_LAYER: int = 1
+const RED_COLLISION_LAYER: int = 16
+const BLUE_COLLISION_LAYER: int = 32
+const NEUTRAL_COLLISION_LAYER: int = 64
+
 func _ready() -> void:
 	if not is_inside_tree():
 		await ready
@@ -84,6 +92,8 @@ func _ready() -> void:
 		server_state.death_changed.connect(_on_sync_death_changed)
 		server_state.name_changed.connect(func(_n): _update_visuals())
 		server_state.character_changed.connect(_on_character_changed)
+		server_state.team_changed.connect(_on_team_changed)
+		_apply_faction_collision(server_state.team_id)
 		
 		if multiplayer.is_server():
 			server_state.max_health = max_health
@@ -129,11 +139,31 @@ func _on_sync_death_changed(is_dead: bool) -> void:
 	else:
 		if has_node("VisualComponent"): $VisualComponent.play_spawn_effect()
 		if has_node("HealthComponent"): $HealthComponent.reset_health()
-		collision_layer = 1
-		collision_mask = 1
+		_apply_faction_collision(server_state.team_id if server_state else TeamId.NONE)
 		if has_node("HurtboxComponent"):
 			$HurtboxComponent.monitorable = true
 			$HurtboxComponent.monitoring = true
+
+func _on_team_changed(team: int) -> void:
+	_apply_faction_collision(team)
+
+## Friendly entities must not physically block each other. Mobs are hostile
+## neutrals even when their team_id is used for wave accounting, so they block
+## both RED and BLUE players/pets. CharacterBody3D then stops at opponents
+## instead of pushing or passing through them.
+func _apply_faction_collision(team: int) -> void:
+	var my_layer := NEUTRAL_COLLISION_LAYER
+	var hostile_layers := RED_COLLISION_LAYER | BLUE_COLLISION_LAYER
+	if not is_in_group(&"mobs"):
+		match team:
+			TeamId.RED:
+				my_layer = RED_COLLISION_LAYER
+				hostile_layers = BLUE_COLLISION_LAYER | NEUTRAL_COLLISION_LAYER
+			TeamId.BLUE:
+				my_layer = BLUE_COLLISION_LAYER
+				hostile_layers = RED_COLLISION_LAYER | NEUTRAL_COLLISION_LAYER
+	collision_layer = my_layer
+	collision_mask = WORLD_COLLISION_LAYER | hostile_layers
 
 func _load_character_actor() -> void:
 	if character_actor_path.is_empty(): return

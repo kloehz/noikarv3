@@ -78,6 +78,14 @@ func _connect_signals() -> void:
 		server_state.character_changed.connect(_on_character_changed)
 		_on_souls_changed(server_state.sync_souls)
 		_on_character_changed(server_state.character_id)
+	_register_pet_hud()
+
+func _register_pet_hud() -> void:
+	if not entity or not entity.is_multiplayer_authority():
+		return
+	var pet_hud := get_tree().root.find_child("PetHUD", true, false)
+	if pet_hud and pet_hud.has_method("set_local_player"):
+		pet_hud.set_local_player(entity)
 
 func _on_souls_changed(amount: int) -> void:
 	# Only update HUD for the local controlled player
@@ -191,18 +199,9 @@ func play_shoot_effect() -> void:
 	_actor.play_animation("Attack") 
 	_anim_lock_time = 0.5 # Wait 0.5s before allowing Idle/Run to override
 
-func _update_debug_pos(debug_mesh: MeshInstance3D) -> void:
-	var combat = entity.get_node_or_null("CombatComponent")
-	if not combat or not combat._melee_shapecast: return
-	
-	# Match exactly what the server is checking
-	debug_mesh.global_position = combat._melee_shapecast.global_position
-
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
 	
-	# Handle Attack Debug visuals deterministically based on synchronized state
-	_handle_attack_debug_visuals()
 	_handle_summon_preview()
 	_handle_networked_attack_vfx()
 	_handle_local_aim_presentation(delta)
@@ -278,22 +277,6 @@ func _handle_local_aim_presentation(delta: float) -> void:
 		_aim_reticle.set("charge_progress", charge_time / attack.charge_duration if aiming else 0.0)
 	var target_fov: float = attack.aim_fov if aiming else _base_camera_fov
 	camera.fov = move_toward(camera.fov, target_fov, delta * 70.0)
-
-func _handle_attack_debug_visuals() -> void:
-	var debug_mesh = get_parent().get_node_or_null("AttackDebugMesh") as MeshInstance3D
-	if not debug_mesh: return
-	
-	var combat = entity.get_node_or_null("CombatComponent")
-	if not combat:
-		debug_mesh.visible = false
-		return
-	
-	# AttackState.ACTIVE is 2
-	if combat.get("current_attack_state") == 2:
-		debug_mesh.visible = true
-		_update_debug_pos(debug_mesh)
-	else:
-		debug_mesh.visible = false
 
 func _update_movement_animations() -> void:
 	if not _actor: return

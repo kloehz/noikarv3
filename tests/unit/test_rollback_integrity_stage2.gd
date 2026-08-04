@@ -39,6 +39,15 @@ func test_projectiles_are_server_authoritative_without_prediction() -> void:
 	for property in [":damage", ":knockback", ":owner_entity_id", ":_lifetime_remaining", ":_has_hit"]:
 		assert_true(properties.has(property), "Projectile state must include %s" % property)
 
+func test_projectiles_target_every_faction_entity_layer() -> void:
+	var scene: PackedScene = load("res://scenes/ProjectileEntity.tscn")
+	var projectile := scene.instantiate() as ProjectileEntity
+	add_child_autofree(projectile)
+	await get_tree().process_frame
+	for layer in [16, 32, 64]:
+		assert_ne(projectile.collision_mask & layer, 0,
+			"Projectile collision mask must include faction layer %d" % layer)
+
 func test_enemy_and_pet_expose_spawn_grace_to_child_components() -> void:
 	var logic_source := FileAccess.get_file_as_string("res://core/LogicComponent.gd")
 	var combat_source := FileAccess.get_file_as_string("res://core/CombatComponent.gd")

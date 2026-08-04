@@ -1050,8 +1050,9 @@ func _on_totem_complete(owner_id: int, type_int: int, souls: int, pos: Vector3) 
 	pet.owner_id = owner_id
 	pet.pet_type = pet_type
 	pet.power_level = souls
-	# The charge VFX already provides the spawn delay; do not hide the pet again.
-	pet.spawn_grace_duration = 0.0
+	# Keep the pet untargetable while its summon animation resolves. PetEntity
+	# also blocks direct AoE damage during this window.
+	pet.spawn_grace_duration = 1.0
 	_prepare_spawn_position(pet, pos, totems_container)
 
 	var server_state = pet.get_node_or_null("ServerState")

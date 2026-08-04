@@ -20,14 +20,6 @@ size = Vector3(1, 2, 1)
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_1"]
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_debug"]
-transparency = 1
-shading_mode = 0
-albedo_color = Color(1, 1, 0, 0.6)
-
-[sub_resource type="SphereMesh" id="SphereMesh_debug"]
-material = SubResource("StandardMaterial3D_debug")
-
 [node name="BaseEntity" type="CharacterBody3D" unique_id=2131335616]
 script = ExtResource("1_base_entity")
 max_health = 400
@@ -81,10 +73,6 @@ entity = NodePath("..")
 [node name="CombatComponent" type="Node" parent="." unique_id=1122334455]
 script = ExtResource("9_combat")
 damage = 90
-
-[node name="AttackDebugMesh" type="MeshInstance3D" parent="." unique_id=777888999]
-visible = false
-mesh = SubResource("SphereMesh_debug")
 
 [node name="VisualComponent" type="Node" parent="." unique_id=1343345633 node_paths=PackedStringArray("entity")]
 script = ExtResource("3_visual_comp")

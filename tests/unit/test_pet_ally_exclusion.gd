@@ -45,11 +45,12 @@ func _spawn_mob(enemy_type: String, pos: Vector3, team: int = TeamId.RED) -> Nod
 	await get_tree().process_frame
 	return mob
 
-func _spawn_tank_pet(owner_id: int, pos: Vector3, power_level: int = 0) -> BaseEntity:
+func _spawn_tank_pet(owner_id: int, pos: Vector3, power_level: int = 0, spawn_grace_duration: float = 0.0) -> BaseEntity:
 	var scene: PackedScene = load("res://scenes/PetEntity.tscn")
 	var pet: BaseEntity = scene.instantiate() as BaseEntity
 	pet.name = "PET_%d" % owner_id
 	pet.owner_id = owner_id
+	pet.spawn_grace_duration = spawn_grace_duration
 	_manager.get_node("Totems").add_child(pet, true)
 	await get_tree().process_frame
 	pet.global_position = pos
@@ -81,6 +82,29 @@ func test_pet_flanks_nearby_allies_instead_of_stacking() -> void:
 		"A pet blocked by allied pets must choose a lateral flank path")
 	assert_lt(steering.z, 0.0,
 		"Pet flanking must still make progress toward the target")
+
+func test_damaged_pet_chases_the_attacking_mob() -> void:
+	var pet := await _spawn_tank_pet(2, Vector3.ZERO)
+	var mob := await _spawn_mob("AATROX", Vector3(20, 0, 0))
+	var hurtbox: HurtboxComponent = pet.get_node("HurtboxComponent") as HurtboxComponent
+	hurtbox.receive_hit_data(1, mob)
+	var ai: Node = pet.get_node("AIComponent")
+	assert_eq(ai.target, mob, "A damaged pet immediately targets its attacking mob")
+	assert_eq(ai.state, 2, # AIComponent.State.CHASE
+		"A damaged pet leaves follow/idle state to counterattack")
+	assert_gt(int(pet.get_node("ServerState").sync_threat_table.get(mob.name, 0)), 0,
+		"The attacker is retained as reactive threat beyond the pet sight range")
+
+## Spawn grace must cover direct damage too: collision disabling alone does
+## not protect against AoE helpers that call HurtboxComponent directly.
+func test_pet_spawn_grace_blocks_direct_damage() -> void:
+	var pet := await _spawn_tank_pet(2, Vector3.ZERO, 0, 1.0)
+	var health: HealthComponent = pet.get_node("HealthComponent") as HealthComponent
+	var hp_before := health.current_health
+	var hurtbox: HurtboxComponent = pet.get_node("HurtboxComponent") as HurtboxComponent
+	hurtbox.receive_hit_data(hp_before, null)
+	assert_eq(health.current_health, hp_before,
+		"A pet is immune to direct damage during summon grace")
 
 ## Melee: pet tanks never deal damage to other pets even at point blank.
 func test_pet_melee_does_not_damage_other_pets() -> void:

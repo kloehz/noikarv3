@@ -184,3 +184,8 @@ func test_ui_locks_ready_during_post_team_change_cooldown() -> void:
 	assert_true(menu.lobby_ready.disabled, "READY locked during the cooldown")
 	assert_true(menu.lobby_ready.text.contains("team change"),
 		"Cooldown countdown is rendered on the button label")
+	menu._team_change_cooldown_until_ms = Time.get_ticks_msec() - 1
+	menu._process(0.0)
+	assert_false(menu.lobby_ready.disabled,
+		"READY unlocks when the visual cooldown expires without a new snapshot")
+	assert_eq(menu.lobby_ready.text, "READY")

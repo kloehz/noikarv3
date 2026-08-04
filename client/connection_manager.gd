@@ -353,7 +353,9 @@ func _on_boss_damage_changed(red_damage: int, blue_damage: int, _boss: Node, ser
 	boss_health_bar.set_damage(red_damage, blue_damage, max(1, max_hp))
 
 func _process(_delta: float) -> void:
-	if Time.get_ticks_msec() < _team_change_cooldown_until_ms:
+	# The final refresh at expiry is what re-enables READY. Restrict this to
+	# the lobby so other menu states do not overwrite the control's state.
+	if current_state == State.TEAM_LOBBY:
 		_apply_ready_cooldown()
 	_refresh_boss_health_bar()
 

@@ -48,6 +48,11 @@ func test_kogmaw_dmg_ranged_projectile_attack() -> void:
 	assert_not_null(attack.projectile_scene)
 	assert_gte(attack.base_damage, 18.0)
 
+func test_ezreal_pet_projectile_compensates_for_its_raised_weapon_socket() -> void:
+	var attack := _primary_attack_for("res://scenes/characters/pets/dps/PetDpsT4Ezreal.tscn")
+	assert_eq(attack.attack_type, AttackDefinition.AttackType.PROJECTILE)
+	assert_almost_eq(attack.projectile_height_offset, -1.5, 0.001)
+
 func _actor_attack_range_for(scene_path: String) -> float:
 	var scene: PackedScene = load(scene_path)
 	var actor: CharacterActor = scene.instantiate()
