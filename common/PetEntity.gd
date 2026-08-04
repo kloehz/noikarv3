@@ -196,13 +196,13 @@ func setup_pet(p_owner_id: int, p_type: String, p_souls: int) -> void:
 		print("[Pet] %s setup for %d | Power: %d" % [pet_type, owner_id, power_level])
 
 func _apply_actor_specs_to_ai() -> void:
-	if not is_instance_valid(character_actor): return
+	if character_spec == null: return
 	var ai = get_node_or_null("AIComponent")
 	if ai:
-		ai.attack_range = character_actor.suggested_attack_range
-		ai.detection_range = character_actor.suggested_detection_range
-		ai.follow_distance = character_actor.suggested_follow_distance
-		print("[Pet] Applied specs from %s: AtkRange=%f" % [character_actor.name, ai.attack_range])
+		ai.attack_range = character_spec.suggested_attack_range
+		ai.detection_range = character_spec.suggested_detection_range
+		ai.follow_distance = character_spec.suggested_follow_distance
+		print("[Pet] Applied specs from %s: AtkRange=%f" % [character_actor_path, ai.attack_range])
 
 func _apply_power_scaling() -> void:
 	var multiplier = 1.0 + (power_level * 0.1)

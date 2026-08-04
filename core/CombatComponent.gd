@@ -423,6 +423,11 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 			var weapon_socket = actor.get_socket("WeaponMain")
 			if weapon_socket:
 				socket_pos = weapon_socket.global_position
+		elif entity and entity.get("character_spec") and entity.character_spec.weapon_socket_height > 0.0:
+			# Headless server: no actor is instantiated, so reproduce the socket
+			# origin from the spec to keep the projectile spawn identical to the
+			# client's Marker3D-based computation.
+			socket_pos = entity.global_position + Vector3(0.0, entity.character_spec.weapon_socket_height, 0.0)
 		spawn_pos = spawn_pos_for(direction, socket_pos)
 	spawn_pos.y += attack_def.projectile_height_offset
 

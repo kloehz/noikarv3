@@ -26,6 +26,10 @@ const CHARACTER_ACTOR_PATHS: Dictionary = {
 #endregion
 
 var character_actor: CharacterActor
+## Combat/AI data for the current character. Loaded from CharacterSpecRegistry
+## on every peer; on the headless server this is the ONLY character data
+## loaded, since no actor scene (and no .glb) is instantiated there.
+var character_spec: CharacterSpec
 
 ## Original collision transforms are retained so model scaling can be applied
 ## repeatedly without compounding the collider size or offset.
@@ -80,8 +84,8 @@ func _ready() -> void:
 	# Set authority recursively
 	set_multiplayer_authority(peer_id, true)
 	
-	# ALWAYS load the actor because it contains logic specs (ranges, timings)
-	# BaseEntity's load_character_actor now handles headless stripping safely.
+	# ALWAYS load the combat spec because it contains logic data (ranges,
+	# timings). The visual actor scene only loads outside headless.
 	_load_character_actor()
 	
 	if server_state:
@@ -167,40 +171,44 @@ func _apply_faction_collision(team: int) -> void:
 
 func _load_character_actor() -> void:
 	if character_actor_path.is_empty(): return
-	
-	var scene: PackedScene
-	if _actor_scene_cache.has(character_actor_path):
-		scene = _actor_scene_cache[character_actor_path]
-	else:
-		scene = load(character_actor_path) as PackedScene
-		_actor_scene_cache[character_actor_path] = scene
-	
-	if scene:
-		character_actor = scene.instantiate() as CharacterActor
-		
-		# SECURITY & CRASH FIX: If headless, strip all visual nodes immediately
-		# but keep the CharacterActor node alive to read combat specs!
-		if GameManager._is_headless_environment():
-			print("[DEBUG] Headless environment: Stripping visual nodes from actor %s" % name)
-			_strip_visual_nodes(character_actor)
-		
-		add_child(character_actor)
-		# Per-actor facing correction. Imported models in this project ship with
-		# +Z as their visible forward, while Godot CharacterBody3D/LogicComponent
-		# move along the entity's local -Z. Each actor scene declares its own
-		# visual_forward_yaw so the actor's mesh aligns with the movement
-		# forward at spawn. We rotate the ACTOR node, never the entity itself,
-		# because rotating the entity would invert the AI/chase/look direction
-		# that LogicComponent drives through entity.rotation.y.
-		if abs(character_actor.visual_forward_yaw) > 0.0001:
-			character_actor.rotation.y = character_actor.visual_forward_yaw
-		# Ensure authority matches
-		if is_instance_valid(character_actor):
-			character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
-		
-		# --- DATA-DRIVEN COMBAT CONFIGURATION ---
-		_configure_combat_from_actor(character_actor)
-		_configure_ai_from_actor(character_actor)
+
+	# The spec carries every piece of data the simulation needs, so it loads
+	# on server and clients alike. On headless the actor scene (and its .glb
+	# model) is never touched.
+	character_spec = CharacterSpecRegistry.load_for(character_actor_path)
+
+	if not GameManager._is_headless_environment():
+		var scene: PackedScene
+		if _actor_scene_cache.has(character_actor_path):
+			scene = _actor_scene_cache[character_actor_path]
+		else:
+			scene = load(character_actor_path) as PackedScene
+			_actor_scene_cache[character_actor_path] = scene
+
+		if scene:
+			character_actor = scene.instantiate() as CharacterActor
+			add_child(character_actor)
+			# Per-actor facing correction. Imported models in this project ship with
+			# +Z as their visible forward, while Godot CharacterBody3D/LogicComponent
+			# move along the entity's local -Z. Each actor scene declares its own
+			# visual_forward_yaw so the actor's mesh aligns with the movement
+			# forward at spawn. We rotate the ACTOR node, never the entity itself,
+			# because rotating the entity would invert the AI/chase/look direction
+			# that LogicComponent drives through entity.rotation.y.
+			if abs(character_actor.visual_forward_yaw) > 0.0001:
+				character_actor.rotation.y = character_actor.visual_forward_yaw
+			# Ensure authority matches
+			if is_instance_valid(character_actor):
+				character_actor.set_multiplayer_authority(get_multiplayer_authority(), true)
+
+			# Fallback: unregistered actors still expose their data through
+			# their own spec reference.
+			if character_spec == null:
+				character_spec = character_actor.spec
+
+	# --- DATA-DRIVEN COMBAT CONFIGURATION ---
+	_configure_combat_from_spec()
+	_configure_ai_from_spec()
 
 ## Scales a character model and every collision shape owned by this entity.
 ## Collider offsets must scale too, otherwise tall models sink their hit volume
@@ -242,37 +250,26 @@ func _on_character_changed(character_id: String) -> void:
 func _validated_character_id(character_id: String) -> String:
 	return character_id if CHARACTER_ACTOR_PATHS.has(character_id) else "warrior"
 
-## Read AttackDefinition exports from the Actor and configure CombatComponent.
-func _configure_combat_from_actor(actor: CharacterActor) -> void:
-	if not actor: return
+## Read AttackDefinitions from the spec and configure CombatComponent.
+func _configure_combat_from_spec() -> void:
+	if character_spec == null: return
 	var combat = get_node_or_null("CombatComponent")
 	if not combat: return
-	
-	if actor.primary_attack or actor.secondary_attack:
-		combat.configure(actor.primary_attack, actor.secondary_attack)
-		print("[BaseEntity] %s: Combat configured from actor (%s)" % [name, actor.name])
 
-## Read suggested ranges from the Actor and configure AIComponent.
-func _configure_ai_from_actor(actor: CharacterActor) -> void:
-	if not actor: return
+	if character_spec.primary_attack or character_spec.secondary_attack:
+		combat.configure(character_spec.primary_attack, character_spec.secondary_attack)
+		print("[BaseEntity] %s: Combat configured from spec (%s)" % [name, character_actor_path])
+
+## Read suggested ranges from the spec and configure AIComponent.
+func _configure_ai_from_spec() -> void:
+	if character_spec == null: return
 	var ai = get_node_or_null("AIComponent")
 	if not ai: return
-	
-	ai.attack_range = actor.suggested_attack_range
-	ai.detection_range = actor.suggested_detection_range
-	ai.follow_distance = actor.suggested_follow_distance
-	print("[BaseEntity] %s: AI configured from actor (atk_range=%.1f)" % [name, actor.suggested_attack_range])
 
-func _strip_visual_nodes(node: Node) -> void:
-	if not node: return
-	var to_remove = []
-	for child in node.get_children():
-		if child is MeshInstance3D or child is Sprite3D or child is Decal or child is GPUParticles3D or child is CPUParticles3D or child is Label3D:
-			to_remove.append(child)
-		else:
-			_strip_visual_nodes(child)
-	for child in to_remove:
-		child.queue_free()
+	ai.attack_range = character_spec.suggested_attack_range
+	ai.detection_range = character_spec.suggested_detection_range
+	ai.follow_distance = character_spec.suggested_follow_distance
+	print("[BaseEntity] %s: AI configured from spec (atk_range=%.1f)" % [name, character_spec.suggested_attack_range])
 
 func _setup_visuals() -> void:
 	if GameManager._is_headless_environment(): return

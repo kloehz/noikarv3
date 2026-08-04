@@ -1,43 +1,18 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://assets/models/pets/support/koi_nami.glb" id="2_model"]
-[ext_resource type="Script" path="res://common/resources/attack_shape_data.gd" id="3_shape"]
-[ext_resource type="Script" path="res://common/resources/attack_definition.gd" id="4_attack"]
-[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="5_projectile"]
-
-[sub_resource type="Resource" id="Resource_sup_t4_shape"]
-script = ExtResource("3_shape")
-radius = 0.3
-length = 0.3
-
-[sub_resource type="Resource" id="Resource_sup_t4_attack"]
-script = ExtResource("4_attack")
-attack_type = 1
-shape_data = SubResource("Resource_sup_t4_shape")
-projectile_scene = ExtResource("5_projectile")
-projectile_speed = 18.0
-base_damage = 8.0
-cooldown = 2.0
-cooldown_min = 1.5
-cooldown_max = 1.9
-knockback_force = 6.0
-startup_time = 0.05
-active_time = 0.15
-recovery_time = 0.2
+[ext_resource type="Resource" path="res://common/resources/specs/pet_sup_t4_nami.tres" id="9_spec"]
 
 [node name="PetSupT4Nami" type="Node3D"]
 script = ExtResource("1_actor")
+spec = ExtResource("9_spec")
 anim_idle = "Idle_Base"
 anim_run = "Run"
 anim_attack = "nami_koi_attack1_anm"
 anim_death = "Death"
 anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
-suggested_attack_range = 12.0
-suggested_detection_range = 5.0
-suggested_follow_distance = 6.0
-primary_attack = SubResource("Resource_sup_t4_attack")
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

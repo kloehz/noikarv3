@@ -11,25 +11,32 @@ for each hosted room. The client itself is not deployed to the VPS.
 
 ## GitHub Configuration
 
-Configure these repository secrets in both repositories:
+Configure these repository secrets in `kloehz/noikarv3`:
 
 - `VPS_HOST`
 - `VPS_USER`
 - `VPS_SSH_PRIVATE_KEY`
 - `VPS_KNOWN_HOSTS`
+- `NOIKAR_BACKEND_ENV_B64`
 
 Configure the repository variable `NOIKAR_VPS_PATH` with an absolute path, for
 example `/opt/noikar`.
+
+The current Hostinger VPS is configured as `72.60.58.24`, user `root`, with
+deployment path `/root/noikar`. Those values and the host key are already set
+in this repository. The remaining SSH private key must be authorized on the
+VPS before Actions can connect.
 
 The SSH key must be restricted to deployment access. `VPS_KNOWN_HOSTS` must be
 the pinned `known_hosts` entry for the VPS, not a value fetched during deploy.
 
 ## One-Time Backend Setup
 
-Create `${NOIKAR_VPS_PATH}/backend/.env` on the VPS. It is intentionally never
-uploaded or deleted by GitHub Actions. It must define `POSTGRES_USER`,
-`POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `JWT_SECRET`, and
-`PROVISIONER_CREDENTIAL`.
+GitHub Actions installs `${NOIKAR_VPS_PATH}/backend/.env` from the
+base64-encoded `NOIKAR_BACKEND_ENV_B64` secret before each deploy. It must
+define `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`,
+`JWT_SECRET`, and `PROVISIONER_CREDENTIAL`. This secret is never written to
+the repository or exposed in workflow logs.
 
 Set `DATABASE_URL` to the Compose service hostname, for example:
 
@@ -54,4 +61,10 @@ resources from this export, so the VPS does not receive client meshes,
 materials, textures, or audio assets.
 
 Noray is deployed independently from `noikar-noray` because it has its own
-source repository and release cadence.
+source repository and release cadence. Its published Docker image does not
+include the Godot dedicated-server binary that it launches for each room.
+Run Noray directly on the VPS with Node.js, and configure
+`GODOT_EXECUTABLE_PATH` to `${NOIKAR_VPS_PATH}/world/current/noikar-server.x86_64`,
+`GODOT_PROJECT_PATH` to `${NOIKAR_VPS_PATH}/world/current`,
+`NOIKAR_BACKEND_URL` to `http://127.0.0.1:8080`, and
+`NOIKAR_PROVISIONER_CREDENTIAL` to the same value as the backend environment.

@@ -172,9 +172,9 @@ func _rollback_tick(_delta: float, _tick: int, _is_fresh: bool) -> void:
 	# forwarding from here would double-tick LogicComponent.
 
 func _apply_actor_specs_to_ai() -> void:
-	if not is_instance_valid(character_actor): return
+	if character_spec == null: return
 	var ai = get_node_or_null("AIComponent")
 	if ai:
-		ai.attack_range = character_actor.suggested_attack_range
-		ai.detection_range = character_actor.suggested_detection_range
-		ai.follow_distance = character_actor.suggested_follow_distance
+		ai.attack_range = character_spec.suggested_attack_range
+		ai.detection_range = character_spec.suggested_detection_range
+		ai.follow_distance = character_spec.suggested_follow_distance

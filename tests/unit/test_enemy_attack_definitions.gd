@@ -1,16 +1,17 @@
 extends GutTest
 
-## Contract coverage for the per-enemy AttackDefinition exports. Verifies
-## that every enemy character scene declares a primary_attack so
+## Contract coverage for the per-enemy AttackDefinition data. Verifies that
+## every enemy CharacterSpec declares a primary_attack so
 ## CombatComponent.configure() actually wires a melee hitscan or ranged
 ## projectile attack instead of falling back to the legacy zero-damage path.
+## Specs are loaded straight from CharacterSpecRegistry — no actor scenes
+## (and no .glb models) are instantiated here, same as the headless server.
 
 func _primary_attack_for(scene_path: String) -> AttackDefinition:
-	var scene: PackedScene = load(scene_path)
-	var actor: CharacterActor = scene.instantiate()
-	add_child_autofree(actor)
-	var attack := actor.primary_attack
-	assert_not_null(attack, "%s must declare a primary_attack AttackDefinition" % scene_path)
+	var spec := CharacterSpecRegistry.load_for(scene_path)
+	assert_not_null(spec, "%s must have a registered CharacterSpec" % scene_path)
+	var attack := spec.primary_attack
+	assert_not_null(attack, "%s spec must declare a primary_attack AttackDefinition" % scene_path)
 	return attack
 
 func test_hecarim_tank_melee_hitscan_attack() -> void:
@@ -54,10 +55,9 @@ func test_ezreal_pet_projectile_compensates_for_its_raised_weapon_socket() -> vo
 	assert_almost_eq(attack.projectile_height_offset, -1.5, 0.001)
 
 func _actor_attack_range_for(scene_path: String) -> float:
-	var scene: PackedScene = load(scene_path)
-	var actor: CharacterActor = scene.instantiate()
-	add_child_autofree(actor)
-	return actor.suggested_attack_range
+	var spec := CharacterSpecRegistry.load_for(scene_path)
+	assert_not_null(spec, "%s must have a registered CharacterSpec" % scene_path)
+	return spec.suggested_attack_range
 
 func test_ranged_enemies_have_tripled_attack_range() -> void:
 	# Both Ivern variants and KogMaw should fire from long range so the
@@ -104,3 +104,23 @@ func test_every_enemy_scene_declares_primary_attack() -> void:
 			assert_not_null(attack.shape_data, "%s melee attack has no shape_data" % path)
 		elif attack.attack_type == AttackDefinition.AttackType.PROJECTILE:
 			assert_not_null(attack.projectile_scene, "%s projectile attack has no scene" % path)
+
+func test_every_registered_spec_loads_with_primary_attack() -> void:
+	# The headless server loads specs without actor scenes, so every registry
+	# entry must resolve to a spec that fully describes the character's combat.
+	for actor_path in CharacterSpecRegistry.SPEC_BY_ACTOR_PATH:
+		var spec := CharacterSpecRegistry.load_for(actor_path)
+		assert_not_null(spec, "spec for %s must load" % actor_path)
+		assert_not_null(spec.primary_attack, "spec for %s needs a primary_attack" % actor_path)
+
+func test_actor_scenes_reference_their_registered_spec() -> void:
+	# Single-source guard: the visual actor scene and the registry must point
+	# at the same .tres, otherwise server and client could read diverging data.
+	for actor_path in CharacterSpecRegistry.SPEC_BY_ACTOR_PATH:
+		var scene: PackedScene = load(actor_path)
+		assert_not_null(scene, "%s must load" % actor_path)
+		var actor: CharacterActor = scene.instantiate()
+		add_child_autofree(actor)
+		assert_not_null(actor.spec, "%s actor must reference a spec" % actor_path)
+		assert_eq(actor.spec.resource_path, CharacterSpecRegistry.spec_path_for(actor_path),
+			"%s actor spec must match the registry entry" % actor_path)

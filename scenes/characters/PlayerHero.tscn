@@ -2,28 +2,11 @@
 
 [ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
 [ext_resource type="PackedScene" uid="uid://b3ms2o4mufeko" path="res://assets/models/enemies/aatrox/chibi_blood_moon_aatrox.tscn" id="2_model"]
-[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_ovqw5"]
-[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="4_projectile"]
-
-[sub_resource type="Resource" id="Resource_626ej"]
-script = ExtResource("2_ovqw5")
-attack_type = 1
-projectile_scene = ExtResource("4_projectile")
-projectile_speed = 32.0
-charge_duration = 1.0
-minimum_charge_multiplier = 1.0
-maximum_charge_multiplier = 2.5
-aim_fov = 56.0
-base_damage = 26.0
-cooldown = 0.45
-startup_time = 0.05
-active_time = 0.01
-recovery_time = 0.12
-metadata/_custom_type_script = "uid://dc5gph2xvvn1b"
+[ext_resource type="Resource" path="res://common/resources/specs/player_hero.tres" id="9_spec"]
 
 [node name="PlayerHero" type="Node3D" unique_id=884139682]
 script = ExtResource("1_actor")
-primary_attack = SubResource("Resource_626ej")
+spec = ExtResource("9_spec")
 
 [node name="Model" parent="." unique_id=945301661 instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)

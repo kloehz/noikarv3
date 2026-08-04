@@ -12,3 +12,9 @@
 
 # Local agent skill registry cache.
 .atl/
+
+# Godot export artifacts.
+/build/
+
+# macOS Finder metadata.
+.DS_Store

@@ -61,18 +61,23 @@ func _find_socket_path(socket_name: String) -> Marker3D:
 ## to the entity, so AI/chase/look driving entity.rotation.y stays correct.
 @export var visual_forward_yaw: float = 0.0
 
-# --- New: Combat Hints for Logic ---
-@export_group("Combat Specs")
-@export var suggested_attack_range: float = 2.5
-@export var suggested_detection_range: float = 15.0
-@export var suggested_follow_distance: float = 4.0
+# --- Combat data lives in the shared CharacterSpec resource ---
+## Single source of truth for combat/AI data. The headless server loads this
+## spec directly through CharacterSpecRegistry without instantiating the actor.
+@export var spec: CharacterSpec
 
-# --- Attack Definitions (read by BaseEntity → CombatComponent.configure()) ---
-@export_group("Attacks")
-## Primary attack definition (left-click / main attack).
-@export var primary_attack: AttackDefinition
-## Secondary attack definition (right-click / alt attack). Optional.
-@export var secondary_attack: AttackDefinition
+## Delegated accessors keep existing call sites (BaseEntity, tests) working
+## while the data lives in the spec.
+var primary_attack: AttackDefinition:
+	get: return spec.primary_attack if spec else null
+var secondary_attack: AttackDefinition:
+	get: return spec.secondary_attack if spec else null
+var suggested_attack_range: float:
+	get: return spec.suggested_attack_range if spec else 2.5
+var suggested_detection_range: float:
+	get: return spec.suggested_detection_range if spec else 15.0
+var suggested_follow_distance: float:
+	get: return spec.suggested_follow_distance if spec else 4.0
 
 ## Play an animation by standard name
 func play_animation(anim_name: String, blend: float = 0.2) -> void:

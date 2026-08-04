@@ -39,6 +39,13 @@ jobs:
             "https://github.com/godotengine/godot/releases/download/$godot_version/Godot_v${godot_version}_export_templates.tpz"
           mkdir -p "$HOME/.local/share/godot/export_templates/4.7.stable"
           unzip -q templates.tpz -d "$HOME/.local/share/godot/export_templates/4.7.stable"
+      - name: Cache Godot import data
+        uses: actions/cache@v4
+        with:
+          path: .godot
+          key: godot-import-${{ runner.os }}-${{ hashFiles('assets/**', 'project.godot', 'export_presets.cfg') }}
+          restore-keys: |
+            godot-import-${{ runner.os }}-
       - name: Export dedicated server
         run: |
           ./Godot_v4.7-stable_linux.x86_64 --headless --path . \

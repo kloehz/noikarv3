@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CharacterSpec" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://common/resources/character_spec.gd" id="1_spec"]
+[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_attack"]
+[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="3_projectile"]
+
+[sub_resource type="Resource" id="AttackDefinition_main"]
+script = ExtResource("2_attack")
+attack_type = 1
+projectile_scene = ExtResource("3_projectile")
+projectile_speed = 32.0
+charge_duration = 1.0
+minimum_charge_multiplier = 1.0
+maximum_charge_multiplier = 2.5
+aim_fov = 56.0
+base_damage = 26.0
+cooldown = 0.45
+startup_time = 0.05
+active_time = 0.01
+recovery_time = 0.12
+
+[resource]
+script = ExtResource("1_spec")
+primary_attack = SubResource("AttackDefinition_main")
+weapon_socket_height = 0.5

@@ -1,44 +1,18 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3]
 
 [ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
 [ext_resource type="PackedScene" path="res://assets/models/pets/tank/dark_star_thresh.glb" id="2_model"]
-[ext_resource type="Script" path="res://common/resources/attack_shape_data.gd" id="3_shape"]
-[ext_resource type="Script" path="res://common/resources/attack_definition.gd" id="4_attack"]
-
-[sub_resource type="Resource" id="Resource_tank_t3_shape"]
-script = ExtResource("3_shape")
-shape_type = 0
-radius = 0.6
-length = 0.6
-height = 0.6
-offset = Vector3(0, 1, -2.5)
-damage_multiplier = 1.0
-
-[sub_resource type="Resource" id="Resource_tank_t3_attack"]
-script = ExtResource("4_attack")
-attack_type = 0
-shape_data = SubResource("Resource_tank_t3_shape")
-base_damage = 6.5
-cooldown = 1.4
-cooldown_min = 1.0
-cooldown_max = 1.4
-knockback_force = 16.0
-startup_time = 0.2
-active_time = 0.18
-recovery_time = 0.35
+[ext_resource type="Resource" path="res://common/resources/specs/pet_tank_t3_thresh.tres" id="9_spec"]
 
 [node name="PetTankT3Thresh" type="Node3D"]
 script = ExtResource("1_actor")
+spec = ExtResource("9_spec")
 anim_idle = "Idle_Base"
 anim_run = "Run"
 anim_attack = "Thresh_Skin05_Attack1_Short_anm"
 anim_death = "Death"
 anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
-suggested_attack_range = 3.5
-suggested_detection_range = 5.0
-suggested_follow_distance = 4.0
-primary_attack = SubResource("Resource_tank_t3_attack")
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

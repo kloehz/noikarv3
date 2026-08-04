@@ -2,30 +2,16 @@
 
 [ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
 [ext_resource type="PackedScene" uid="uid://c1x170pl04w71" path="res://assets/models/enemies/ivern/old_god_ivern.glb" id="2_model"]
-[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="3_attack"]
-[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="4_projectile"]
-
-[sub_resource type="Resource" id="Resource_ivern_heal_attack"]
-script = ExtResource("3_attack")
-attack_type = 1
-projectile_scene = ExtResource("4_projectile")
-projectile_speed = 22.0
-charge_duration = 0.0
-base_damage = 24.0
-cooldown = 0.9
-startup_time = 0.1
-active_time = 0.01
-recovery_time = 0.2
+[ext_resource type="Resource" path="res://common/resources/specs/ivern_heal.tres" id="9_spec"]
 
 [node name="IvernHeal" type="Node3D"]
 script = ExtResource("1_actor")
+spec = ExtResource("9_spec")
 anim_idle = "Idle1_Base"
 anim_run = "Run_Base"
 anim_attack = "Attack1"
 anim_death = "Death"
 visual_forward_yaw = 3.1415927
-suggested_attack_range = 7.5
-primary_attack = SubResource("Resource_ivern_heal_attack")
 
 [node name="Model" parent="." instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)

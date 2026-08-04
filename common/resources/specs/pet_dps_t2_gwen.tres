@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="CharacterSpec" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://common/resources/character_spec.gd" id="1_spec"]
+[ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_attack"]
+[ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="3_shape"]
+
+[sub_resource type="Resource" id="AttackShapeData_main"]
+script = ExtResource("3_shape")
+shape_type = 1
+radius = 0.2
+length = 0.7
+offset = Vector3(0, 0.5, -1.5)
+
+[sub_resource type="Resource" id="AttackDefinition_main"]
+script = ExtResource("2_attack")
+attack_type = 0
+shape_data = SubResource("AttackShapeData_main")
+base_damage = 30.0
+cooldown = 0.8
+cooldown_min = 0.65
+cooldown_max = 0.95
+startup_time = 0.05
+active_time = 0.2
+
+[resource]
+script = ExtResource("1_spec")
+primary_attack = SubResource("AttackDefinition_main")
+suggested_attack_range = 2.0
+suggested_detection_range = 5.0
+suggested_follow_distance = 4.0
