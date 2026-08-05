@@ -101,12 +101,22 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
       - name: Sync dedicated-server runtime
         run: |
-          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
           set -euo pipefail
-          mkdir -p "$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION"
-          REMOTE
-          rsync -az --delete build/world/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION/"
-          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
+          # The VPS edge firewall intermittently drops runner traffic before
+          # it reaches sshd, so every remote operation retries with backoff.
+          retry() {
+            local attempts=8 delay=20 n=1
+            until "$@"; do
+              if [ "$n" -ge "$attempts" ]; then return 1; fi
+              echo "attempt $n failed; retrying in ${delay}s..."
+              sleep "$delay"
+              n=$((n + 1))
+            done
+          }
+          export SSHOPTS="-o ConnectTimeout=15"
+          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION'"
+          retry rsync -az --delete -e "ssh $SSHOPTS" build/world/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION/"
+          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
           set -euo pipefail
           world_dir="$VPS_DEPLOY_PATH/world"
           release_path="$world_dir/releases/$RELEASE_VERSION"
@@ -115,8 +125,12 @@ jobs:
           REMOTE
       - name: Verify dedicated-server runtime
         run: |
-          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' bash -s" <<'REMOTE'
           set -euo pipefail
-          test -x "$VPS_DEPLOY_PATH/world/current/noikar-server.x86_64"
-          test -f "$VPS_DEPLOY_PATH/world/current/noikar-server.pck"
-          REMOTE
+          for attempt in $(seq 1 8); do
+            if ssh -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" "test -x '$VPS_DEPLOY_PATH/world/current/noikar-server.x86_64' && test -f '$VPS_DEPLOY_PATH/world/current/noikar-server.pck'"; then
+              exit 0
+            fi
+            echo "verify attempt $attempt failed; retrying in 20s..."
+            sleep 20
+          done
+          exit 1
