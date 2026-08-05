@@ -44,7 +44,8 @@ Set `DATABASE_URL` to the Compose service hostname, for example:
 postgres://noikar:<password>@db:5432/noikar?sslmode=disable
 ```
 
-The backend binds to `127.0.0.1:8080`. Configure the VPS reverse proxy to serve
+The backend binds to `127.0.0.1:8090` (8080 is used by an unrelated service on
+the VPS). Configure the VPS reverse proxy to serve
 it over HTTPS, then set the exported client's `noikar/auth/api_url` to that
 public URL.
 
@@ -78,5 +79,5 @@ include the Godot dedicated-server binary that it launches for each room.
 Run Noray directly on the VPS with Node.js, and configure
 `GODOT_EXECUTABLE_PATH` to `${NOIKAR_VPS_PATH}/world/current/noikar-server.x86_64`,
 `GODOT_PROJECT_PATH` to `${NOIKAR_VPS_PATH}/world/current`,
-`NOIKAR_BACKEND_URL` to `http://127.0.0.1:8080`, and
+`NOIKAR_BACKEND_URL` to `http://127.0.0.1:8090`, and
 `NOIKAR_PROVISIONER_CREDENTIAL` to the same value as the backend environment.
