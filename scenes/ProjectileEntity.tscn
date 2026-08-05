@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://common/ProjectileEntity.gd" id="1_projectile"]
 [ext_resource type="Script" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="2_rb_sync"]
+[ext_resource type="Script" path="res://addons/netfox/tick-interpolator.gd" id="3_interpolator"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_proj"]
 radius = 0.2
@@ -33,3 +34,8 @@ script = ExtResource("2_rb_sync")
 root = NodePath("..")
 enable_prediction = false
 state_properties = Array[String]([":global_position", ":velocity", ":_direction", ":speed", ":damage", ":knockback", ":lifetime", ":owner_entity_id", ":_lifetime_remaining", ":_has_hit"])
+
+[node name="TickInterpolator" type="Node" parent="." node_paths=PackedStringArray("root")]
+script = ExtResource("3_interpolator")
+root = NodePath("..")
+properties = Array[String]([":global_position"])
