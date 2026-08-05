@@ -60,6 +60,18 @@ var _idle_timer: float = 0.0
 var _patrol_start_delay: float = -1.0
 var _patrol_wait_duration: float = 0.0
 
+## Mobs in passive states (IDLE/PATROL) with no live player or pet nearby
+## make decisions at a third of the tickrate; farther out they sleep
+## entirely. Movement inputs persist between decisions, so patrols stay
+## smooth while a full wave of far-away mobs stops burning server CPU.
+## Any threat entry forces full rate, so long-range poke always aggros
+## (threat sources bypass detection_range by design).
+const STAGGER_RADIUS := 45.0
+const SLEEP_RADIUS := 60.0
+const PASSIVE_TICKS_SKIP := 3
+
+var _tick_stagger: int = 0
+
 func _ready() -> void:
 	# AI logic only runs on the server
 	if not multiplayer.is_server():
@@ -114,6 +126,24 @@ func tick(delta: float) -> void:
 	if not logic:
 		logic = entity.get_node_or_null("LogicComponent")
 		if not logic: return
+
+	# Passive mobs far from any action: stagger decisions or sleep outright.
+	# CHASE/ATTACK (and anything near players) always run at full rate so
+	# combat stays responsive.
+	var passive := state == State.IDLE or state == State.PATROL
+	if _is_mob and passive and not _has_threat():
+		var nearest_sq := _nearest_actor_dist_sq()
+		# INF means the room has no players at all (tests, empty rooms about
+		# to shut down) — stay awake and keep pre-refactor behavior there.
+		if nearest_sq != INF:
+			if nearest_sq > SLEEP_RADIUS * SLEEP_RADIUS:
+				_stop_inputs()
+				return
+			if nearest_sq > STAGGER_RADIUS * STAGGER_RADIUS:
+				_tick_stagger += 1
+				if _tick_stagger % PASSIVE_TICKS_SKIP != 0:
+					return
+				delta *= PASSIVE_TICKS_SKIP
 
 	# Ensure we have the players node
 	if not is_instance_valid(_players_node):
@@ -361,6 +391,23 @@ func _steer_around_nearby_allies(direction: Vector3) -> Vector3:
 		separation += lateral * blocker_weight
 
 	return (direction + separation * MOB_AVOIDANCE_STRENGTH).normalized()
+
+## True when the mob has any threat entry — someone engaged it recently.
+func _has_threat() -> bool:
+	var state_node := entity.get_node_or_null("ServerState")
+	return state_node != null and not state_node.sync_threat_table.is_empty()
+
+## Squared distance to the closest live player or pet (INF when none).
+## Players and pets are few, so this scan is cheap even at full tickrate.
+func _nearest_actor_dist_sq() -> float:
+	var nearest := INF
+	for group in [&"players", &"pets"]:
+		for node in get_tree().get_nodes_in_group(group):
+			if node is Node3D and not node.get("sync_is_dead"):
+				var d := entity.global_position.distance_squared_to(node.global_position)
+				if d < nearest:
+					nearest = d
+	return nearest
 
 func _look_at_target(pos: Vector3) -> void:
 	var dir = (pos - entity.global_position).normalized()

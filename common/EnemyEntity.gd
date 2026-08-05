@@ -129,6 +129,10 @@ func setup_enemy(p_type: String, p_position: Vector3 = Vector3.ZERO) -> void:
 func _finish_enemy_setup() -> void:
 	set_model_scale(actor_scale)
 
+	# Distance-based sync filtering: far mobs stop broadcasting to peers
+	# that cannot see them (interest management).
+	InterestManager.apply_to_mob(self)
+
 	# Re-link VisualComponent
 	if has_node("VisualComponent"):
 		var vis = get_node("VisualComponent")

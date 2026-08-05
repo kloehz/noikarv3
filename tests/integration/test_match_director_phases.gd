@@ -146,7 +146,7 @@ func test_determinism_identical_runs() -> void:
 
 	assert_eq(_phase_log, log_a, "Two runs with same roster+seed must produce identical logs")
 	assert_eq(director_b.match_state.match_seed, seed_a, "Match seed must be identical")
-	assert_eq(log_a, EXPECTED_WALK, "Run A must match the expected walk")
+	assert_eq(log_a, _expected_walk(director_a.rules), "Run A must match the expected walk")
 
 ## Test: match_seed = seed_base + match_index assigned at ROUND_SETUP, and
 ## match_index increments after the POST_MATCH reset
@@ -228,7 +228,7 @@ func test_stub_phase_guards() -> void:
 	director.request_match_start()
 	director.request_match_start()  # in COUNTDOWN: no-op
 	assert_eq(director.match_state.phase, MatchState.Phase.COUNTDOWN)
-	_drive_ticks(director, 1, 180)
+	_drive_ticks(director, 1, director.rules.seconds_to_ticks(director.rules.countdown_sec))
 	director.request_match_start()  # in PVE_RACE: no-op
 	director.request_boss_a1_end()  # in PVE_RACE: no-op
 	assert_eq(director.match_state.phase, MatchState.Phase.PVE_RACE)
@@ -238,10 +238,11 @@ func test_character_selection_deadline_is_exact_and_cancels() -> void:
 	var director := _make_director([1, 2])
 	assert_true(director.begin_character_selection([1, 2]))
 	assert_eq(director.match_state.phase, MatchState.Phase.CHARACTER_SELECT)
-	assert_eq(director.match_state.selection_deadline_tick, 1800)
-	director.tick_update(1799)
+	var deadline := director.rules.seconds_to_ticks(director.rules.character_select_sec)
+	assert_eq(director.match_state.selection_deadline_tick, deadline)
+	director.tick_update(deadline - 1)
 	assert_eq(director.match_state.phase, MatchState.Phase.CHARACTER_SELECT)
-	director.tick_update(1800)
+	director.tick_update(deadline)
 	assert_eq(director.match_state.phase, MatchState.Phase.LOBBY)
 	assert_eq(director.match_state.selection_deadline_tick, 0)
 
