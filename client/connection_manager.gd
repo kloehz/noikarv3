@@ -155,7 +155,11 @@ func _start_noray_flow(as_host: bool) -> void:
 	if await Noray.register_remote() != OK:
 		_fail_connection("Could not register the room connection")
 		return
-	Noray.connect_nat(_current_oid)
+	# Relay instead of NAT: rooms always run on the VPS next to noray, so the
+	# relay hop is loopback-internal and the game traffic uses the already-open
+	# relay port range (20000-22048). NAT mode would hand clients the host's
+	# registered address — 127.0.0.1, since the server registers over loopback.
+	Noray.connect_relay(_current_oid)
 
 func _on_noray_connect_nat(address: String, port: int) -> void:
 	_connect_to_peer(address, port)
