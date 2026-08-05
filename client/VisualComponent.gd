@@ -169,63 +169,9 @@ func _on_health_changed(current: int, maximum: int) -> void:
 	if health_label:
 		health_label.text = "%d/%d" % [current, maximum]
 
-## Presentation-layer motion smoothing for the LOCAL player. Remote entities
-## are already smoothed by TickInterpolator, but the owned entity renders its
-## predicted transform, which only advances on 30Hz ticks. Trailing the actor
-## mesh with a fast exponential filter makes movement read fluid without
-## adding any input latency: only the visual child lags, never the entity
-## transform that aim, camera, and gameplay read.
-const VISUAL_SMOOTH_RATE := 14.0
-## Camera position smoothing is slightly stiffer than the mesh so aim still
-## feels attached while the 30Hz tick stepping disappears from the world.
-const CAMERA_SMOOTH_RATE := 18.0
-## Corrections larger than this snap the mesh instantly (respawns,
-## reconciliation teleports) instead of gliding across the map.
-const VISUAL_SNAP_DISTANCE := 2.5
-
-var _visual_pos_ready := false
-var _camera_pivot: Node3D
-var _camera_pivot_offset := Vector3.ZERO
-var _camera_smooth_pos := Vector3.ZERO
-
-func _smooth_actor_transform(delta: float) -> void:
-	if not entity or not (entity is Node3D): return
-	if not entity.is_multiplayer_authority(): return
-	if not entity.is_inside_tree(): return
-
-	var target_pos: Vector3 = entity.global_position
-	if not _visual_pos_ready:
-		if _camera_pivot == null:
-			_camera_pivot = entity.get_node_or_null("CameraPivot")
-			if _camera_pivot:
-				_camera_pivot_offset = _camera_pivot.global_position - target_pos
-		_camera_smooth_pos = target_pos
-		if _actor:
-			_actor.global_position = target_pos
-		_visual_pos_ready = true
-		return
-
-	var dist := target_pos - _camera_smooth_pos
-	if dist.length() > VISUAL_SNAP_DISTANCE:
-		_camera_smooth_pos = target_pos
-	else:
-		var ct := 1.0 - exp(-CAMERA_SMOOTH_RATE * delta)
-		_camera_smooth_pos += dist * ct
-	if _camera_pivot:
-		_camera_pivot.global_position = _camera_smooth_pos + _camera_pivot_offset
-
-	if _actor:
-		if _actor.global_position.distance_to(target_pos) > VISUAL_SNAP_DISTANCE:
-			_actor.global_position = target_pos
-		else:
-			var t := 1.0 - exp(-VISUAL_SMOOTH_RATE * delta)
-			_actor.global_position = _actor.global_position.lerp(target_pos, t)
-
 ## Initialize with a specific character actor
 func setup_with_actor(actor: CharacterActor) -> void:
 	_actor = actor
-	_visual_pos_ready = false
-	_camera_pivot = null
 	if _actor:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		_attack_visual_active = false
@@ -269,7 +215,6 @@ func _process(delta: float) -> void:
 	# "No multiplayer peer is assigned" every frame.
 	if multiplayer.multiplayer_peer == null: return
 
-	_smooth_actor_transform(delta)
 	_handle_summon_preview()
 	_handle_networked_attack_vfx()
 	_handle_local_aim_presentation(delta)

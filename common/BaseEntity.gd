@@ -296,7 +296,13 @@ func _setup_netfox() -> void:
 	var interpolator = get_node_or_null("TickInterpolator")
 	var owner_id = name.to_int() if name.is_valid_int() else 1
 	if interpolator and multiplayer.get_unique_id() == owner_id:
-		interpolator.enabled = false
+		# Owned player: interpolate POSITION between predicted ticks so 30Hz
+		# movement renders smoothly. TickInterpolator saves/restores the true
+		# transform around the tick loop, so prediction stays authoritative.
+		# Rotation is excluded — mouse look applies every render frame in
+		# LogicComponent._process and must stay instant, not interpolated.
+		interpolator.properties.erase(":quaternion")
+		interpolator.process_settings()
 
 func _setup_health_component() -> void:
 	var hc = get_node_or_null("HealthComponent")
