@@ -83,6 +83,8 @@ jobs:
         with:
           name: noikar-world-runtime
           path: build/world
+      - name: Restore executable bit lost by artifact upload
+        run: chmod +x build/world/noikar-server.x86_64
       - name: Validate deployment configuration
         run: |
           test -n "$VPS_HOST"
