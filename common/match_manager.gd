@@ -1027,6 +1027,7 @@ func request_spawn_totem(player: BaseEntity, type: int) -> void:
 	var totem_pos = player.global_position + (forward * 2.0)
 	totem.totem_type = type
 	totem.stored_souls = souls
+	totem.team_id = player.server_state.team_id
 	_prepare_spawn_position(totem, totem_pos, totems_container)
 
 	totems_container.add_child(totem, true)

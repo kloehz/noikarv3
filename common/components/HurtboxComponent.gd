@@ -27,6 +27,8 @@ func _ready() -> void:
 
 ## Receive a hit from a hitbox.
 func receive_hit(hitbox: HitboxComponent) -> void:
+	if _is_friendly_fire(hitbox.owner_node):
+		return
 	hurt.emit(hitbox)
 	_apply_threat(hitbox.damage, hitbox.owner_node)
 
@@ -36,10 +38,40 @@ func receive_hit(hitbox: HitboxComponent) -> void:
 
 ## Receive direct damage data (useful for Raycasts).
 func receive_hit_data(damage_amount: int, source: Node) -> void:
+	if _is_friendly_fire(source):
+		return
 	_apply_threat(damage_amount, source)
 	if health_component:
 		var damage_dealt := health_component.take_damage(damage_amount, source)
 		_react_to_damage_source(source, damage_dealt)
+
+## Same-team entities never damage each other. This is what stops a player
+## from blowing up their own summoning totem (or their pets) with splash
+## projectiles — enemy teams and mobs still damage them normally.
+func _is_friendly_fire(source: Node) -> bool:
+	if source == null or not is_instance_valid(source):
+		return false
+	# Mobs are hostile neutrals even though their team_id tracks wave
+	# ownership — never treat them as allies in either direction.
+	if owner_node and owner_node.is_in_group(&"mobs"):
+		return false
+	if source.is_in_group(&"mobs"):
+		return false
+	var victim_team := _team_of(owner_node)
+	if victim_team == TeamId.NONE:
+		return false
+	return victim_team == _team_of(source)
+
+func _team_of(node: Node) -> int:
+	if node == null or not is_instance_valid(node):
+		return TeamId.NONE
+	var direct = node.get("team_id")
+	if direct != null:
+		return direct
+	var state := node.get_node_or_null("ServerState")
+	if state:
+		return state.team_id
+	return TeamId.NONE
 
 ## A damaged pet should defend itself even when it was merely following its
 ## owner. This only reacts to mobs; pets still never retaliate against pets.

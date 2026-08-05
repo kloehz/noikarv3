@@ -35,6 +35,11 @@ const TYPE_COLORS := {
 @export var cast_duration: float = 3.0
 @export var stored_souls: int = 0
 
+## Owning faction, set by MatchManager at spawn from the summoner's team.
+## HurtboxComponent uses it to reject friendly fire: allies can no longer
+## destroy their own ritual, enemies (and mobs) still can.
+var team_id: int = TeamId.NONE
+
 @onready var server_state: Node = $ServerState
 @onready var health_comp: Node = $HealthComponent
 @onready var _vfx: Node3D = $ChargeVFX
