@@ -86,6 +86,7 @@ dash={
 [netfox]
 
 time/tickrate=60
+rollback/history_limit=128
 
 [noikar]
 
