@@ -124,27 +124,30 @@ func test_threat_decays_linearly_on_server() -> void:
 	state.sync_threat_table["2"] = 100
 	await get_tree().process_frame
 	assert_eq(int(state.sync_threat_table.get("2", 0)), 100,
-		"Threat untouched on first frame at 60Hz")
-	for tick in 60:
-		player._on_authoritative_tick(1.0 / 60.0, tick)
-	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 0.001,
+		"Threat untouched on first frame")
+	var rate := NetworkTime.tickrate
+	for tick in rate:
+		player._on_authoritative_tick(1.0 / rate, tick)
+	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 1.0,
 		"One full second of decay removes ~5 threat (5/sec rate)")
 
 func test_threat_decays_at_tickrate() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var state := player.get_node("ServerState")
 	state.sync_threat_table["2"] = 100
-	for tick in 60:
-		player._on_authoritative_tick(1.0 / 60.0, tick)
+	var rate := NetworkTime.tickrate
+	for tick in rate:
+		player._on_authoritative_tick(1.0 / rate, tick)
 	assert_almost_eq(int(state.sync_threat_table.get("2", 0)), 95, 1.0,
-		"60 authoritative ticks remove ~5 threat independent of render FPS")
+		"One tickrate-second of authoritative ticks removes ~5 threat independent of render FPS")
 
 func test_threat_does_not_go_negative() -> void:
 	var player := await _spawn_player(2, Vector3(0, 0, 0))
 	var state := player.get_node("ServerState")
 	state.sync_threat_table["2"] = 3
-	for tick in 600:
-		player._on_authoritative_tick(1.0 / 60.0, tick)
+	var rate := NetworkTime.tickrate
+	for tick in rate * 10:
+		player._on_authoritative_tick(1.0 / rate, tick)
 	assert_eq(int(state.sync_threat_table.get("2", 0)), 0,
 		"Decay clamps at 0, never negative")
 

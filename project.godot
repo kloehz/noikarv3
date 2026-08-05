@@ -85,7 +85,7 @@ dash={
 
 [netfox]
 
-time/tickrate=60
+time/tickrate=30
 rollback/history_limit=128
 logging/log_level=4
 
@@ -96,3 +96,4 @@ auth/api_url="http://72.60.58.24:8090"
 [physics]
 
 3d/physics_engine="Jolt Physics"
+common/physics_ticks_per_second=30

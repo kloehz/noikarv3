@@ -72,27 +72,33 @@ func _drive_ticks(director: MatchDirector, from_tick: int, count: int) -> void:
 
 ## Full scripted walk LOBBY→COUNTDOWN→ROUND_SETUP→PVE_RACE→BOSS_LOCK→
 ## BOSS_DEPLOY→BOSS_A1→RESULT→POST_MATCH→LOBBY using stub events in order.
+## Tick counts derive from MatchRules so the walk is tickrate-agnostic.
 func _run_full_walk(director: MatchDirector) -> void:
+	var c: int = director.rules.seconds_to_ticks(director.rules.countdown_sec)
+	var r: int = director.rules.seconds_to_ticks(director.rules.result_display_sec)
 	director.request_match_start()
-	_drive_ticks(director, 1, 180)
+	_drive_ticks(director, 1, c)
 	director.request_boss_lock()
 	director.request_boss_lock()
-	_drive_ticks(director, 181, 180)
+	_drive_ticks(director, c + 1, c)
 	director.request_boss_a1_end()
-	_drive_ticks(director, 361, 600)
-	_drive_ticks(director, 961, 1)
+	_drive_ticks(director, 2 * c + 1, r)
+	_drive_ticks(director, 2 * c + r + 1, 1)
 
-const EXPECTED_WALK := [
-	[MatchState.Phase.COUNTDOWN, 0],
-	[MatchState.Phase.ROUND_SETUP, 180],
-	[MatchState.Phase.PVE_RACE, 180],
-	[MatchState.Phase.BOSS_LOCK, 180],
-	[MatchState.Phase.BOSS_DEPLOY, 180],
-	[MatchState.Phase.BOSS_A1, 360],
-	[MatchState.Phase.RESULT, 360],
-	[MatchState.Phase.POST_MATCH, 960],
-	[MatchState.Phase.LOBBY, 961],
-]
+func _expected_walk(rules: MatchRules) -> Array:
+	var c := rules.seconds_to_ticks(rules.countdown_sec)
+	var r := rules.seconds_to_ticks(rules.result_display_sec)
+	return [
+		[MatchState.Phase.COUNTDOWN, 0],
+		[MatchState.Phase.ROUND_SETUP, c],
+		[MatchState.Phase.PVE_RACE, c],
+		[MatchState.Phase.BOSS_LOCK, c],
+		[MatchState.Phase.BOSS_DEPLOY, c],
+		[MatchState.Phase.BOSS_A1, 2 * c],
+		[MatchState.Phase.RESULT, 2 * c],
+		[MatchState.Phase.POST_MATCH, 2 * c + r],
+		[MatchState.Phase.LOBBY, 2 * c + r + 1],
+	]
 
 ## Test: Director registers in the match_director group on ready
 func test_director_in_match_director_group() -> void:
@@ -104,23 +110,27 @@ func test_director_in_match_director_group() -> void:
 func test_full_phase_walk_order_and_ticks() -> void:
 	var director := _make_director()
 	_run_full_walk(director)
-	assert_eq(_phase_log, EXPECTED_WALK, "Phase walk must match the transition map exactly")
+	assert_eq(_phase_log, _expected_walk(director.rules), "Phase walk must match the transition map exactly")
 	assert_eq(director.match_state.phase, MatchState.Phase.LOBBY,
 		"POST_MATCH must reset back to LOBBY")
 
-## Test: Timed phases use MatchRules durations: 180t countdown, 180t deploy, 600t result
+## Test: Timed phases use MatchRules durations for countdown, deploy, result
 func test_phase_timer_durations() -> void:
 	var director := _make_director()
 	_run_full_walk(director)
+	var rules := director.rules
 	var by_phase := {}
 	for entry in _phase_log:
 		by_phase[entry[0]] = entry[1]
-	assert_eq(by_phase[MatchState.Phase.PVE_RACE] - by_phase[MatchState.Phase.COUNTDOWN], 180,
-		"COUNTDOWN must last countdown_sec (3.0s = 180t)")
-	assert_eq(by_phase[MatchState.Phase.BOSS_A1] - by_phase[MatchState.Phase.BOSS_DEPLOY], 180,
-		"BOSS_DEPLOY must last boss_deploy_countdown_sec (3.0s = 180t)")
-	assert_eq(by_phase[MatchState.Phase.POST_MATCH] - by_phase[MatchState.Phase.RESULT], 600,
-		"RESULT must last result_display_sec (10.0s = 600t)")
+	assert_eq(by_phase[MatchState.Phase.PVE_RACE] - by_phase[MatchState.Phase.COUNTDOWN],
+		rules.seconds_to_ticks(rules.countdown_sec),
+		"COUNTDOWN must last countdown_sec")
+	assert_eq(by_phase[MatchState.Phase.BOSS_A1] - by_phase[MatchState.Phase.BOSS_DEPLOY],
+		rules.seconds_to_ticks(rules.boss_deploy_countdown_sec),
+		"BOSS_DEPLOY must last boss_deploy_countdown_sec")
+	assert_eq(by_phase[MatchState.Phase.POST_MATCH] - by_phase[MatchState.Phase.RESULT],
+		rules.seconds_to_ticks(rules.result_display_sec),
+		"RESULT must last result_display_sec")
 
 ## Test: Same roster + seed_base yields byte-identical (phase, tick) logs
 func test_determinism_identical_runs() -> void:

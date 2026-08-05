@@ -48,17 +48,19 @@ func test_team_and_phase_values() -> void:
 	assert_eq(_rules.forfeit_disconnect_sec, 30.0)
 	assert_eq(_rules.character_select_sec, 30.0)
 
-## Test: seconds_to_ticks converts at the configured 60Hz tickrate
+## Test: seconds_to_ticks converts at the configured network tickrate
 func test_seconds_to_ticks_conversion() -> void:
-	assert_eq(_rules.seconds_to_ticks(3.0), 180)
-	assert_eq(_rules.seconds_to_ticks(1.5), 90)
-	assert_eq(_rules.seconds_to_ticks(10.0), 600)
-	assert_eq(_rules.seconds_to_ticks(_rules.character_select_sec), 1800)
+	var rate := NetworkTime.tickrate
+	assert_eq(_rules.seconds_to_ticks(3.0), 3 * rate)
+	assert_eq(_rules.seconds_to_ticks(1.5), roundi(1.5 * rate))
+	assert_eq(_rules.seconds_to_ticks(10.0), 10 * rate)
+	assert_eq(_rules.seconds_to_ticks(_rules.character_select_sec), roundi(_rules.character_select_sec * rate))
 
 ## Test: seconds_to_ticks rounds to the nearest tick
 func test_seconds_to_ticks_rounding() -> void:
-	assert_eq(_rules.seconds_to_ticks(0.025), 2, "1.5 ticks rounds to 2")
-	assert_eq(_rules.seconds_to_ticks(0.01), 1, "0.6 ticks rounds to 1")
+	var rate := NetworkTime.tickrate
+	assert_eq(_rules.seconds_to_ticks(0.025), maxi(1, roundi(0.025 * rate)))
+	assert_eq(_rules.seconds_to_ticks(0.01), maxi(1, roundi(0.01 * rate)))
 
 ## Test: seconds_to_ticks never returns less than 1 tick
 func test_seconds_to_ticks_minimum_one() -> void:
