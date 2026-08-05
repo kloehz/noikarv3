@@ -87,6 +87,7 @@ dash={
 
 time/tickrate=30
 rollback/history_limit=128
+rollback/display_offset=1
 logging/log_level=4
 
 [noikar]

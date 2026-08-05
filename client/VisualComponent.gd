@@ -169,9 +169,40 @@ func _on_health_changed(current: int, maximum: int) -> void:
 	if health_label:
 		health_label.text = "%d/%d" % [current, maximum]
 
+## Presentation-layer motion smoothing for the LOCAL player. Remote entities
+## are already smoothed by TickInterpolator, but the owned entity renders its
+## predicted transform, which only advances on 30Hz ticks. Trailing the actor
+## mesh with a fast exponential filter makes movement read fluid without
+## adding any input latency: only the visual child lags, never the entity
+## transform that aim, camera, and gameplay read.
+const VISUAL_SMOOTH_RATE := 14.0
+## Corrections larger than this snap the mesh instantly (respawns,
+## reconciliation teleports) instead of gliding across the map.
+const VISUAL_SNAP_DISTANCE := 2.5
+
+var _visual_pos_ready := false
+
+func _smooth_actor_transform(delta: float) -> void:
+	if not _actor or not entity or not (entity is Node3D): return
+	if not entity.is_multiplayer_authority(): return
+	if not entity.is_inside_tree(): return
+
+	var target_pos: Vector3 = entity.global_position
+	if not _visual_pos_ready:
+		_actor.global_position = target_pos
+		_visual_pos_ready = true
+		return
+
+	if _actor.global_position.distance_to(target_pos) > VISUAL_SNAP_DISTANCE:
+		_actor.global_position = target_pos
+	else:
+		var t := 1.0 - exp(-VISUAL_SMOOTH_RATE * delta)
+		_actor.global_position = _actor.global_position.lerp(target_pos, t)
+
 ## Initialize with a specific character actor
 func setup_with_actor(actor: CharacterActor) -> void:
 	_actor = actor
+	_visual_pos_ready = false
 	if _actor:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		_attack_visual_active = false
@@ -214,7 +245,8 @@ func _process(delta: float) -> void:
 	# After a disconnect the peer is gone and authority checks would spam
 	# "No multiplayer peer is assigned" every frame.
 	if multiplayer.multiplayer_peer == null: return
-	
+
+	_smooth_actor_transform(delta)
 	_handle_summon_preview()
 	_handle_networked_attack_vfx()
 	_handle_local_aim_presentation(delta)

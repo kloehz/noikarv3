@@ -206,6 +206,17 @@ func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
 	
 	_apply_movement(delta)
 
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint(): return
+	if not entity or not entity.name.is_valid_int(): return
+	if not _is_local_authority(): return
+	# Mouse look is sampled in real time from Input events, but the entity yaw
+	# is only applied inside rollback ticks — at 30Hz the camera visibly
+	# steps. Apply it every render frame; netfox still records look_yaw per
+	# tick and the tick copy stays authoritative for the simulation.
+	entity.rotation.y = look_yaw
+	_apply_camera_aim()
+
 func _apply_movement(delta: float) -> void:
 	if not entity: return
 	_apply_camera_aim()
