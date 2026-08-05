@@ -28,7 +28,13 @@ func _start_as_server() -> void:
 	Noray.on_connect_nat.connect(_on_noray_connect_nat)
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
 	
-	var err = await Noray.connect_to_host("127.0.0.1")
+	# In production the spawned server must reach noray through the VPS public
+	# IP so noray learns a routable game address for clients; registering over
+	# loopback would hand clients 127.0.0.1. Local dev defaults to loopback.
+	var noray_host := OS.get_environment("NOIKAR_NORAY_HOST")
+	if noray_host.is_empty():
+		noray_host = "127.0.0.1"
+	var err = await Noray.connect_to_host(noray_host)
 	if err != OK:
 		print("[GameManager] Failed to connect to Noray: ", err)
 		return

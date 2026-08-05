@@ -34,6 +34,7 @@ const GAME_CONNECTION_TIMEOUT_SEC := 12.0
 
 var _active_peer: ENetMultiplayerPeer
 var _game_connection_attempt := 0
+var _used_relay := false
 var _current_oid := ""
 var _snapshot: Dictionary = {}
 var _selected_character := "warrior"
@@ -155,11 +156,11 @@ func _start_noray_flow(as_host: bool) -> void:
 	if await Noray.register_remote() != OK:
 		_fail_connection("Could not register the room connection")
 		return
-	# Relay instead of NAT: rooms always run on the VPS next to noray, so the
-	# relay hop is loopback-internal and the game traffic uses the already-open
-	# relay port range (20000-22048). NAT mode would hand clients the host's
-	# registered address — 127.0.0.1, since the server registers over loopback.
-	Noray.connect_relay(_current_oid)
+	# NAT first: the VPS room server registers through the public IP, so noray
+	# hands clients a routable address and game traffic flows direct. If the
+	# direct path fails (strict home NAT), fall back to noray's relay once.
+	_used_relay = false
+	Noray.connect_nat(_current_oid)
 
 func _on_noray_connect_nat(address: String, port: int) -> void:
 	_connect_to_peer(address, port)
@@ -224,6 +225,8 @@ func _watch_game_connection(attempt: int, peer: ENetMultiplayerPeer) -> void:
 	if attempt != _game_connection_attempt or peer != _active_peer:
 		return
 	if peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTING:
+		if _try_relay_fallback():
+			return
 		_fail_connection("Timed out connecting to the game server")
 
 func _on_connected_to_server() -> void:
@@ -397,7 +400,24 @@ func _on_selection_ready_toggled(ready: bool) -> void:
 func _on_match_phase_changed(phase: int) -> void:
 	if phase == MatchState.Phase.COUNTDOWN: _switch_state(State.IN_GAME)
 
-func _on_connection_failed() -> void: _fail_connection("Game server connection failed")
+func _on_connection_failed() -> void:
+	if _try_relay_fallback():
+		return
+	_fail_connection("Game server connection failed")
+
+## Switches an in-flight direct (NAT) connection to noray's relay. Returns
+## false when the relay was already tried or there is no room to dial.
+func _try_relay_fallback() -> bool:
+	if _used_relay or _current_oid.is_empty():
+		return false
+	_used_relay = true
+	if _active_peer:
+		_active_peer.close()
+		_active_peer = null
+	multiplayer.multiplayer_peer = null
+	status_label.text = "Direct connection failed, retrying through relay..."
+	Noray.connect_relay(_current_oid)
+	return true
 func _on_server_disconnected() -> void: _fail_connection("Disconnected from game server")
 func _fail_connection(message: String) -> void:
 	_game_connection_attempt += 1
