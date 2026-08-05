@@ -30,5 +30,5 @@ recovery_time = 0.15
 script = ExtResource("1_spec")
 primary_attack = SubResource("AttackDefinition_main")
 suggested_attack_range = 1.5
-suggested_detection_range = 5.0
-suggested_follow_distance = 4.0
+suggested_detection_range = 10.0
+suggested_follow_distance = 6.5
