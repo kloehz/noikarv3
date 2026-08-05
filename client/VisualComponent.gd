@@ -211,6 +211,9 @@ func play_shoot_effect() -> void:
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint(): return
+	# After a disconnect the peer is gone and authority checks would spam
+	# "No multiplayer peer is assigned" every frame.
+	if multiplayer.multiplayer_peer == null: return
 	
 	_handle_summon_preview()
 	_handle_networked_attack_vfx()
