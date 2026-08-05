@@ -40,8 +40,6 @@ func take_damage(amount: int, source: Node = null) -> int:
 	current_health -= actual
 	damaged.emit(actual, source)
 	
-	print("[Health] %s took %d damage. Health: %d/%d" % [get_parent().name, actual, current_health, max_health])
-	
 	if current_health <= 0:
 		died.emit()
 	elif invincibility_time > 0:

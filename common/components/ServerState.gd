@@ -164,34 +164,51 @@ func decay_threat(amount: int) -> void:
 			pet_data_received.emit(pet_type_sync, power_level_sync)
 
 func _ready() -> void:
-	print("[DEBUG] ServerState initialization for entity: %s" % get_parent().name)
 	set_multiplayer_authority(1)
 	var sync = get_node_or_null("StateSynchronizer")
 	if sync:
-		print("[DEBUG] ServerState %s found StateSynchronizer, adding states" % get_parent().name)
-		sync.add_state(self, "max_health")
-		sync.add_state(self, "sync_health")
-		sync.add_state(self, "sync_is_dead")
-		sync.add_state(self, "player_name")
-		sync.add_state(self, "character_id")
-		sync.add_state(self, "sync_souls")
-		sync.add_state(self, "team_id")
-		sync.add_state(self, "red_damage_taken")
-		sync.add_state(self, "blue_damage_taken")
-		sync.add_state(self, "sync_threat_table")
-		sync.add_state(self, "knockback_velocity")
-		sync.add_state(self, "knockback_remaining_time")
-		sync.add_state(self, "is_stunned")
-		sync.add_state(self, "stun_remaining_time")
-		sync.add_state(self, "sync_is_dashing")
-		sync.add_state(self, "sync_heal_amount")
-		sync.add_state(self, "sync_heal_sequence")
-		sync.add_state(self, "sync_damage_amount")
-		sync.add_state(self, "sync_damage_sequence")
-		sync.add_state(self, "pet_type_sync")
-		sync.add_state(self, "power_level_sync")
+		var properties: Array[String] = [
+			"max_health",
+			"sync_health",
+			"sync_is_dead",
+			"team_id",
+			"sync_heal_amount",
+			"sync_heal_sequence",
+			"sync_damage_amount",
+			"sync_damage_sequence",
+			"is_stunned",
+			"stun_remaining_time",
+		]
+		var entity := get_parent()
+		if entity.name.begins_with("PET"):
+			properties.append_array(["sync_threat_table", "pet_type_sync", "power_level_sync"])
+			_add_npc_presentation_state(sync, entity)
+		elif entity.name.begins_with("MOB_") or entity.name.begins_with("BOSS_") \
+				or entity.name.begins_with("ELITE") or entity.name.begins_with("Dummy"):
+			properties.append_array(["sync_threat_table", "red_damage_taken", "blue_damage_taken"])
+			_add_npc_presentation_state(sync, entity)
+		else:
+			properties.append_array([
+				"player_name",
+				"character_id",
+				"sync_souls",
+				"knockback_velocity",
+				"knockback_remaining_time",
+				"sync_is_dashing",
+			])
+		for property in properties:
+			sync.add_state(self, property)
 		if sync.has_method("process_settings"):
-			print("[DEBUG] ServerState %s processing synchronizer settings" % get_parent().name)
 			sync.process_settings()
 	else:
 		print("[WARNING] ServerState %s: StateSynchronizer not found!" % get_parent().name)
+
+func _add_npc_presentation_state(sync: StateSynchronizer, entity: Node) -> void:
+	sync.add_state(entity, "global_position")
+	sync.add_state(entity, "quaternion")
+	var logic := entity.get_node_or_null("LogicComponent")
+	if logic:
+		sync.add_state(logic, "current_velocity")
+	var combat := entity.get_node_or_null("CombatComponent")
+	if combat:
+		sync.add_state(combat, "sync_attack_count")

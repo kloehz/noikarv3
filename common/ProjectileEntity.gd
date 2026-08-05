@@ -38,6 +38,7 @@ func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id:
 
 func _ready() -> void:
 	# Server authority — projectile is controlled by the server
+	add_to_group(&"projectiles")
 	set_multiplayer_authority(1)
 	collision_mask = TARGET_COLLISION_MASK
 	_lifetime_remaining = lifetime
@@ -120,7 +121,6 @@ func _try_hit(collider: Node) -> bool:
 		target_state.knockback_velocity = kb_dir * knockback
 		target_state.knockback_remaining_time = 0.25
 	
-	print("[Projectile] Hit %s for %.0f damage" % [target.name, damage])
 	return true
 
 func _despawn() -> void:

@@ -64,6 +64,8 @@ const NEUTRAL_COLLISION_LAYER: int = 64
 func _ready() -> void:
 	if not is_inside_tree():
 		await ready
+	if OS.has_feature("dedicated_server"):
+		_strip_server_presentation()
 		
 	# Assign groups for faster AI faction detection
 	if name.is_valid_int():
@@ -114,6 +116,20 @@ func _ready() -> void:
 	_setup_health_component()
 	if multiplayer.is_server() and not NetworkTime.after_tick.is_connected(_on_authoritative_tick):
 		NetworkTime.after_tick.connect(_on_authoritative_tick)
+
+func _strip_server_presentation() -> void:
+	for path in [
+		"MeshInstance3D",
+		"CameraPivot",
+		"VisualComponent",
+		"HealthViewport",
+		"HealthBar3D",
+		"NameLabel",
+	]:
+		var presentation_node := get_node_or_null(path)
+		if presentation_node:
+			presentation_node.process_mode = Node.PROCESS_MODE_DISABLED
+			presentation_node.queue_free()
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
 	# Update local max_health if server changed it

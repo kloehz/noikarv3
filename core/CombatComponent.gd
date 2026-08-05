@@ -163,6 +163,12 @@ func _configure_shapecast_from_data(cast: ShapeCast3D, data: AttackShapeData) ->
 # ============================================================
 
 func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
+	_simulate_tick(delta, _tick, is_fresh)
+
+func simulate_authoritative_tick(delta: float, tick: int) -> void:
+	_simulate_tick(delta, tick, true)
+
+func _simulate_tick(delta: float, tick: int, is_fresh: bool) -> void:
 	# The client-owned CombatComponent for player projectiles is NOT in the
 	# server's owned_state list, so the server resimulates it as a predicted
 	# tick (is_fresh=false). We must still advance the replicated state machine
@@ -185,7 +191,7 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 	if _primary_cooldown > 0: _primary_cooldown -= delta
 	if _secondary_cooldown > 0: _secondary_cooldown -= delta
 
-	_update_attack_state(delta, _tick)
+	_update_attack_state(delta, tick)
 
 	# Only owner or server can start attacks
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
@@ -478,10 +484,6 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 	# would otherwise make the projectile bounce off the player on spawn.
 	if projectile is PhysicsBody3D and entity is PhysicsBody3D:
 		projectile.add_collision_exception_with(entity)
-
-	print("[CombatComponent] %s fired projectile (dmg=%.0f, speed=%.0f)" % [
-		entity.name, projectile_damage, attack_def.projectile_speed
-	])
 
 # ============================================================
 # HIT HANDLING — shared by all attack types

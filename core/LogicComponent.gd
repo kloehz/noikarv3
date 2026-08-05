@@ -55,10 +55,10 @@ func _ready() -> void:
 	else:
 		print("[DEBUG] LogicComponent %s: ServerState linked" % entity_name)
 
-	# Live input is sampled once per tick loop, before ticks run. Rollback
-	# ticks must only read the recorded input properties (netfox restores
-	# them during resimulations), never Input.* directly.
-	NetworkTime.before_tick_loop.connect(_gather_input)
+	# Only human entities own input. Server-driven NPCs receive their intent
+	# directly from AI during the authoritative simulation tick.
+	if entity and entity.name.is_valid_int():
+		NetworkTime.before_tick_loop.connect(_gather_input)
 
 ## Sample live Input for the owning human player, once per tick loop.
 ## RollbackSynchronizer records input_axis/is_shooting/look_yaw and restores
@@ -152,7 +152,13 @@ func _handle_preview_input(event: InputEvent) -> void:
 func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
 
-func _rollback_tick(delta: float, _tick: int, _is_fresh: bool) -> void:
+func _rollback_tick(delta: float, tick: int, _is_fresh: bool) -> void:
+	_simulate_tick(delta, tick)
+
+func simulate_authoritative_tick(delta: float, tick: int) -> void:
+	_simulate_tick(delta, tick)
+
+func _simulate_tick(delta: float, _tick: int) -> void:
 	if not entity or entity.get("sync_is_dead"): 
 		input_axis = Vector2.ZERO
 		return

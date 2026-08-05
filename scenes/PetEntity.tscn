@@ -5,7 +5,6 @@
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="4_server_state"]
 [ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_state_sync"]
-[ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" path="res://client/VisualComponent.gd" id="7_visual"]
 [ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_health_bar"]
 [ext_resource type="Script" path="res://core/LogicComponent.gd" id="9_logic"]
@@ -26,7 +25,7 @@ viewport_path = NodePath("HealthViewport")
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_pet"]
 properties/0/path = NodePath(".:global_position")
 properties/0/spawn = true
-properties/0/replication_mode = 1
+properties/0/replication_mode = 2
 properties/1/path = NodePath(".:owner_id")
 properties/1/spawn = true
 properties/1/replication_mode = 1
@@ -109,16 +108,9 @@ script = ExtResource("4_server_state")
 
 [node name="StateSynchronizer" type="Node" parent="ServerState" unique_id=48199021 node_paths=PackedStringArray("root")]
 script = ExtResource("5_state_sync")
-root = NodePath("..")
-properties = Array[String]([":sync_health", ":sync_is_dead", ":pet_type_sync", ":power_level_sync"])
-
-[node name="RollbackSynchronizer" type="Node" parent="." unique_id=185521340 node_paths=PackedStringArray("root")]
-script = ExtResource("6_rb_sync")
-root = NodePath("..")
-enable_prediction = false
+root = NodePath("../..")
+properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:sync_attack_count", "ServerState:sync_health", "ServerState:sync_is_dead", "ServerState:pet_type_sync", "ServerState:power_level_sync"])
 full_state_interval = 12
-state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "LogicComponent:is_dashing", "LogicComponent:dash_direction", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown"])
-input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1933293119 node_paths=PackedStringArray("root")]
 script = ExtResource("10_interpolator")

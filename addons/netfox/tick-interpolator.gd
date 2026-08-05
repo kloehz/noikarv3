@@ -117,6 +117,11 @@ func _disconnect_signals() -> void:
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
 		return
+	# Interpolation only affects presentation. A headless authority must keep
+	# the simulated state intact and does not need per-frame snapshots.
+	if OS.has_feature("dedicated_server"):
+		set_process(false)
+		return
 
 	process_settings.call_deferred()
 	_connect_signals.call_deferred()
@@ -127,7 +132,7 @@ func _enter_tree() -> void:
 		teleport()
 
 func _exit_tree() -> void:
-	if Engine.is_editor_hint():
+	if Engine.is_editor_hint() or OS.has_feature("dedicated_server"):
 		return
 
 	_disconnect_signals()

@@ -50,6 +50,8 @@ func _ready() -> void:
 
 	# BaseEntity handles authority, server_state link, and initial loading
 	super._ready()
+	if multiplayer.is_server():
+		NetworkTime.on_tick.connect(_on_npc_tick)
 	
 	if server_state:
 		# On clients, wait for synchronized data to trigger setup
@@ -217,7 +219,7 @@ func _apply_power_scaling() -> void:
 	# Visual scaling
 	scale = Vector3.ONE * (1.0 + (power_level * 0.02))
 
-func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
+func _on_npc_tick(delta: float, tick: int) -> void:
 	if _spawn_grace_active:
 		var logic = get_node_or_null("LogicComponent")
 		if logic:
@@ -226,20 +228,19 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 			logic.current_velocity = Vector3.ZERO
 		return
 
-	# No super call: RollbackSynchronizer auto-discovers and ticks every
-	# rollback-aware node under its root (LogicComponent included). Manually
-	# forwarding from here would double-tick LogicComponent.
-
-	# Skill execution logic (Server only)
-	if not is_fresh or not multiplayer.is_server(): return
-
-	# Skill execution logic
 	skill_timer += delta
 	if skill_timer >= skill_interval:
 		_execute_skill()
 		skill_timer = 0.0
 
-# NOTE: Skill randf() rolls are server-gated (is_fresh && is_server); outcomes
+	var logic := get_node_or_null("LogicComponent")
+	if logic:
+		logic.simulate_authoritative_tick(delta, tick)
+	var combat := get_node_or_null("CombatComponent")
+	if combat:
+		combat.simulate_authoritative_tick(delta, tick)
+
+# NOTE: Skill randf() rolls are server-only; outcomes
 # replicate to clients via ServerState/HealthComponent/StateSynchronizer, so
 # client determinism is not affected.
 # TODO(Stage 2): seed a RewindableRandomNumberGenerator (netfox.extras) with

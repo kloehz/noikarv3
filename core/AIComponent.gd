@@ -375,9 +375,10 @@ func _steer_around_nearby_allies(direction: Vector3) -> Vector3:
 			continue
 		var offset: Vector3 = other_entity.global_position - entity.global_position
 		offset.y = 0.0
-		var distance: float = offset.length()
-		if distance <= 0.001 or distance >= MOB_AVOIDANCE_RADIUS:
+		var distance_sq := offset.length_squared()
+		if distance_sq <= 0.000001 or distance_sq >= MOB_AVOIDANCE_RADIUS * MOB_AVOIDANCE_RADIUS:
 			continue
+		var distance: float = offset.length()
 		var proximity: float = 1.0 - distance / MOB_AVOIDANCE_RADIUS
 		var other_direction: Vector3 = offset / distance
 		separation -= other_direction * proximity

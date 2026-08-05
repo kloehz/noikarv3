@@ -7,6 +7,10 @@ const DEFAULT_PORT = 7777
 var validated_room_creator_account_id := ""
 
 func _ready() -> void:
+	if OS.has_feature("dedicated_server"):
+		# Network and physics ticks run at 30 Hz. Two process frames per tick
+		# keep enough scheduling headroom without spinning the headless loop.
+		Engine.max_fps = 60
 	if _is_headless_environment():
 		_start_as_server()
 	else:

@@ -51,6 +51,8 @@ func _ready() -> void:
 		_begin_spawn_grace()
 	super._ready()
 	_finish_enemy_setup()
+	if multiplayer.is_server():
+		NetworkTime.on_tick.connect(_on_npc_tick)
 	if _spawn_grace_active:
 		_finish_spawn_grace.call_deferred()
 
@@ -155,25 +157,14 @@ func _finish_enemy_setup() -> void:
 	# Ensure server authority
 	if multiplayer.is_server():
 		set_multiplayer_authority(1)
-	# Project rule: any authority change after _ready() MUST be followed by
-	# process_settings() so netfox rebuilds property configs per authority.
-	var rb = get_node_or_null("RollbackSynchronizer")
-	if rb and rb.has_method("process_settings"):
-		rb.process_settings()
-	
 
-func _rollback_tick(_delta: float, _tick: int, _is_fresh: bool) -> void:
-	if _spawn_grace_active:
-		var logic = get_node_or_null("LogicComponent")
-		if logic:
-			logic.input_axis = Vector2.ZERO
-			logic.is_shooting = false
-			logic.current_velocity = Vector3.ZERO
-		return
-
-	# No super call: RollbackSynchronizer auto-discovers and ticks every
-	# rollback-aware node under its root (LogicComponent included). Manually
-	# forwarding from here would double-tick LogicComponent.
+func _on_npc_tick(delta: float, tick: int) -> void:
+	var logic := get_node_or_null("LogicComponent")
+	if logic:
+		logic.simulate_authoritative_tick(delta, tick)
+	var combat := get_node_or_null("CombatComponent")
+	if combat:
+		combat.simulate_authoritative_tick(delta, tick)
 
 func _apply_actor_specs_to_ai() -> void:
 	if character_spec == null: return

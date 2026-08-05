@@ -25,22 +25,19 @@ const SYNC_RADIUS_SQ := SYNC_RADIUS * SYNC_RADIUS
 static func apply_to_mob(entity: BaseEntity) -> void:
 	if not entity.multiplayer.is_server():
 		return
-	var rb := entity.get_node_or_null("RollbackSynchronizer")
-	if rb and rb.visibility_filter:
-		_register(rb.visibility_filter, entity)
+	var players := entity.get_tree().root.find_child("Players", true, false)
 	var ss := entity.get_node_or_null("ServerState/StateSynchronizer")
 	if ss and ss.visibility_filter:
-		_register(ss.visibility_filter, entity)
+		_register(ss.visibility_filter, entity, players)
 
-static func _register(filter: PeerVisibilityFilter, entity: BaseEntity) -> void:
-	filter.add_visibility_filter(InterestManager._is_visible_to_peer.bind(entity))
+static func _register(filter: PeerVisibilityFilter, entity: BaseEntity, players: Node) -> void:
+	filter.add_visibility_filter(InterestManager._is_visible_to_peer.bind(entity, players))
 	filter.update_mode = PeerVisibilityFilter.UpdateMode.PER_TICK_LOOP
 
-static func _is_visible_to_peer(peer_id: int, entity: BaseEntity) -> bool:
+static func _is_visible_to_peer(peer_id: int, entity: BaseEntity, players: Node) -> bool:
 	if not is_instance_valid(entity):
 		return true
-	var players := entity.get_tree().root.find_child("Players", true, false)
-	var player := players.get_node_or_null(str(peer_id)) if players else null
+	var player := players.get_node_or_null(str(peer_id)) if is_instance_valid(players) else null
 	if player == null or not (player is Node3D):
 		# Peer has no avatar to measure from (joining, server, spectator):
 		# keep the entity visible rather than dropping state blindly.
