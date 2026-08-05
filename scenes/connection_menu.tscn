@@ -429,7 +429,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_styles/normal = SubResource("input_normal")
 theme_override_styles/focus = SubResource("input_focus")
-text = "127.0.0.1"
+text = "72.60.58.24"
 alignment = 1
 
 [node name="RoomStatus" type="Label" parent="RoomPanel/Card/VBox"]

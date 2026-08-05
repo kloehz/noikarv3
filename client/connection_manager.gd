@@ -127,7 +127,7 @@ func _start_noray_flow(as_host: bool) -> void:
 	_switch_state(State.CONNECTING)
 	status_label.text = "Connecting to Noray..."
 	var noray_addr := noray_address_edit.text.strip_edges()
-	if noray_addr.is_empty(): noray_addr = "127.0.0.1"
+	if noray_addr.is_empty(): noray_addr = "72.60.58.24"
 	if not Noray.is_connected_to_host():
 		if await Noray.connect_to_host(noray_addr) != OK:
 			_fail_connection("Could not connect to Noray")

@@ -1,7 +1,10 @@
 extends Node
 
 ## Owns the client access token and validates tokens for the dedicated server.
-const DEFAULT_API_URL := "http://127.0.0.1:8080"
+## Closed beta: clients reach the API straight off the VPS IP (no HTTPS proxy
+## yet). The dedicated server overrides this with the loopback address.
+const DEFAULT_API_URL := "http://72.60.58.24:8090"
+const SERVER_API_URL := "http://127.0.0.1:8090"
 const API_URL_SETTING := "noikar/auth/api_url"
 
 var access_token := ""
@@ -9,7 +12,9 @@ var account_id := ""
 var username := ""
 
 func _ready() -> void:
-	if not ProjectSettings.has_setting(API_URL_SETTING):
+	if OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless":
+		ProjectSettings.set_setting(API_URL_SETTING, SERVER_API_URL)
+	elif not ProjectSettings.has_setting(API_URL_SETTING):
 		ProjectSettings.set_setting(API_URL_SETTING, DEFAULT_API_URL)
 
 func login(account_name: String, password: String) -> Dictionary:

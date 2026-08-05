@@ -89,7 +89,7 @@ time/tickrate=60
 
 [noikar]
 
-auth/api_url="http://127.0.0.1:8080"
+auth/api_url="http://72.60.58.24:8090"
 
 [physics]
 
