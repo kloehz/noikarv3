@@ -115,7 +115,7 @@ properties = Array[String]([":sync_health", ":sync_is_dead", ":pet_type_sync", "
 [node name="RollbackSynchronizer" type="Node" parent="." unique_id=185521340 node_paths=PackedStringArray("root")]
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
-enable_prediction = true
+enable_prediction = false
 full_state_interval = 12
 state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "LogicComponent:is_dashing", "LogicComponent:dash_direction", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown"])
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])

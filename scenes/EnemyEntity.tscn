@@ -112,7 +112,9 @@ script = ExtResource("6_rb_sync")
 root = NodePath("..")
 state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "LogicComponent:is_dashing", "LogicComponent:dash_direction", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown"])
 full_state_interval = 12
-enable_prediction = true
+# Server-driven AI: clients interpolate the latest state instead of paying
+# rollback re-simulation for every mob on every desync.
+enable_prediction = false
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1174372783 node_paths=PackedStringArray("root")]
