@@ -47,22 +47,40 @@ jobs:
             rmdir "$templates_dir/templates"
           fi
           test -f "$templates_dir/linux_release.x86_64"
-      - name: Cache Godot import data
-        uses: actions/cache@v4
-        with:
-          path: .godot
-          key: godot-import-${{ runner.os }}-${{ hashFiles('assets/**', 'project.godot', 'export_presets.cfg') }}
-          restore-keys: |
-            godot-import-${{ runner.os }}-
-      - name: Import project resources
+      - name: Prepare filtered server project
         run: |
-          ./Godot_v4.7-stable_linux.x86_64 --headless --path . --import
+          set -euo pipefail
+          SERVER_PROJECT="$RUNNER_TEMP/noikar-server-project"
+          rm -rf "$SERVER_PROJECT"
+          mkdir -p "$SERVER_PROJECT"
+          # Filter sources before Godot scans the project; export exclude
+          # filters only affect packaging and cannot prevent editor import work.
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='.godot/' \
+            --exclude='build/' \
+            --exclude='assets/models/' \
+            --exclude='MODELS_TEST/' \
+            --exclude='scenes/characters/' \
+            --exclude='addons/gut/' \
+            --exclude='tests/' \
+            ./ "$SERVER_PROJECT/"
+          test -f "$SERVER_PROJECT/project.godot"
+          test -f "$SERVER_PROJECT/export_presets.cfg"
+          if find "$SERVER_PROJECT" -name '*.glb' -print -quit | grep -q .; then
+            echo "Filtered server project must not contain GLB files." >&2
+            exit 1
+          fi
+          printf 'SERVER_PROJECT=%s\n' "$SERVER_PROJECT" >> "$GITHUB_ENV"
       - name: Export dedicated server
         run: |
-          mkdir -p build/world
-          ./Godot_v4.7-stable_linux.x86_64 --headless --path . \
-            --export-release "Dedicated Server (Linux)" build/world/noikar-server.x86_64
-          test -x build/world/noikar-server.x86_64
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/build/world"
+          world_exe="$GITHUB_WORKSPACE/build/world/noikar-server.x86_64"
+          ./Godot_v4.7-stable_linux.x86_64 --headless \
+            --path "$SERVER_PROJECT" \
+            --export-release "Dedicated Server (Linux)" "$world_exe"
+          test -x "$world_exe"
       - uses: actions/upload-artifact@v4
         with:
           name: noikar-world-runtime
@@ -114,9 +132,15 @@ jobs:
             done
           }
           export SSHOPTS="-o ConnectTimeout=15"
-          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION'"
-          retry rsync -az --delete -e "ssh $SSHOPTS" build/world/ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION/"
-          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
+          release_dir="$VPS_DEPLOY_PATH/world/releases/$RELEASE_VERSION"
+          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" \
+            "mkdir -p '$release_dir'"
+          retry rsync -az --delete -e "ssh $SSHOPTS" build/world/ \
+            "$VPS_USER@$VPS_HOST:$release_dir/"
+          remote_env="VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH'"
+          remote_env="$remote_env RELEASE_VERSION='$RELEASE_VERSION'"
+          retry ssh $SSHOPTS "$VPS_USER@$VPS_HOST" \
+            "$remote_env bash -s" <<'REMOTE'
           set -euo pipefail
           world_dir="$VPS_DEPLOY_PATH/world"
           release_path="$world_dir/releases/$RELEASE_VERSION"
@@ -127,7 +151,11 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 8); do
-            if ssh -o ConnectTimeout=15 "$VPS_USER@$VPS_HOST" "test -x '$VPS_DEPLOY_PATH/world/current/noikar-server.x86_64' && test -f '$VPS_DEPLOY_PATH/world/current/noikar-server.pck'"; then
+            remote_world="$VPS_DEPLOY_PATH/world/current"
+            verify_cmd="test -x '$remote_world/noikar-server.x86_64'"
+            verify_cmd="$verify_cmd && test -f '$remote_world/noikar-server.pck'"
+            if ssh -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" "$verify_cmd"; then
               exit 0
             fi
             echo "verify attempt $attempt failed; retrying in 20s..."
