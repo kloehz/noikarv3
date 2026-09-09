@@ -4,13 +4,15 @@ extends Node
 ## Uses Netfox for server authority and client prediction.
 
 const DEFAULT_PORT = 7777
+const SERVER_MIN_FPS = 30
+const SERVER_MAX_FPS = 60
+const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
 var validated_room_creator_account_id := ""
 
 func _ready() -> void:
-	if OS.has_feature("dedicated_server"):
-		# Network and physics ticks run at 30 Hz. Two process frames per tick
-		# keep enough scheduling headroom without spinning the headless loop.
-		Engine.max_fps = 60
+	var server_frame_cap := _server_frame_cap_for_environment()
+	if server_frame_cap > 0:
+		Engine.max_fps = server_frame_cap
 	if _is_headless_environment():
 		_start_as_server()
 	else:
@@ -23,6 +25,22 @@ func _is_headless_environment() -> bool:
 	if OS.has_feature("editor"):
 		return DisplayServer.get_name() == "headless"
 	return OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless"
+
+func _server_frame_cap_for_environment() -> int:
+	return resolve_server_max_fps_override(OS.get_environment(SERVER_MAX_FPS_ENV), _is_headless_environment())
+
+func resolve_server_max_fps_override(raw_value: String, is_server_runtime: bool) -> int:
+	if not is_server_runtime:
+		return 0
+	var normalized_value := raw_value.strip_edges()
+	if normalized_value.is_empty():
+		return SERVER_MAX_FPS
+	if not normalized_value.is_valid_int():
+		return SERVER_MAX_FPS
+	var requested_fps := normalized_value.to_int()
+	if requested_fps < SERVER_MIN_FPS or requested_fps > SERVER_MAX_FPS:
+		return SERVER_MAX_FPS
+	return requested_fps
 
 func _start_as_server() -> void:
 	print("[GameManager] Server environment starting. Connecting to Noray...")

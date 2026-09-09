@@ -53,6 +53,10 @@ var sync_health: int:
 # Static cache to avoid repeated load calls across all instances
 static var _actor_scene_cache: Dictionary = {}
 
+func _enter_tree() -> void:
+	if GameManager._is_headless_environment():
+		_strip_server_presentation()
+
 ## Physics layers reserve the low bits for world/projectiles/hurtboxes. Team
 ## layers live above them so entities can collide with opponents while every
 ## ally (including the owner's pets) can pass through freely.
@@ -64,7 +68,7 @@ const NEUTRAL_COLLISION_LAYER: int = 64
 func _ready() -> void:
 	if not is_inside_tree():
 		await ready
-	if OS.has_feature("dedicated_server"):
+	if GameManager._is_headless_environment():
 		_strip_server_presentation()
 		
 	# Assign groups for faster AI faction detection
@@ -125,11 +129,13 @@ func _strip_server_presentation() -> void:
 		"HealthViewport",
 		"HealthBar3D",
 		"NameLabel",
+		"TickInterpolator",
 	]:
 		var presentation_node := get_node_or_null(path)
 		if presentation_node:
 			presentation_node.process_mode = Node.PROCESS_MODE_DISABLED
-			presentation_node.queue_free()
+			remove_child(presentation_node)
+			presentation_node.free()
 
 func _on_sync_health_changed(current: int, maximum: int) -> void:
 	# Update local max_health if server changed it

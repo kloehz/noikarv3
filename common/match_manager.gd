@@ -237,13 +237,13 @@ var _room_creator_account_id: String = ""
 
 const ALLOWED_CHARACTER_IDS: Array[String] = ["warrior", "ivern_ranger"]
 
+func _enter_tree() -> void:
+	if GameManager._is_headless_environment():
+		_strip_headless_presentation()
+
 func _ready() -> void:
-	if OS.has_feature("dedicated_server"):
-		for path in ["HUD", "ConnectionMenu", "WorldEnvironment", "Sun"]:
-			var presentation_node := get_node_or_null(path)
-			if presentation_node:
-				presentation_node.process_mode = Node.PROCESS_MODE_DISABLED
-				presentation_node.queue_free()
+	if GameManager._is_headless_environment():
+		_strip_headless_presentation()
 	add_to_group(&"match_manager")
 	EventBus.server_started.connect(_on_server_started)
 	EventBus.client_connected.connect(_on_client_connected)
@@ -534,6 +534,14 @@ func _finalize_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
 	var interpolator = entity.get_node_or_null("TickInterpolator")
 	if interpolator and interpolator.has_method("teleport"):
 		interpolator.teleport()
+
+func _strip_headless_presentation() -> void:
+	for path in ["HUD", "ConnectionMenu", "WorldEnvironment", "Sun"]:
+		var presentation_node := get_node_or_null(path)
+		if presentation_node:
+			presentation_node.process_mode = Node.PROCESS_MODE_DISABLED
+			remove_child(presentation_node)
+			presentation_node.free()
 
 func _strip_visual_nodes_recursive(node: Node) -> void:
 	if not node: return

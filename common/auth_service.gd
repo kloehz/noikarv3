@@ -6,16 +6,27 @@ extends Node
 const DEFAULT_API_URL := "http://72.60.58.24:8090"
 const SERVER_API_URL := "http://127.0.0.1:8090"
 const API_URL_SETTING := "noikar/auth/api_url"
+const BACKEND_URL_ENV := "NOIKAR_BACKEND_URL"
 
 var access_token := ""
 var account_id := ""
 var username := ""
 
 func _ready() -> void:
-	if OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless":
-		ProjectSettings.set_setting(API_URL_SETTING, SERVER_API_URL)
-	elif not ProjectSettings.has_setting(API_URL_SETTING):
-		ProjectSettings.set_setting(API_URL_SETTING, DEFAULT_API_URL)
+	var configured_url := str(ProjectSettings.get_setting(API_URL_SETTING, "")) if ProjectSettings.has_setting(API_URL_SETTING) else ""
+	ProjectSettings.set_setting(API_URL_SETTING, _resolve_api_url(configured_url, OS.get_environment(BACKEND_URL_ENV), _is_headless_runtime()))
+
+func _is_headless_runtime() -> bool:
+	return OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless"
+
+func _resolve_api_url(configured_url: String, env_override: String, is_headless: bool) -> String:
+	var normalized_override := env_override.strip_edges().trim_suffix("/")
+	if not normalized_override.is_empty():
+		return normalized_override
+	if is_headless:
+		return SERVER_API_URL
+	var normalized_configured := configured_url.strip_edges()
+	return normalized_configured if not normalized_configured.is_empty() else DEFAULT_API_URL
 
 func login(account_name: String, password: String) -> Dictionary:
 	return await _authenticate("/api/v1/auth/login", account_name, password)
