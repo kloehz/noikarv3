@@ -36,6 +36,7 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_DEPLOY_PATH: ${{ vars.NOIKAR_VPS_PATH }}
       BACKEND_ENV_B64: ${{ secrets.NOIKAR_BACKEND_ENV_B64 }}
+      RELEASE_VERSION: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate deployment configuration
@@ -44,6 +45,7 @@ jobs:
           test -n "$VPS_USER"
           test -n "$VPS_DEPLOY_PATH"
           test -n "$BACKEND_ENV_B64"
+          test -n "$RELEASE_VERSION"
           case "$VPS_DEPLOY_PATH" in /*) ;; *) exit 1 ;; esac
       - uses: webfactory/ssh-agent@v0.9.1
         with:
@@ -63,15 +65,30 @@ jobs:
       - name: Install backend environment
         run: |
           printf '%s' "$BACKEND_ENV_B64" | ssh "$VPS_USER@$VPS_HOST" \
-            "base64 -d > '$VPS_DEPLOY_PATH/backend/.env' && chmod 600 '$VPS_DEPLOY_PATH/backend/.env'"
+            "base64 -d > '$VPS_DEPLOY_PATH/backend/.env' && \
+            chmod 600 '$VPS_DEPLOY_PATH/backend/.env'"
       - name: Rebuild and verify backend
         run: |
-          ssh "$VPS_USER@$VPS_HOST" "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' bash -s" <<'REMOTE'
+          ssh "$VPS_USER@$VPS_HOST" \
+            "VPS_DEPLOY_PATH='$VPS_DEPLOY_PATH' \
+            RELEASE_VERSION='$RELEASE_VERSION' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$VPS_DEPLOY_PATH/backend"
-          docker compose -f docker-compose.production.yml up -d --build --remove-orphans
+          BUILD_VERSION="$RELEASE_VERSION" docker compose \
+            -f docker-compose.production.yml \
+            up -d --build --remove-orphans
           for attempt in $(seq 1 20); do
-            if curl --fail --silent http://127.0.0.1:8090/api/v1/health >/dev/null; then
+            response=$(curl --fail --silent \
+              http://127.0.0.1:8090/api/v1/health || true)
+            case "$response" in
+              *'"status":"ok"'*) status_ok=1 ;;
+              *) status_ok=0 ;;
+            esac
+            case "$response" in
+              *'"version":"'"$RELEASE_VERSION"'"'*) version_ok=1 ;;
+              *) version_ok=0 ;;
+            esac
+            if [ "$status_ok" -eq 1 ] && [ "$version_ok" -eq 1 ]; then
               exit 0
             fi
             sleep 2

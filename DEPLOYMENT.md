@@ -52,7 +52,13 @@ public URL.
 ## Deploys
 
 Pushing backend changes to `main` runs tests, syncs the backend source with
-`rsync`, rebuilds the Compose stack, and waits for `/api/v1/health`.
+`rsync`, rebuilds the Compose stack, and waits for `/api/v1/health`. The health
+response includes the deployed commit SHA as `version`:
+
+```sh
+curl --silent http://127.0.0.1:8090/api/v1/health
+# {"status":"ok","version":"<deployment commit SHA>"}
+```
 
 Pushing dedicated-server source changes exports a Linux dedicated-server build
 in CI and syncs only that artifact to `${NOIKAR_VPS_PATH}/world/releases`. It
