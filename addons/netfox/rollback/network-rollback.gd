@@ -318,10 +318,10 @@ func _rollback() -> void:
 	_rollback_stage = _STAGE_BEFORE
 
 	# from = Earliest input amongst all rewindables
-	var from := _resim_from
+	var from: int = _resim_from
 
 	# to = Current tick
-	var to := NetworkTime.tick
+	var to: int = NetworkTime.tick
 
 	# Limit number of rollback ticks
 	if to - from > history_limit:

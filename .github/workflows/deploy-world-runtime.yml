@@ -72,6 +72,26 @@ jobs:
             exit 1
           fi
           printf 'SERVER_PROJECT=%s\n' "$SERVER_PROJECT" >> "$GITHUB_ENV"
+      - name: Import filtered server resources
+        run: |
+          set -euo pipefail
+          import_log="$(mktemp)"
+          cleanup() {
+            rm -f "$import_log"
+          }
+          trap cleanup EXIT
+          set +e
+          ./Godot_v4.7-stable_linux.x86_64 --headless \
+            --path "$SERVER_PROJECT" \
+            --import 2>&1 | tee "$import_log"
+          godot_status=${PIPESTATUS[0]}
+          set -e
+          script_error_re='SCRIPT ERROR: (Parse Error|Compile Error)'
+          if grep -E "$script_error_re" "$import_log"; then
+            echo "Godot import reported script parse/compile errors." >&2
+            exit 1
+          fi
+          exit "$godot_status"
       - name: Export dedicated server
         run: |
           set -euo pipefail
@@ -153,7 +173,7 @@ jobs:
           for attempt in $(seq 1 8); do
             remote_world="$VPS_DEPLOY_PATH/world/current"
             verify_cmd="test -x '$remote_world/noikar-server.x86_64'"
-            verify_cmd="$verify_cmd && test -f '$remote_world/noikar-server.pck'"
+            verify_cmd+=" && test -f '$remote_world/noikar-server.pck'"
             if ssh -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" "$verify_cmd"; then
               exit 0
