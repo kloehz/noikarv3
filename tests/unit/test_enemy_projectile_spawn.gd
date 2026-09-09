@@ -11,6 +11,31 @@ extends GutTest
 const ENEMY_CHEST_HEIGHT: float = 1.0
 const FORWARD_OFFSET: float = 1.6
 
+class SpawnProbeProjectile:
+	extends Node3D
+	var initialized_before_tree := false
+	var entered_tree_before_initialize := false
+	var initialized_position := Vector3.INF
+	var initialized_direction := Vector3.ZERO
+	var initialized_speed := 0.0
+	var initialized_damage := 0.0
+	var initialized_owner_id := -1
+	var initialized_knockback := 0.0
+	var initialized_owner_entity: Node = null
+
+	func _enter_tree() -> void:
+		entered_tree_before_initialize = not initialized_before_tree
+
+	func initialize(direction: Vector3, speed: float, damage: float, owner_id: int, knockback: float = 8.0, owner_entity: Node = null) -> void:
+		initialized_before_tree = not is_inside_tree()
+		initialized_position = position
+		initialized_direction = direction
+		initialized_speed = speed
+		initialized_damage = damage
+		initialized_owner_id = owner_id
+		initialized_knockback = knockback
+		initialized_owner_entity = owner_entity
+
 func _spawn_mob_stub() -> Node:
 	# Bare CharacterBody3D with the mobs group; EnemyEntity would queue_free
 	# itself in tests because its enemy_type export is empty. We only need
@@ -77,3 +102,44 @@ func test_enemy_and_player_spawn_heights_remain_distinguishable() -> void:
 	assert_gt(player_y - mob_y, 0.5,
 		"Player spawn must stay at least 0.5m above the enemy chest spawn so the two paths stay distinguishable")
 
+
+func test_projectile_is_positioned_and_initialized_before_tree_insertion() -> void:
+	var world := Node3D.new()
+	add_child_autofree(world)
+	var projectiles := Node3D.new()
+	projectiles.name = "Projectiles"
+	world.add_child(projectiles)
+
+	var entity := CharacterBody3D.new()
+	entity.name = "9001"
+	entity.add_to_group(&"mobs")
+	world.add_child(entity)
+	entity.global_position = Vector3(3.0, 0.0, 4.0)
+
+	var probe := SpawnProbeProjectile.new()
+	var scene := PackedScene.new()
+	assert_eq(scene.pack(probe), OK, "Probe projectile scene should pack")
+
+	var attack_def := AttackDefinition.new()
+	attack_def.attack_type = AttackDefinition.AttackType.PROJECTILE
+	attack_def.projectile_scene = scene
+	attack_def.projectile_speed = 42.0
+	attack_def.base_damage = 11.0
+	attack_def.knockback_force = 5.0
+
+	var combat := CombatComponent.new()
+	entity.add_child(combat)
+	combat.entity = entity
+	combat.call("_execute_projectile", attack_def, 2.0)
+
+	var spawned := projectiles.get_child(projectiles.get_child_count() - 1) as SpawnProbeProjectile
+	assert_not_null(spawned, "CombatComponent should add the projectile under Projectiles")
+	assert_true(spawned.initialized_before_tree, "Projectile gameplay fields must be initialized before add_child")
+	assert_false(spawned.entered_tree_before_initialize, "Projectile must not enter the tree before initialize")
+	assert_eq(spawned.initialized_position, spawned.position, "Spawn local position should be set before initialize")
+	assert_eq(spawned.initialized_direction, -entity.global_transform.basis.z.normalized(), "Direction should be initialized before spawn replication")
+	assert_eq(spawned.initialized_speed, 42.0, "Speed should be initialized before spawn replication")
+	assert_eq(spawned.initialized_damage, 22.0, "Server-only damage should still be initialized before insertion")
+	assert_eq(spawned.initialized_owner_id, 9001, "Owner id should be initialized before insertion")
+	assert_eq(spawned.initialized_knockback, 5.0, "Knockback should be initialized before insertion")
+	assert_eq(spawned.initialized_owner_entity, entity, "Owner entity should stay server-only")

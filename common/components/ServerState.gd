@@ -98,8 +98,9 @@ signal threat_changed(new_table: Dictionary)
 		sync_threat_table = incoming
 		threat_changed.emit(sync_threat_table)
 
-## Threat tables must be reassigned, rather than mutated in place, so the
-## StateSynchronizer observes every server-side update.
+## Threat tables must be reassigned, rather than mutated in place, so local
+## signal listeners observe every server-side update. The table is not added to
+## NPC/pet StateSynchronizer state; server AI reads it locally.
 func add_threat(attacker_name: String, amount: int) -> void:
 	if attacker_name.is_empty() or amount <= 0:
 		return
@@ -181,11 +182,11 @@ func _ready() -> void:
 		]
 		var entity := get_parent()
 		if entity.name.begins_with("PET"):
-			properties.append_array(["sync_threat_table", "pet_type_sync", "power_level_sync"])
+			properties.append_array(["pet_type_sync", "power_level_sync"])
 			_add_npc_presentation_state(sync, entity)
 		elif entity.name.begins_with("MOB_") or entity.name.begins_with("BOSS_") \
 				or entity.name.begins_with("ELITE") or entity.name.begins_with("Dummy"):
-			properties.append_array(["sync_threat_table", "red_damage_taken", "blue_damage_taken"])
+			properties.append_array(["red_damage_taken", "blue_damage_taken"])
 			_add_npc_presentation_state(sync, entity)
 		else:
 			properties.append_array([
@@ -204,11 +205,15 @@ func _ready() -> void:
 		print("[WARNING] ServerState %s: StateSynchronizer not found!" % get_parent().name)
 
 func _add_npc_presentation_state(sync: StateSynchronizer, entity: Node) -> void:
+	_remove_state_path(sync, "LogicComponent:current_velocity")
 	sync.add_state(entity, "global_position")
 	sync.add_state(entity, "quaternion")
-	var logic := entity.get_node_or_null("LogicComponent")
-	if logic:
-		sync.add_state(logic, "current_velocity")
 	var combat := entity.get_node_or_null("CombatComponent")
 	if combat:
 		sync.add_state(combat, "sync_attack_count")
+
+func _remove_state_path(sync: StateSynchronizer, property_path: String) -> void:
+	for index in range(sync.properties.size() - 1, -1, -1):
+		var configured_path := String(sync.properties[index])
+		if configured_path == property_path or configured_path.ends_with(property_path):
+			sync.properties.remove_at(index)

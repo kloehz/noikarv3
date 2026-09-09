@@ -439,20 +439,20 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 
 	var projectile = attack_def.projectile_scene.instantiate()
 
-	# Add to scene tree FIRST so the projectile's global transform exists.
-	# Otherwise setting global_position, look_at, and add_collision_exception
-	# with silently no-op or log !is_inside_tree() errors.
 	var projectiles_container = get_tree().root.find_child("Projectiles", true, false)
-	if projectiles_container:
-		projectiles_container.add_child(projectile, true)
-	else:
+	var projectile_parent: Node = projectiles_container
+	if not projectile_parent:
 		var players = get_tree().root.find_child("Players", true, false)
 		if players and players.get_parent():
-			players.get_parent().add_child(projectile, true)
+			projectile_parent = players.get_parent()
 		else:
-			get_tree().root.add_child(projectile, true)
+			projectile_parent = get_tree().root
 
-	projectile.global_position = spawn_pos
+	if projectile is Node3D:
+		if projectile_parent is Node3D:
+			projectile.position = (projectile_parent as Node3D).to_local(spawn_pos)
+		else:
+			projectile.position = spawn_pos
 
 	var owner_id: int
 	if entity.name.is_valid_int():
@@ -468,7 +468,8 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 	projectile_damage *= damage_multiplier
 	projectile_damage = _apply_difficulty(projectile_damage)
 
-	# Initialize projectile
+	# Initialize projectile before tree insertion so spawn replication captures
+	# local position, direction, and speed without racing per-tick sync/despawn.
 	if projectile.has_method("initialize"):
 		projectile.initialize(
 			direction,
@@ -478,6 +479,8 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 			attack_def.knockback_force,
 			entity
 		)
+
+	projectile_parent.add_child(projectile, true)
 
 	# Don't let the projectile collide with its own owner immediately. Both the
 	# BaseEntity CharacterBody3D (layer 1) and the projectile collision_mask 3

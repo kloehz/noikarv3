@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
 [ext_resource type="Script" uid="uid://dnpnjpubiwloe" path="res://common/match_state.gd" id="3_mstate"]
 [ext_resource type="Script" uid="uid://c24ik743i4qc3" path="res://common/match_director.gd" id="4_mdirector"]
-[ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="5_statesync"]
+[ext_resource type="Script" path="res://common/net/CadencedStateSynchronizer.gd" id="5_statesync"]
 [ext_resource type="Resource" path="res://common/resources/default_match_rules.tres" id="6_rules"]
 [ext_resource type="PackedScene" uid="uid://b6vd7b4f6ubs7" path="res://scenes/maps/lorencia_3d.tscn" id="7_lorencia"]
 [ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_player_health"]
@@ -117,6 +117,7 @@ script = ExtResource("3_mstate")
 [node name="StateSynchronizer" type="Node" parent="MatchState" unique_id=904152637 node_paths=PackedStringArray("root")]
 script = ExtResource("5_statesync")
 root = NodePath("..")
+authority_snapshot_stride = 6
 
 [node name="MatchDirector" type="Node" parent="." unique_id=317745902]
 script = ExtResource("4_mdirector")

@@ -8,8 +8,10 @@ const GAMEPLAY_TIMEOUT_SEC := 20.0
 
 var _main: Node
 var _menu: CanvasLayer
+var _observed_projectile_spawns: int = 0
 
 func _initialize() -> void:
+	node_added.connect(_on_node_added)
 	call_deferred("_run")
 
 func _run() -> void:
@@ -26,8 +28,11 @@ func _run() -> void:
 		_fail("main.tscn is missing ConnectionMenu")
 		return
 
-	_menu.account_edit.text = "debugtest1"
-	_menu.password_edit.text = "debugpassword123"
+	var profile_account := OS.get_environment("NOIKAR_PROFILE_ACCOUNT")
+	var profile_password := OS.get_environment("NOIKAR_PROFILE_PASSWORD")
+	_menu.account_edit.text = profile_account if not profile_account.is_empty() else "debugtest1"
+	_menu.password_edit.text = profile_password if not profile_password.is_empty() else "debugpassword123"
+	_menu.noray_address_edit.text = "127.0.0.1"
 	_menu._on_enter_lobby_pressed()
 	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.ROOM, 15.0):
 		_fail("login did not reach ROOM")
@@ -38,6 +43,10 @@ func _run() -> void:
 		_fail("host flow did not reach authenticated lobby")
 		return
 	print("[LIVE-PROBE] admitted oid=%s" % _menu._current_oid)
+	var lobby_hold_sec := clampf(float(OS.get_environment("NOIKAR_PROFILE_LOBBY_HOLD_SEC")), 0.0, 30.0)
+	if lobby_hold_sec > 0.0:
+		print("[LIVE-PROBE] holding authenticated lobby for %.1fs" % lobby_hold_sec)
+		await create_timer(lobby_hold_sec).timeout
 
 	_menu._on_team_choice_pressed(TeamId.RED)
 	if not await _wait_until(func() -> bool: return int(_menu._snapshot.get("team", TeamId.NONE)) == TeamId.RED, 5.0):
@@ -87,7 +96,7 @@ func _run() -> void:
 	Input.action_release("move_forward")
 	var player_distance := player_start.distance_to(player.global_position)
 
-	var max_projectiles := 0
+	var max_projectiles := _observed_projectile_spawns
 	var max_mob_displacement := 0.0
 	closest_mob = _closest_mob(player, mobs)
 	target_delta = closest_mob.global_position - player.global_position
@@ -95,7 +104,10 @@ func _run() -> void:
 	var combat := player.get_node_or_null("CombatComponent")
 	var attack_count_start := int(combat.sync_attack_count) if combat else -1
 	Input.action_press("shoot")
-	await create_timer(2.0).timeout
+	var shoot_deadline := Time.get_ticks_msec() + 2000
+	while Time.get_ticks_msec() < shoot_deadline:
+		await process_frame
+		max_projectiles = max(max_projectiles, _main.get_node("Projectiles").get_child_count())
 	Input.action_release("shoot")
 	var exercise_deadline := Time.get_ticks_msec() + 8000
 	while Time.get_ticks_msec() < exercise_deadline:
@@ -106,6 +118,7 @@ func _run() -> void:
 				var mob_start: Vector3 = mob_start_positions[mob]
 				max_mob_displacement = max(max_mob_displacement,
 					mob_start.distance_to(mob.global_position))
+	max_projectiles = max(max_projectiles, _observed_projectile_spawns)
 	var attack_count_end := int(combat.sync_attack_count) if combat else -1
 	var player_dead := bool(player.get("sync_is_dead"))
 
@@ -125,6 +138,10 @@ func _run() -> void:
 	_close_peer()
 	print("[LIVE-PROBE] PASS oid=%s" % _menu._current_oid)
 	quit(0)
+
+func _on_node_added(node: Node) -> void:
+	if node is ProjectileEntity:
+		_observed_projectile_spawns += 1
 
 func _wait_until(predicate: Callable, timeout_sec: float) -> bool:
 	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)

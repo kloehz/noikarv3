@@ -23,6 +23,10 @@ var _base_camera_fov: float = 75.0
 ## Tracks the last soul amount rendered in the HUD so the pulse animation
 ## only fires on increment (not on every replication tick).
 var _last_hud_souls: int = 0
+var _has_last_remote_animation_position: bool = false
+var _last_remote_animation_position: Vector3 = Vector3.ZERO
+
+const REMOTE_MOVEMENT_ANIMATION_THRESHOLD_SQUARED := 0.0001
 
 ## Preloaded impact VFX scene used by the replicated hit-event flow.
 const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
@@ -321,13 +325,35 @@ func _update_movement_animations() -> void:
 		else:
 			_actor.animation_player.speed_scale = 1.0
 
-		var velocity = logic.get("current_velocity") as Vector3
-		if velocity and velocity.length() > 0.1:
-			_actor.play_animation("Run")
-			_ensure_loop("Run")
-		else:
-			_actor.play_animation("Idle")
-			_ensure_loop("Idle")
+	var velocity := _movement_animation_velocity(logic)
+	if velocity.length_squared() > REMOTE_MOVEMENT_ANIMATION_THRESHOLD_SQUARED:
+		_actor.play_animation("Run")
+		_ensure_loop("Run")
+	else:
+		_actor.play_animation("Idle")
+		_ensure_loop("Idle")
+
+func _movement_animation_velocity(logic: Node) -> Vector3:
+	if _uses_remote_transform_delta_for_movement_animation():
+		var current_position := entity.global_position
+		if not _has_last_remote_animation_position:
+			_last_remote_animation_position = current_position
+			_has_last_remote_animation_position = true
+			return Vector3.ZERO
+		var displacement := current_position - _last_remote_animation_position
+		_last_remote_animation_position = current_position
+		return displacement
+
+	_has_last_remote_animation_position = false
+	if logic == null:
+		return Vector3.ZERO
+	var velocity = logic.get("current_velocity")
+	return velocity as Vector3 if velocity is Vector3 else Vector3.ZERO
+
+func _uses_remote_transform_delta_for_movement_animation() -> bool:
+	return entity != null \
+		and (entity.is_in_group(&"mobs") or entity.is_in_group(&"pets")) \
+		and not entity.is_multiplayer_authority()
 
 ## Force the current animation to loop. Some GLB exports import a single
 ## clip that AnimationPlayer treats as one-shot; without this the mob
