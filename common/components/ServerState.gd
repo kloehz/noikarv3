@@ -98,6 +98,15 @@ signal threat_changed(new_table: Dictionary)
 		sync_threat_table = incoming
 		threat_changed.emit(sync_threat_table)
 
+## NPC-only server-selected snapshot cadence. The server may opt into 15 Hz or
+## 10 Hz NPC snapshots by setting NOIKAR_NPC_SNAPSHOT_HZ to 15 or 10 at the
+## default 30 Hz NetworkTime tickrate. Clients receive this through the normal
+## StateSynchronizer schema and never read local environment for cadence.
+@export_range(1, 3, 1)
+var npc_snapshot_stride: int = 1:
+	set(v):
+		npc_snapshot_stride = clampi(v, 1, 3)
+
 ## Threat tables must be reassigned, rather than mutated in place, so local
 ## signal listeners observe every server-side update. The table is not added to
 ## NPC/pet StateSynchronizer state; server AI reads it locally.
@@ -167,6 +176,12 @@ func decay_threat(amount: int) -> void:
 func _ready() -> void:
 	set_multiplayer_authority(1)
 	var sync = get_node_or_null("StateSynchronizer")
+	var entity := get_parent()
+	var is_npc := _is_npc_entity(entity)
+	if is_npc and multiplayer.is_server():
+		npc_snapshot_stride = _npc_snapshot_stride_from_environment()
+		if not NetworkRollback.enable_diff_states:
+			npc_snapshot_stride = 1
 	if sync:
 		var properties: Array[String] = [
 			"max_health",
@@ -180,7 +195,10 @@ func _ready() -> void:
 			"is_stunned",
 			"stun_remaining_time",
 		]
-		var entity := get_parent()
+		if is_npc:
+			properties.append("npc_snapshot_stride")
+			if sync.has_method("set"):
+				sync.set("npc_snapshot_stride", npc_snapshot_stride)
 		if entity.name.begins_with("PET"):
 			properties.append_array(["pet_type_sync", "power_level_sync"])
 			_add_npc_presentation_state(sync, entity)
@@ -217,3 +235,24 @@ func _remove_state_path(sync: StateSynchronizer, property_path: String) -> void:
 		var configured_path := String(sync.properties[index])
 		if configured_path == property_path or configured_path.ends_with(property_path):
 			sync.properties.remove_at(index)
+
+func _is_npc_entity(entity: Node) -> bool:
+	if entity == null:
+		return false
+	return entity.name.begins_with("PET") or entity.name.begins_with("MOB_") \
+		or entity.name.begins_with("BOSS_") or entity.name.begins_with("ELITE") \
+		or entity.name.begins_with("Dummy")
+
+func _npc_snapshot_stride_from_environment() -> int:
+	if int(NetworkTime.tickrate) != 30:
+		return 1
+	var requested := OS.get_environment("NOIKAR_NPC_SNAPSHOT_HZ").strip_edges()
+	match requested:
+		"", "30":
+			return 1
+		"15":
+			return 2
+		"10":
+			return 3
+		_:
+			return 1

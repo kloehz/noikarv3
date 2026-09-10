@@ -12,8 +12,11 @@ var _client_peer: ENetMultiplayerPeer
 var _server_scene: Node
 var _client_scene: Node
 var _base_entity_scene: PackedScene
+var _previous_peer: MultiplayerPeer
 
 func before_each() -> void:
+	_previous_peer = multiplayer.multiplayer_peer
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_base_entity_scene = load("res://scenes/BaseEntity.tscn")
 	assert_not_null(_base_entity_scene, "BaseEntity.tscn should exist")
 
@@ -60,6 +63,7 @@ func after_each() -> void:
 		_client_peer.close()
 	_server_peer = null
 	_client_peer = null
+	multiplayer.multiplayer_peer = _previous_peer
 	
 	if is_instance_valid(_server_scene):
 		_server_scene.queue_free()
@@ -266,7 +270,7 @@ func test_mob_state_synchronizer_omits_logic_velocity_but_keeps_transform_snapsh
 		"Mob StateSynchronizer must keep authoritative global_position snapshots")
 	assert_true(_state_sync_has_property(sync, ":quaternion"),
 		"Mob StateSynchronizer must keep authoritative quaternion snapshots")
-	_assert_state_sync_property_count(sync, 19,
+	_assert_state_sync_property_count(sync, 20,
 		"Mob")
 
 func test_pet_state_synchronizer_omits_logic_velocity_but_keeps_pet_data() -> void:
@@ -280,7 +284,7 @@ func test_pet_state_synchronizer_omits_logic_velocity_but_keeps_pet_data() -> vo
 		"Pet type remains synchronized after the velocity reduction")
 	assert_true(_state_sync_has_property(sync, ":power_level_sync"),
 		"Pet power level remains synchronized after the velocity reduction")
-	_assert_state_sync_property_count(sync, 19,
+	_assert_state_sync_property_count(sync, 20,
 		"Pet")
 
 func test_player_rollback_synchronizer_retains_logic_velocity_state() -> void:
@@ -304,10 +308,10 @@ func test_enemy_multiplayer_synchronizer_keeps_position_spawn_only() -> void:
 
 	var enemy: Node = load("res://scenes/EnemyEntity.tscn").instantiate()
 	var state_sync := enemy.get_node("ServerState/StateSynchronizer") as StateSynchronizer
-	assert_eq(state_sync.get_script(), load("res://addons/netfox/state-synchronizer.gd"),
-		"EnemyEntity should use vendor StateSynchronizer for every 30 Hz network tick")
-	assert_false(_object_has_property(state_sync, "authority_snapshot_stride"),
-		"EnemyEntity visible movement must not be reduced by authority cadence")
+	assert_true(state_sync is StateSynchronizer,
+		"EnemyEntity NPC adapter should inherit vendor StateSynchronizer")
+	assert_eq(state_sync.get("npc_snapshot_stride"), 1,
+		"EnemyEntity default NPC cadence remains 30 Hz")
 	var expected_transform_properties: Array[String] = [":global_position", ":quaternion"]
 	assert_eq(state_sync.properties, expected_transform_properties,
 		"EnemyEntity should keep only authoritative transform snapshots")
@@ -329,10 +333,10 @@ func test_pet_multiplayer_synchronizer_keeps_position_spawn_only() -> void:
 
 	var pet: Node = load("res://scenes/PetEntity.tscn").instantiate()
 	var state_sync := pet.get_node("ServerState/StateSynchronizer") as StateSynchronizer
-	assert_eq(state_sync.get_script(), load("res://addons/netfox/state-synchronizer.gd"),
-		"PetEntity should use vendor StateSynchronizer for every 30 Hz network tick")
-	assert_false(_object_has_property(state_sync, "authority_snapshot_stride"),
-		"PetEntity visible movement must not be reduced by authority cadence")
+	assert_true(state_sync is StateSynchronizer,
+		"PetEntity NPC adapter should inherit vendor StateSynchronizer")
+	assert_eq(state_sync.get("npc_snapshot_stride"), 1,
+		"PetEntity default NPC cadence remains 30 Hz")
 	var expected_transform_properties: Array[String] = [":global_position", ":quaternion"]
 	assert_eq(state_sync.properties, expected_transform_properties,
 		"PetEntity should keep only authoritative transform snapshots")

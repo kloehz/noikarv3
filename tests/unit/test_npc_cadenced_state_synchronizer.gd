@@ -8,13 +8,15 @@ const BASE_ENTITY_SCENE := preload("res://scenes/BaseEntity.tscn")
 const MAIN_SCENE := preload("res://scenes/main.tscn")
 
 var _cadenced_sync_script: Script
+var _previous_peer: MultiplayerPeer
 
 func before_each() -> void:
+	_previous_peer = multiplayer.multiplayer_peer
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	_cadenced_sync_script = load(CADENCED_SYNC_PATH)
 
 func after_each() -> void:
-	multiplayer.multiplayer_peer = null
+	multiplayer.multiplayer_peer = _previous_peer
 
 func _free_visibility_filter(sync: StateSynchronizer) -> void:
 	var filter: Node = sync.visibility_filter
@@ -147,14 +149,14 @@ func test_enemy_pet_and_match_state_sync_policy_keeps_visible_movement_per_tick(
 	var player_sync := player.get_node("ServerState/StateSynchronizer")
 	var match_sync := main.get_node("MatchState/StateSynchronizer")
 
-	assert_true(enemy_sync.get_script() == vendor_sync_script,
-		"EnemyEntity must use vendor StateSynchronizer so TickInterpolator receives every 30 Hz network tick")
-	assert_true(pet_sync.get_script() == vendor_sync_script,
-		"PetEntity must use vendor StateSynchronizer so TickInterpolator receives every 30 Hz network tick")
-	assert_false(_object_has_property(enemy_sync, "authority_snapshot_stride"),
-		"EnemyEntity must not apply authority snapshot cadence to visible movement")
-	assert_false(_object_has_property(pet_sync, "authority_snapshot_stride"),
-		"PetEntity must not apply authority snapshot cadence to visible movement")
+	assert_true(enemy_sync is StateSynchronizer,
+		"EnemyEntity NPC adapter must keep StateSynchronizer inheritance and vendor RPC behavior")
+	assert_true(pet_sync is StateSynchronizer,
+		"PetEntity NPC adapter must keep StateSynchronizer inheritance and vendor RPC behavior")
+	assert_eq(enemy_sync.get("npc_snapshot_stride"), 1,
+		"EnemyEntity default NPC cadence preserves 30 Hz behavior")
+	assert_eq(pet_sync.get("npc_snapshot_stride"), 1,
+		"PetEntity default NPC cadence preserves 30 Hz behavior")
 	assert_false(player_sync.get_script() == _cadenced_sync_script,
 		"BaseEntity/player synchronizer must remain vanilla StateSynchronizer")
 	assert_true(match_sync.get_script() == _cadenced_sync_script,
