@@ -25,8 +25,15 @@ var _base_camera_fov: float = 75.0
 var _last_hud_souls: int = 0
 var _has_last_remote_animation_position: bool = false
 var _last_remote_animation_position: Vector3 = Vector3.ZERO
+var _remote_motion_hold_remaining: float = 0.0
+var _remote_motion_last_entity_id: int = 0
+var _remote_motion_last_authority: bool = false
+var _remote_motion_has_context: bool = false
 
-const REMOTE_MOVEMENT_ANIMATION_THRESHOLD_SQUARED := 0.0001
+const LOCAL_MOVEMENT_ANIMATION_SPEED_THRESHOLD_SQUARED := 0.0001
+const REMOTE_MOVEMENT_ANIMATION_SPEED_THRESHOLD := 0.05
+const REMOTE_MOVEMENT_ANIMATION_HOLD_SECONDS := 0.18
+const REMOTE_MOVEMENT_ANIMATION_MAX_SAMPLE_GAP_SECONDS := 0.20
 
 ## Preloaded impact VFX scene used by the replicated hit-event flow.
 const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
@@ -179,6 +186,7 @@ func setup_with_actor(actor: CharacterActor) -> void:
 	if _actor:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		_attack_visual_active = false
+		_begin_remote_motion_reset()
 		_setup_hit_flash_overlays()
 		if entity:
 			var mesh = entity.get_node_or_null("MeshInstance3D")
@@ -189,6 +197,7 @@ func setup_with_actor(actor: CharacterActor) -> void:
 ## Called when entity spawns - play spawn VFX/effects.
 func _on_entity_spawned(p_entity: Node3D) -> void:
 	if p_entity == self.entity:
+		_begin_remote_motion_reset()
 		play_spawn_effect()
 
 ## Update visual name (e.g., label above player).
@@ -225,9 +234,10 @@ func _process(delta: float) -> void:
 	
 	if _anim_lock_time > 0:
 		_anim_lock_time -= delta
+		_begin_remote_motion_reset()
 		return
 		
-	_update_movement_animations()
+	_update_movement_animations(delta)
 
 func _handle_networked_attack_vfx() -> void:
 	var combat = entity.get_node_or_null("CombatComponent")
@@ -295,7 +305,7 @@ func _handle_local_aim_presentation(delta: float) -> void:
 	var target_fov: float = attack.aim_fov if aiming else _base_camera_fov
 	camera.fov = move_toward(camera.fov, target_fov, delta * 70.0)
 
-func _update_movement_animations() -> void:
+func _update_movement_animations(delta: float) -> void:
 	if not _actor: return
 	if not entity: return
 
@@ -321,34 +331,84 @@ func _update_movement_animations() -> void:
 			_actor.animation_player.speed_scale = 2.0
 			_actor.play_animation("Run")
 			_ensure_loop("Run")
+			_begin_remote_motion_reset()
 			return
 		else:
 			_actor.animation_player.speed_scale = 1.0
 
-	var velocity := _movement_animation_velocity(logic)
-	if velocity.length_squared() > REMOTE_MOVEMENT_ANIMATION_THRESHOLD_SQUARED:
+	var uses_remote_transform_delta := _uses_remote_transform_delta_for_movement_animation()
+	var velocity := _movement_animation_velocity(logic, delta, uses_remote_transform_delta)
+	var threshold_squared := 0.0 if uses_remote_transform_delta else LOCAL_MOVEMENT_ANIMATION_SPEED_THRESHOLD_SQUARED
+	if velocity.length_squared() > threshold_squared:
 		_actor.play_animation("Run")
 		_ensure_loop("Run")
 	else:
 		_actor.play_animation("Idle")
 		_ensure_loop("Idle")
 
-func _movement_animation_velocity(logic: Node) -> Vector3:
-	if _uses_remote_transform_delta_for_movement_animation():
-		var current_position := entity.global_position
-		if not _has_last_remote_animation_position:
-			_last_remote_animation_position = current_position
-			_has_last_remote_animation_position = true
-			return Vector3.ZERO
-		var displacement := current_position - _last_remote_animation_position
-		_last_remote_animation_position = current_position
-		return displacement
+func _movement_animation_velocity(logic: Node, delta: float, uses_remote_transform_delta: bool) -> Vector3:
+	if uses_remote_transform_delta:
+		return _remote_transform_animation_velocity(delta)
 
-	_has_last_remote_animation_position = false
+	_begin_remote_motion_reset()
 	if logic == null:
 		return Vector3.ZERO
-	var velocity = logic.get("current_velocity")
+	var velocity: Variant = logic.get("current_velocity")
 	return velocity as Vector3 if velocity is Vector3 else Vector3.ZERO
+
+func _remote_transform_animation_velocity(delta: float) -> Vector3:
+	var current_position := entity.global_position
+	var is_authority := entity.is_multiplayer_authority()
+	var entity_id := entity.get_instance_id()
+	if not _remote_motion_has_context \
+			or _remote_motion_last_entity_id != entity_id \
+			or _remote_motion_last_authority != is_authority:
+		_reset_remote_motion_sample(current_position, entity_id, is_authority)
+		return Vector3.ZERO
+
+	if not _has_last_remote_animation_position:
+		_reset_remote_motion_sample(current_position, entity_id, is_authority)
+		return Vector3.ZERO
+
+	if delta <= 0.0:
+		_reset_remote_motion_sample(current_position, entity_id, is_authority)
+		return Vector3.ZERO
+
+	if delta > REMOTE_MOVEMENT_ANIMATION_MAX_SAMPLE_GAP_SECONDS:
+		_reset_remote_motion_sample(current_position, entity_id, is_authority)
+		return Vector3.ZERO
+
+	var elapsed := delta
+	var displacement := current_position - _last_remote_animation_position
+	_last_remote_animation_position = current_position
+	_remote_motion_last_entity_id = entity_id
+	_remote_motion_last_authority = is_authority
+
+	var speed: float = displacement.length() / elapsed
+	if speed >= REMOTE_MOVEMENT_ANIMATION_SPEED_THRESHOLD:
+		_remote_motion_hold_remaining = REMOTE_MOVEMENT_ANIMATION_HOLD_SECONDS
+		return displacement / elapsed
+	_remote_motion_hold_remaining = max(_remote_motion_hold_remaining - elapsed, 0.0)
+
+	if _remote_motion_hold_remaining > 0.0:
+		return Vector3.RIGHT * REMOTE_MOVEMENT_ANIMATION_SPEED_THRESHOLD
+	return Vector3.ZERO
+
+func _begin_remote_motion_reset() -> void:
+	_has_last_remote_animation_position = false
+	_last_remote_animation_position = Vector3.ZERO
+	_remote_motion_hold_remaining = 0.0
+	_remote_motion_has_context = false
+	_remote_motion_last_entity_id = 0
+	_remote_motion_last_authority = false
+
+func _reset_remote_motion_sample(position: Vector3, entity_id: int, is_authority: bool) -> void:
+	_last_remote_animation_position = position
+	_has_last_remote_animation_position = true
+	_remote_motion_hold_remaining = 0.0
+	_remote_motion_has_context = true
+	_remote_motion_last_entity_id = entity_id
+	_remote_motion_last_authority = is_authority
 
 func _uses_remote_transform_delta_for_movement_animation() -> bool:
 	return entity != null \
@@ -396,6 +456,7 @@ func _play_fallback_punch() -> void:
 ## Called when entity dies - play death VFX/effects.
 func _on_entity_died(p_entity: Node3D) -> void:
 	if p_entity == self.entity:
+		_begin_remote_motion_reset()
 		play_death_effect()
 
 ## Called when entity takes damage - play hit flash/effects.
@@ -430,6 +491,7 @@ func _spawn_heal_burst(amount: int) -> void:
 	EventBus.visual_effect_requested.emit(entity, "heal")
 ## Play death visual effect.
 func play_death_effect() -> void:
+	_begin_remote_motion_reset()
 	if _actor:
 		_actor.play_animation("Death")
 
@@ -451,6 +513,7 @@ func play_death_effect() -> void:
 
 ## Play spawn/respawn visual effect.
 func play_spawn_effect() -> void:
+	_begin_remote_motion_reset()
 	if _actor:
 		_actor.visible = true
 		# Force the actor into the Idle animation so mobs don't sit in
@@ -500,6 +563,7 @@ func _begin_protected_attack() -> void:
 
 	_attack_visual_token += 1
 	_attack_visual_active = true
+	_begin_remote_motion_reset()
 	# An attack is an explicit combat action, so it preempts a hit reaction.
 	_actor.animation_player.stop()
 	_actor.animation_player.speed_scale = 1.0
@@ -522,6 +586,7 @@ func _finish_protected_attack(token: int) -> void:
 	if token != _attack_visual_token:
 		return
 	_attack_visual_active = false
+	_begin_remote_motion_reset()
 
 func _setup_hit_flash_overlays() -> void:
 	if _hit_flash_actor == _actor:
