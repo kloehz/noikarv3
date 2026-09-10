@@ -31,6 +31,8 @@ var _active_attack: AttackDefinition  # Currently executing attack
 var entity: Node
 var logic: Node
 var _melee_shapecast: ShapeCast3D  # Dynamically created for MELEE_HITSCAN
+var _perf_probe: Node = null
+var _perf_probe_npc_cost_enabled: bool = false
 
 # --- Attack State Machine ---
 enum AttackState { READY, STARTUP, ACTIVE, RECOVERY }
@@ -73,6 +75,7 @@ func _ready() -> void:
 	logic = get_node_or_null("../LogicComponent")
 	if not logic:
 		print("[CombatComponent] %s: LogicComponent not found" % entity_name)
+	_setup_perf_probe()
 	
 	# If there's a static ShapeCast3D in the scene, use it as fallback
 	var static_cast = get_node_or_null("../ShapeCast3D")
@@ -168,7 +171,22 @@ func _rollback_tick(delta: float, _tick: int, is_fresh: bool) -> void:
 func simulate_authoritative_tick(delta: float, tick: int) -> void:
 	_simulate_tick(delta, tick, true)
 
+func _setup_perf_probe() -> void:
+	_perf_probe = get_node_or_null("/root/PerfProbe")
+	_perf_probe_npc_cost_enabled = _perf_probe != null and _perf_probe.get("npc_cost_recording_enabled") == true
+
 func _simulate_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	if _should_record_npc_combat_cost():
+		var started_usec := Time.get_ticks_usec()
+		_simulate_tick_impl(delta, tick, is_fresh)
+		_perf_probe.record_npc_cost(&"combat", Time.get_ticks_usec() - started_usec)
+		return
+	_simulate_tick_impl(delta, tick, is_fresh)
+
+func _should_record_npc_combat_cost() -> bool:
+	return _perf_probe_npc_cost_enabled and entity != null and multiplayer.is_server() and not entity.name.is_valid_int()
+
+func _simulate_tick_impl(delta: float, tick: int, is_fresh: bool) -> void:
 	# The client-owned CombatComponent for player projectiles is NOT in the
 	# server's owned_state list, so the server resimulates it as a predicted
 	# tick (is_fresh=false). We must still advance the replicated state machine

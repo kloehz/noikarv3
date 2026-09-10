@@ -31,6 +31,8 @@ var preview_cancelled: bool = false
 
 var camera_pivot: Node3D
 var _server_state: Node
+var _perf_probe: Node = null
+var _perf_probe_npc_cost_enabled: bool = false
 @export var mouse_sensitivity: float = 0.005
 
 func _ready() -> void:
@@ -49,6 +51,7 @@ func _ready() -> void:
 		print("[DEBUG] LogicComponent %s: Initial rotation captured" % entity_name)
 	
 	_server_state = get_parent().get_node_or_null("ServerState")
+	_setup_perf_probe()
 
 	if not _server_state:
 		print("[WARNING] LogicComponent %s: ServerState not found!" % entity_name)
@@ -210,7 +213,15 @@ func _simulate_tick(delta: float, _tick: int) -> void:
 	if is_human and summon_type != -1:
 		summon_type = -1 
 	
-	_apply_movement(delta)
+	if not is_human and multiplayer.is_server():
+		if _perf_probe_npc_cost_enabled:
+			var started_usec := Time.get_ticks_usec()
+			_apply_npc_movement(delta, true)
+			_perf_probe.record_npc_cost(&"movement", Time.get_ticks_usec() - started_usec)
+		else:
+			_apply_npc_movement(delta)
+	else:
+		_apply_movement(delta)
 
 func _process(_delta: float) -> void:
 	if Engine.is_editor_hint(): return
@@ -222,6 +233,10 @@ func _process(_delta: float) -> void:
 	# tick and the tick copy stays authoritative for the simulation.
 	entity.rotation.y = look_yaw
 	_apply_camera_aim()
+
+func _setup_perf_probe() -> void:
+	_perf_probe = get_node_or_null("/root/PerfProbe")
+	_perf_probe_npc_cost_enabled = _perf_probe != null and not _perf_probe.is_queued_for_deletion() and _perf_probe.get("npc_cost_recording_enabled") == true
 
 func _apply_movement(delta: float) -> void:
 	if not entity: return
@@ -271,6 +286,60 @@ func _apply_movement(delta: float) -> void:
 		entity.force_update_transform()
 
 	# Sync back velocity for next frame (handles collisions stopping movement)
+	current_velocity = entity.velocity / NetworkTime.physics_factor
+
+func _apply_npc_movement(delta: float, record_npc_movement_children: bool = false) -> void:
+	if not entity: return
+	if input_axis != Vector2.ZERO or current_velocity != Vector3.ZERO or is_dashing or camera_pivot != null or entity.rotation.y != look_yaw:
+		if record_npc_movement_children:
+			_apply_timed_npc_movement(delta)
+		else:
+			_apply_movement(delta)
+		return
+
+	entity.velocity = Vector3.ZERO
+	if record_npc_movement_children:
+		var slide_started_usec := Time.get_ticks_usec()
+		entity.move_and_slide()
+		_perf_probe.record_npc_cost(&"movement_slide", Time.get_ticks_usec() - slide_started_usec)
+		var flush_started_usec := Time.get_ticks_usec()
+		entity.force_update_transform()
+		_perf_probe.record_npc_cost(&"movement_flush", Time.get_ticks_usec() - flush_started_usec)
+	else:
+		entity.move_and_slide()
+		entity.force_update_transform()
+	current_velocity = entity.velocity / NetworkTime.physics_factor
+
+func _apply_timed_npc_movement(delta: float) -> void:
+	var prepare_started_usec := Time.get_ticks_usec()
+	_apply_camera_aim()
+
+	# 0. DASH Logic (Predictive)
+	if is_dashing:
+		current_velocity = dash_direction * (max_speed * DASH_SPEED_MULT)
+	else:
+		# Normal Input-based movement
+		entity.rotation.y = look_yaw
+		var move_dir = Vector3.ZERO
+		if input_axis.length() > 0:
+			var forward = -entity.global_transform.basis.z
+			var right = entity.global_transform.basis.x
+			move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+		var target_vel = move_dir * max_speed
+		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
+	_perf_probe.record_npc_cost(&"movement_prepare", Time.get_ticks_usec() - prepare_started_usec)
+
+	var old_pos = entity.global_position
+	entity.velocity = current_velocity * NetworkTime.physics_factor
+	var slide_started_usec := Time.get_ticks_usec()
+	entity.move_and_slide()
+	_perf_probe.record_npc_cost(&"movement_slide", Time.get_ticks_usec() - slide_started_usec)
+
+	if old_pos.distance_squared_to(entity.global_position) > 0.0001 or multiplayer.is_server():
+		var flush_started_usec := Time.get_ticks_usec()
+		entity.force_update_transform()
+		_perf_probe.record_npc_cost(&"movement_flush", Time.get_ticks_usec() - flush_started_usec)
+
 	current_velocity = entity.velocity / NetworkTime.physics_factor
 
 # Removed _clear_server_impulse as it's no longer needed with time-based state

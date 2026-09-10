@@ -71,6 +71,8 @@ const SLEEP_RADIUS := 60.0
 const PASSIVE_TICKS_SKIP := 3
 
 var _tick_stagger: int = 0
+var _perf_probe: Node = null
+var _perf_probe_npc_cost_enabled: bool = false
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -89,6 +91,8 @@ func _ready() -> void:
 	# Cache players node to avoid expensive root searches
 	_players_node = get_tree().root.find_child("Players", true, false)
 	
+	_setup_perf_probe()
+
 	# NOTE: Faction cache is NOT set here — groups may not be assigned yet.
 	# It's lazily evaluated on tick() or forced via refresh_faction().
 	
@@ -115,6 +119,14 @@ func set_patrol_center(center: Vector3) -> void:
 		_patrol_target = center
 
 func tick(delta: float) -> void:
+	if _perf_probe_npc_cost_enabled:
+		var started_usec := Time.get_ticks_usec()
+		_tick_impl(delta)
+		_perf_probe.record_npc_cost(&"ai", Time.get_ticks_usec() - started_usec)
+		return
+	_tick_impl(delta)
+
+func _tick_impl(delta: float) -> void:
 	if not entity or entity.get("sync_is_dead"):
 		if logic: _stop_inputs()
 		return
@@ -334,6 +346,10 @@ func engage_attacker(attacker: Node) -> void:
 		state = State.CHASE
 		_target_search_timer = 0.0
 
+func _setup_perf_probe() -> void:
+	_perf_probe = get_node_or_null("/root/PerfProbe")
+	_perf_probe_npc_cost_enabled = _perf_probe != null and _perf_probe.get("npc_cost_recording_enabled") == true
+
 func _move_towards(pos: Vector3, speed_factor: float = 1.0) -> void:
 	var dir := (pos - entity.global_position).normalized()
 	dir = _steer_around_nearby_allies(dir)
@@ -367,7 +383,10 @@ func _steer_around_nearby_allies(direction: Vector3) -> Vector3:
 
 	var separation := Vector3.ZERO
 	var blocker_weight := 0.0
-	for other in get_tree().get_nodes_in_group(ally_group):
+	var allies := get_tree().get_nodes_in_group(ally_group)
+	if _perf_probe_npc_cost_enabled:
+		_perf_probe.record_npc_counter(&"avoidance", allies.size())
+	for other in allies:
 		if other == entity or not is_instance_valid(other) or other.get("sync_is_dead"):
 			continue
 		var other_entity := other as Node3D
@@ -446,7 +465,10 @@ func _find_nearest_target() -> void:
 
 	# Search ALL entities in hostile groups (not just Players container)
 	for group_name in hostile_groups:
-		for potential in get_tree().get_nodes_in_group(group_name):
+		var candidates := get_tree().get_nodes_in_group(group_name)
+		if _perf_probe_npc_cost_enabled:
+			_perf_probe.record_npc_counter(&"target_scan", candidates.size())
+		for potential in candidates:
 			if potential == entity: continue
 			if not is_instance_valid(potential): continue
 			if potential.get("sync_is_dead"): continue
