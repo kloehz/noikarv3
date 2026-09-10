@@ -22,6 +22,8 @@ const BOSS_HP_MULTIPLIER: float = 2.0
 ## Mob type per stage index (positions come from map markers MobStage1/2/3).
 const STAGE_TYPES: Array[String] = ["HECARIM_TANK", "IVERN_HEAL", "KOGMAW_DMG"]
 const BOSS_DEFINITION := { "type": "AATROX", "prefix": "BOSS_" }
+const PROFILE_FIXED_POPULATION_SEED: int = 120120
+const PROFILE_BACKEND_URLS: Array[String] = ["http://127.0.0.1:18090", "http://localhost:18090"]
 
 ## Per-team-member mob scaling curve. With `n` players on the opposing team:
 ##   n=1 → 1.0 (+0%)   — solo / training
@@ -283,12 +285,69 @@ func _begin_stage_progression() -> void:
 	if _boss_spawned or _stage_progression_active_by_team[TeamId.RED] or _stage_progression_active_by_team[TeamId.BLUE]:
 		return
 	_handled_wave_death_ids.clear()
+	_reset_stage_progression_counters(false)
+	if _profile_fixed_population_enabled():
+		_spawn_profile_fixed_population()
+		return
+	for team in [TeamId.RED, TeamId.BLUE]:
+		_stage_progression_active_by_team[team] = true
+		_spawn_next_stage_for_team(team)
+
+func _reset_stage_progression_counters(active: bool) -> void:
 	for team in [TeamId.RED, TeamId.BLUE]:
 		_next_stage_index_by_team[team] = 0
 		_wave_alive_by_team[team] = 0
 		_active_wave_entity_ids_by_team[team].clear()
-		_stage_progression_active_by_team[team] = true
-		_spawn_next_stage_for_team(team)
+		_stage_progression_active_by_team[team] = active
+
+func _profile_fixed_population_enabled() -> bool:
+	if not GameManager._is_headless_environment():
+		return false
+	if OS.get_environment("NOIKAR_PERF_PROBE") != "1":
+		return false
+	if OS.get_environment("NOIKAR_PROFILE_FIXED_POPULATION") != "1":
+		return false
+	if not PROFILE_BACKEND_URLS.has(OS.get_environment("NOIKAR_BACKEND_URL")):
+		return false
+	return ["0", "1", "20"].has(OS.get_environment("NOIKAR_PROFILE_MOB_COUNT"))
+
+func _profile_fixed_population_count() -> int:
+	return int(OS.get_environment("NOIKAR_PROFILE_MOB_COUNT"))
+
+func _spawn_profile_fixed_population() -> void:
+	var expected_count := _profile_fixed_population_count()
+	var specs := _profile_fixed_population_specs()
+	for i in range(expected_count):
+		var spec: Dictionary = specs[i]
+		var mob := _spawn_named_enemy(str(spec["enemy_type"]), spec["position"], "MOB_", 1.0, 0.0, int(spec["team"]))
+		if mob:
+			var ai: Node = mob.get_node_or_null("AIComponent")
+			if ai and ai.has_method("set_patrol_center"):
+				ai.set_patrol_center(spec["position"])
+	var actual_count := mobs_container.get_child_count()
+	if actual_count == expected_count:
+		print("[PROFILE_POPULATION_READY] mode=fixed_population expectedcount=%d actualcount=%d seed=%d" % [expected_count, actual_count, PROFILE_FIXED_POPULATION_SEED])
+	else:
+		print("[PROFILE_POPULATION_FAILED] mode=fixed_population expectedcount=%d actualcount=%d seed=%d" % [expected_count, actual_count, PROFILE_FIXED_POPULATION_SEED])
+
+func _profile_fixed_population_specs() -> Array[Dictionary]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = PROFILE_FIXED_POPULATION_SEED
+	var specs: Array[Dictionary] = []
+	var enemy_type: String = STAGE_TYPES[0]
+	var red_anchor := _stage_spawn_pos_for_team(TeamId.RED, 0)
+	var blue_anchor := _stage_spawn_pos_for_team(TeamId.BLUE, 0)
+	specs.append({"enemy_type": enemy_type, "position": red_anchor, "team": TeamId.RED})
+	for _i in range(9):
+		specs.append({"enemy_type": enemy_type, "position": _profile_scattered_position(red_anchor, rng), "team": TeamId.RED})
+	for _i in range(10):
+		specs.append({"enemy_type": enemy_type, "position": _profile_scattered_position(blue_anchor, rng), "team": TeamId.BLUE})
+	return specs
+
+func _profile_scattered_position(anchor: Vector3, rng: RandomNumberGenerator) -> Vector3:
+	var angle: float = rng.randf() * TAU
+	var distance: float = sqrt(rng.randf()) * STAGE_SCATTER_RADIUS
+	return Vector3(anchor.x + cos(angle) * distance, 0, anchor.z + sin(angle) * distance)
 
 ## Spawn the next stage for one team or trigger the boss if the team just
 ## cleared stage 3. Stages 1 and 2 advance independently of the boss state so
