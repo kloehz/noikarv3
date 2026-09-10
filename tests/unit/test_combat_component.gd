@@ -79,3 +79,29 @@ func test_fixed_attack_cooldown_remains_unchanged() -> void:
 	var attack := AttackDefinition.new()
 	attack.cooldown = 1.25
 	assert_almost_eq(attack.get_cooldown("MOB_1", 1), 1.25, 0.000001)
+
+func test_attack_event_identity_uses_attack_counter_not_processing_tick() -> void:
+	_mock_entity.name = "77"
+	_combat.sync_attack_count = 8
+	assert_eq(_combat._attack_event_id(), "77:8")
+	assert_true(_combat._record_attack_event(_combat._attack_event_id()))
+	assert_false(_combat._record_attack_event(_combat._attack_event_id()),
+		"Reprocessing the same attack counter on another tick must not dispatch twice")
+
+func test_attack_event_ledger_is_per_component_and_bounded() -> void:
+	_mock_entity.name = "77"
+	_combat.sync_attack_count = 1
+	assert_true(_combat._record_attack_event(_combat._attack_event_id()))
+
+	var new_combat := CombatComponent.new()
+	new_combat.entity = _mock_entity
+	new_combat.sync_attack_count = 1
+	assert_true(new_combat._record_attack_event(new_combat._attack_event_id()),
+		"A newly spawned component has its own irreversible-event ledger")
+	new_combat.free()
+
+	for i in range(CombatComponent.MAX_RECORDED_ATTACK_EVENTS + 1):
+		assert_true(_combat._record_attack_event("77:%d" % [i + 2]))
+	assert_lte(_combat._dispatched_attack_event_order.size(), CombatComponent.MAX_RECORDED_ATTACK_EVENTS)
+	assert_false(_combat._dispatched_attack_events.has("77:1"),
+		"Old attack IDs are evicted so the server ledger remains bounded")

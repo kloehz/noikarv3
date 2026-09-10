@@ -87,8 +87,12 @@ func _ready() -> void:
 		
 	print("[DEBUG] BaseEntity %s initialization (peer_id: %d, is_human: %s)" % [name, peer_id, is_human])
 	
-	# Set authority recursively
+	# Set player authority recursively first so LogicComponent inputs stay owned
+	# by the player peer, then pin authoritative combat state back to server.
 	set_multiplayer_authority(peer_id, true)
+	var combat = get_node_or_null("CombatComponent")
+	if combat:
+		combat.set_multiplayer_authority(1, true)
 	
 	# ALWAYS load the combat spec because it contains logic data (ranges,
 	# timings). The visual actor scene only loads outside headless.

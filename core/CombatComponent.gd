@@ -187,14 +187,11 @@ func _should_record_npc_combat_cost() -> bool:
 	return _perf_probe_npc_cost_enabled and entity != null and multiplayer.is_server() and not entity.name.is_valid_int()
 
 func _simulate_tick_impl(delta: float, tick: int, is_fresh: bool) -> void:
-	# The client-owned CombatComponent for player projectiles is NOT in the
-	# server's owned_state list, so the server resimulates it as a predicted
-	# tick (is_fresh=false). We must still advance the replicated state machine
-	# and dispatch the spawn when ACTIVE is reached so server authority can
-	# instantiate the projectile exactly once.
-	var advance_only: bool = multiplayer.is_server() and not is_fresh
+	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
+	var is_owner = multiplayer.get_unique_id() == owner_id
+	var can_process_intentions = multiplayer.is_server() or is_owner
 
-	if not is_fresh and not advance_only:
+	if not is_fresh and not can_process_intentions:
 		return
 
 	if entity and entity.get("sync_is_dead"):
@@ -211,11 +208,10 @@ func _simulate_tick_impl(delta: float, tick: int, is_fresh: bool) -> void:
 
 	_update_attack_state(delta, tick)
 
-	# Only owner or server can start attacks
-	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
-	var is_owner = (multiplayer.get_unique_id() == owner_id)
-
-	if (multiplayer.is_server() or is_owner) and current_attack_state == AttackState.READY and is_fresh:
+	# Only owner or server can start attacks. Resimulation ticks still carry
+	# recorded input transitions, so do not gate deterministic charge/release on
+	# Netfox's freshness flag.
+	if can_process_intentions and current_attack_state == AttackState.READY:
 		if _uses_charged_projectile(_primary):
 			_update_charged_projectile(delta)
 		elif logic and logic.get("is_shooting"):
@@ -270,6 +266,7 @@ func _update_attack_state(delta: float, tick: int) -> void:
 	if current_attack_state == AttackState.READY:
 		return
 
+	_rehydrate_active_attack()
 	_state_timer -= delta
 
 	if _state_timer <= 0:
@@ -286,6 +283,16 @@ func _update_attack_state(delta: float, tick: int) -> void:
 				current_attack_state = AttackState.READY
 				_hit_entities_this_attack.clear()
 				_active_attack = null
+				_active_attack_slot = 0
+
+func _rehydrate_active_attack() -> void:
+	match _active_attack_slot:
+		1:
+			_active_attack = _primary
+		2:
+			_active_attack = _secondary
+		_:
+			_active_attack = null
 
 # ============================================================
 # ATTACK START
@@ -301,6 +308,8 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_mu
 	if not attack_def:
 		# No definition configured — use legacy fallback behavior
 		_active_attack = null
+		_active_attack_slot = 0
+		_active_damage_multiplier = 1.0
 		current_attack_state = AttackState.STARTUP
 		_state_timer = 0.1
 		sync_attack_count += 1
@@ -333,21 +342,14 @@ func _on_attack_active(tick: int) -> void:
 	# sync_attack_count is rollback state and identifies this attack instance.
 	# The ledger deliberately is not rollback state: it records an irreversible
 	# server side effect and suppresses replays after restored simulation state.
-	var event_id := "%s:%d:%d" % [entity.name, sync_attack_count, tick]
+	var event_id := _attack_event_id()
 	if not _record_attack_event(event_id):
 		return
 
-	# Resolve the slot to a concrete AttackDefinition. The server may have
-	# resimulated this state without carrying the resource reference, so look
-	# it up from the slot that the client committed.
-	var attack_def: AttackDefinition = null
-	match _active_attack_slot:
-		1:
-			attack_def = _primary
-		2:
-			attack_def = _secondary
-		_:
-			attack_def = _active_attack
+	# Resolve the server-owned slot to a concrete AttackDefinition. Rollback
+	# restores the canonical slot, while the resource reference is local cache.
+	_rehydrate_active_attack()
+	var attack_def: AttackDefinition = _active_attack
 
 	if attack_def:
 		match attack_def.attack_type:
@@ -361,6 +363,9 @@ func _on_attack_active(tick: int) -> void:
 	else:
 		# Legacy fallback: use the static ShapeCast3D with @export damage
 		_execute_melee_legacy()
+
+func _attack_event_id() -> String:
+	return "%s:%d" % [entity.name, sync_attack_count]
 
 ## Returns true exactly once for each irreversible server-side attack event.
 func _record_attack_event(event_id: String) -> bool:

@@ -33,23 +33,25 @@ func encode(tick: int, reference_tick: int, properties: Array[PropertyEntry]) ->
 	assert(properties.size() <= 255, "Property indices may not fit into bytes!")
 
 	var snapshot := _history.get_snapshot(tick)
-	var property_strings := properties.map(func(it): return it.to_string())
+	var allowed_properties := _make_allowed_property_lookup(properties)
+	var filtered_snapshot := _filter_snapshot(snapshot, allowed_properties)
 
 	var reference_snapshot := _history.get_history(reference_tick)
 	var diff_snapshot := reference_snapshot.make_patch(snapshot)
+	var filtered_diff_snapshot := _filter_snapshot(diff_snapshot, allowed_properties)
 
-	_full_snapshot = snapshot.as_dictionary()
-	_encoded_snapshot = diff_snapshot.as_dictionary()
+	_full_snapshot = filtered_snapshot.as_dictionary()
+	_encoded_snapshot = filtered_diff_snapshot.as_dictionary()
 
-	if diff_snapshot.is_empty():
+	if filtered_diff_snapshot.is_empty():
 		return PackedByteArray()
 
 	var buffer := StreamPeerBuffer.new()
 	buffer.put_u8(_version)
 
-	for property in diff_snapshot.properties():
+	for property in filtered_diff_snapshot.properties():
 		var property_idx := _property_indexes.get_by_value(property) as int
-		var property_value = diff_snapshot.get_value(property)
+		var property_value = filtered_diff_snapshot.get_value(property)
 
 		buffer.put_u8(property_idx)
 		buffer.put_var(property_value)
@@ -122,6 +124,22 @@ func get_encoded_snapshot() -> Dictionary:
 
 func get_full_snapshot() -> Dictionary:
 	return _full_snapshot
+
+func _make_allowed_property_lookup(properties: Array[PropertyEntry]) -> Dictionary:
+	var result := {}
+	for property_entry in properties:
+		result[property_entry.to_string()] = true
+	return result
+
+func _filter_snapshot(snapshot: _PropertySnapshot, allowed_properties: Dictionary) -> _PropertySnapshot:
+	if allowed_properties.is_empty():
+		return _PropertySnapshot.new()
+
+	var result := {}
+	for property in snapshot.properties():
+		if allowed_properties.has(property):
+			result[property] = snapshot.get_value(property)
+	return _PropertySnapshot.from_dictionary(result)
 
 func _ensure_property_idx(property: String) -> bool:
 	if _property_indexes.has_value(property):
