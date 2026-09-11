@@ -1,0 +1,3 @@
+[submodule "noikar-noray"]
+	path = noikar-noray
+	url = https://github.com/kloehz/noikar-noray.git
