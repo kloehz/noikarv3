@@ -359,6 +359,23 @@ func _on_boss_damage_changed(red_damage: int, blue_damage: int, _boss: Node, ser
 		max_hp = int(_boss.max_health)
 	boss_health_bar.set_damage(red_damage, blue_damage, max(1, max_hp))
 
+func _unhandled_input(event: InputEvent) -> void:
+	if _toggle_in_game_mouse_mode(event):
+		get_viewport().set_input_as_handled()
+
+func _toggle_in_game_mouse_mode(event: InputEvent) -> bool:
+	if current_state != State.IN_GAME:
+		return false
+	if event is InputEventKey and event.echo:
+		return false
+	if not event.is_action_pressed(&"toggle_menu"):
+		return false
+	Input.mouse_mode = _next_in_game_mouse_mode(Input.mouse_mode)
+	return true
+
+func _next_in_game_mouse_mode(mouse_mode: int) -> int:
+	return Input.MOUSE_MODE_VISIBLE if mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
+
 func _process(_delta: float) -> void:
 	# The final refresh at expiry is what re-enables READY. Restrict this to
 	# the lobby so other menu states do not overwrite the control's state.

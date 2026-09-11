@@ -37,7 +37,15 @@ The checkout does not import private configuration from this PC.
 
 ## Running the project
 
-Open `project.godot` with Godot 4.7.
+Open `project.godot` with Godot 4.7, or use the launcher:
+
+```bash
+./play.sh          # client
+./play.sh server   # headless server
+./play.sh local    # isolated local PostgreSQL/backend/Noray/server/client manual session
+```
+
+`./play.sh local` wraps `tests/manual/profile_room_scaling.py --human` and passes the launcher's detected Godot binary. Override Godot with `GODOT_BIN=/absolute/path/to/Godot ./play.sh local`.
 
 Playing against the hosted VPS does not require starting a local Noray server.
 

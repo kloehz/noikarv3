@@ -11,6 +11,14 @@ const NPC_COST_ENV := "NOIKAR_PERF_PROBE_NPC_COST"
 const NPC_COST_TIMERS := [&"ai", &"movement", &"movement_prepare", &"movement_slide", &"movement_flush", &"combat"]
 const NPC_COST_COUNTERS := [&"target_scan", &"avoidance"]
 const ENTITY_GROUPS := [&"players", &"pets", &"mobs", &"projectiles"]
+const BENCHMARK_SCENARIOS := {
+	"A": {"players": 0, "mobs": 0, "ai_decisions": true, "requires_client_probe": false},
+	"B": {"players": 0, "mobs": 20, "ai_decisions": false, "requires_client_probe": false},
+	"C": {"players": 0, "mobs": 20, "ai_decisions": true, "requires_client_probe": false},
+	"D": {"players": 1, "mobs": 0, "ai_decisions": true, "requires_client_probe": true},
+	"E": {"players": 1, "mobs": 20, "ai_decisions": true, "requires_client_probe": true},
+	"F": {"players": 1, "mobs": 20, "ai_decisions": true, "requires_client_probe": true},
+}
 const NETFOX_MONITORS := {
 	"network_loop_ms": &"netfox/Network loop duration (ms)",
 	"rollback_loop_ms": &"netfox/Rollback loop duration (ms)",
@@ -37,9 +45,12 @@ var _npc_counters := {}
 func _ready() -> void:
 	var perf_env := OS.get_environment("NOIKAR_PERF_PROBE")
 	var is_headless := GameManager._is_headless_environment()
+	var benchmark_scenario := benchmark_scenario_from_args(OS.get_cmdline_user_args())
 	npc_cost_recording_enabled = _should_enable_npc_costs(perf_env, is_headless, OS.get_environment(NPC_COST_ENV))
 	_reset_npc_cost_accumulators()
-	if not _should_enable_probe(perf_env, is_headless):
+	if _has_benchmark_arg(OS.get_cmdline_user_args()) and benchmark_scenario.is_empty():
+		printerr("[BENCHMARK] invalid --benchmark selection; expected one of A,B,C,D,E,F")
+	if not _should_enable_probe(perf_env, is_headless) and not _should_enable_benchmark(benchmark_scenario, is_headless):
 		queue_free()
 		return
 
@@ -58,6 +69,26 @@ func _process(delta: float) -> void:
 
 func _should_enable_probe(env_value: String, is_headless: bool) -> bool:
 	return env_value == "1" and is_headless
+
+func _should_enable_benchmark(scenario: String, is_headless: bool) -> bool:
+	return not scenario.is_empty() and is_headless
+
+func benchmark_scenario_from_args(args: Array) -> String:
+	for arg in args:
+		var text := str(arg).strip_edges()
+		if text.begins_with("--benchmark="):
+			var selected := text.replace("--benchmark=", "").strip_edges().to_upper()
+			return selected if BENCHMARK_SCENARIOS.has(selected) else ""
+	return ""
+
+func benchmark_config_for_scenario(scenario: String) -> Dictionary:
+	return (BENCHMARK_SCENARIOS.get(scenario.to_upper(), {}) as Dictionary).duplicate()
+
+func _has_benchmark_arg(args: Array) -> bool:
+	for arg in args:
+		if str(arg).strip_edges().begins_with("--benchmark="):
+			return true
+	return false
 
 func _should_enable_npc_costs(perf_env_value: String, is_headless: bool, cost_env_value: String) -> bool:
 	return _should_enable_probe(perf_env_value, is_headless) and cost_env_value == "1"
@@ -143,15 +174,31 @@ func _consume_rollback_summary() -> Dictionary:
 
 func _collect_metrics() -> Dictionary:
 	var rollback := _consume_rollback_summary()
+	var scenario := benchmark_scenario_from_args(OS.get_cmdline_user_args())
+	var benchmark_config := benchmark_config_for_scenario(scenario)
+	var entity_counts := _count_entities_by_group()
 	var metrics := {
+		"scenario": scenario,
+		"uptime_sec": float(Time.get_ticks_msec()) / 1000.0,
+		"configured_players": int(benchmark_config.get("players", 0)),
+		"configured_mobs": int(benchmark_config.get("mobs", 0)),
+		"live_players": entity_counts.get("players", multiplayer.get_peers().size()),
+		"live_mobs": entity_counts.get("mobs", 0),
 		"fps": Performance.get_monitor(Performance.TIME_FPS),
+		"frames": Engine.get_frames_drawn(),
 		"frame_ms": Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 		"physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+		"physics_ticks_per_second": Engine.physics_ticks_per_second,
+		"max_fps": Engine.max_fps,
 		"players": multiplayer.get_peers().size(),
-		"entities": _count_entities(),
+		"entities": _sum_entity_counts(entity_counts),
+		"entity_counts": entity_counts,
 		"rollback_events": rollback.events,
 		"rollback_avg_ticks": rollback.avg_ticks,
 		"rollback_max_ticks": rollback.max_ticks,
+		"rollback_nodes_observable": _count_nodes_named("RollbackSynchronizer"),
+		"snapshot_nodes_observable": _count_snapshot_sync_nodes(),
+		"synchronized_entities_observable": _count_synchronized_entities(),
 		"netfox": _collect_netfox_monitors(),
 	}
 	if npc_cost_recording_enabled:
@@ -159,9 +206,42 @@ func _collect_metrics() -> Dictionary:
 	return metrics
 
 func _count_entities() -> int:
+	return _sum_entity_counts(_count_entities_by_group())
+
+func _count_entities_by_group() -> Dictionary:
+	var counts := {}
+	for group in ENTITY_GROUPS:
+		counts[String(group)] = get_tree().get_nodes_in_group(group).size()
+	return counts
+
+func _sum_entity_counts(counts: Dictionary) -> int:
+	var count := 0
+	for value in counts.values():
+		count += int(value)
+	return count
+
+func _count_nodes_named(child_name: String) -> int:
 	var count := 0
 	for group in ENTITY_GROUPS:
-		count += get_tree().get_nodes_in_group(group).size()
+		for node in get_tree().get_nodes_in_group(group):
+			if node.get_node_or_null(child_name) != null:
+				count += 1
+	return count
+
+func _count_snapshot_sync_nodes() -> int:
+	var count := 0
+	for group in ENTITY_GROUPS:
+		for node in get_tree().get_nodes_in_group(group):
+			if node.get_node_or_null("StateSynchronizer") != null or node.get_node_or_null("ServerState") != null:
+				count += 1
+	return count
+
+func _count_synchronized_entities() -> int:
+	var count := 0
+	for group in ENTITY_GROUPS:
+		for node in get_tree().get_nodes_in_group(group):
+			if node.get_node_or_null("RollbackSynchronizer") != null or node.get_node_or_null("StateSynchronizer") != null or node.get_node_or_null("ServerState") != null:
+				count += 1
 	return count
 
 func _collect_netfox_monitors() -> Dictionary:
@@ -174,17 +254,32 @@ func _collect_netfox_monitors() -> Dictionary:
 
 func _format_perf_line(metrics: Dictionary) -> String:
 	var netfox: Dictionary = metrics.get("netfox", {})
-	var parts := [
-		"[PERF]",
-		"fps=%.1f" % metrics.get("fps", 0.0),
-		"frame_ms=%.2f" % metrics.get("frame_ms", 0.0),
-		"physics_ms=%.2f" % metrics.get("physics_ms", 0.0),
-		"players=%d" % metrics.get("players", 0),
-		"entities=%d" % metrics.get("entities", 0),
-		"rollback_events=%d" % metrics.get("rollback_events", 0),
-		"rollback_avg_ticks=%.2f" % metrics.get("rollback_avg_ticks", 0.0),
-		"rollback_max_ticks=%d" % metrics.get("rollback_max_ticks", 0),
-	]
+	var scenario := str(metrics.get("scenario", ""))
+	var parts := []
+	if scenario.is_empty():
+		parts.append("[PERF]")
+	else:
+		parts.append("[BENCHMARK]")
+		parts.append("scenario=%s" % scenario)
+		parts.append("uptime_sec=%.1f" % metrics.get("uptime_sec", 0.0))
+		parts.append("configured_players=%d" % metrics.get("configured_players", 0))
+		parts.append("configured_mobs=%d" % metrics.get("configured_mobs", 0))
+		parts.append("live_players=%d" % metrics.get("live_players", 0))
+		parts.append("live_mobs=%d" % metrics.get("live_mobs", 0))
+	parts.append("fps=%.1f" % metrics.get("fps", 0.0))
+	parts.append("frames=%d" % metrics.get("frames", 0))
+	parts.append("frame_ms=%.2f" % metrics.get("frame_ms", 0.0))
+	parts.append("physics_ms=%.2f" % metrics.get("physics_ms", 0.0))
+	parts.append("physics_ticks_per_second=%d" % metrics.get("physics_ticks_per_second", 0))
+	parts.append("max_fps=%d" % metrics.get("max_fps", 0))
+	parts.append("players=%d" % metrics.get("players", 0))
+	parts.append("entities=%d" % metrics.get("entities", 0))
+	parts.append("rollback_events=%d" % metrics.get("rollback_events", 0))
+	parts.append("rollback_avg_ticks=%.2f" % metrics.get("rollback_avg_ticks", 0.0))
+	parts.append("rollback_max_ticks=%d" % metrics.get("rollback_max_ticks", 0))
+	parts.append("rollback_nodes_observable=%d" % metrics.get("rollback_nodes_observable", 0))
+	parts.append("snapshot_nodes_observable=%d" % metrics.get("snapshot_nodes_observable", 0))
+	parts.append("synchronized_entities_observable=%d" % metrics.get("synchronized_entities_observable", 0))
 
 	for metric_name in NETFOX_MONITORS:
 		if netfox.has(metric_name):

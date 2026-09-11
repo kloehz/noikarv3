@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
+[ext_resource type="Script" path="res://common/components/AbilityComponent.gd" id="12_ability"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -58,8 +59,8 @@ collide_with_areas = true
 script = ExtResource("6_rb_sync")
 root = NodePath("..")
 enable_prediction = true
-state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown", "LogicComponent:is_dashing", "LogicComponent:dash_direction"])
-input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw", "LogicComponent:look_pitch"])
+state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:_state_timer", "CombatComponent:sync_attack_count", "CombatComponent:is_charging", "CombatComponent:current_charge_time", "CombatComponent:_projectile_direction", "CombatComponent:_active_damage_multiplier", "CombatComponent:_active_r_stun_token", "CombatComponent:_active_attack_slot", "CombatComponent:_primary_cooldown", "CombatComponent:_secondary_cooldown", "LogicComponent:is_dashing", "LogicComponent:dash_direction"])
+input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:ability_q_pressed", "LogicComponent:ability_e_pressed", "LogicComponent:ability_r_pressed", "LogicComponent:look_yaw", "LogicComponent:look_pitch"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1235367204 node_paths=PackedStringArray("root")]
 script = ExtResource("8_interpolator")
@@ -73,6 +74,11 @@ entity = NodePath("..")
 [node name="CombatComponent" type="Node" parent="." unique_id=1122334455]
 script = ExtResource("9_combat")
 damage = 90
+
+[node name="AbilityComponent" type="Node" parent="." unique_id=73513579 node_paths=PackedStringArray("entity", "server_state")]
+script = ExtResource("12_ability")
+entity = NodePath("..")
+server_state = NodePath("../ServerState")
 
 [node name="VisualComponent" type="Node" parent="." unique_id=1343345633 node_paths=PackedStringArray("entity")]
 script = ExtResource("3_visual_comp")

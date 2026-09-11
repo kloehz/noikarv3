@@ -52,6 +52,7 @@ enum AttackState { READY, STARTUP, ACTIVE, RECOVERY }
 ## the correct projectile/melee on ACTIVE without replicating a resource.
 @export var _active_attack_slot: int = 0  # 0 = none, 1 = primary, 2 = secondary
 @export var _active_damage_multiplier: float = 1.0
+@export var _active_r_stun_token: int = 0
 ## Server-only event ledger. Rollback restores component state, so a mutable
 ## boolean cannot prove whether a world side effect already happened.
 const MAX_RECORDED_ATTACK_EVENTS: int = 256
@@ -194,6 +195,12 @@ func _simulate_tick_impl(delta: float, tick: int, is_fresh: bool) -> void:
 	if not is_fresh and not can_process_intentions:
 		return
 
+	if _is_stunned():
+		current_attack_state = AttackState.READY
+		_active_attack = null
+		is_charging = false
+		return
+
 	if entity and entity.get("sync_is_dead"):
 		# Dead entities cannot attack. Reset any active attack state.
 		current_attack_state = AttackState.READY
@@ -284,6 +291,7 @@ func _update_attack_state(delta: float, tick: int) -> void:
 				_hit_entities_this_attack.clear()
 				_active_attack = null
 				_active_attack_slot = 0
+				_active_r_stun_token = 0
 
 func _rehydrate_active_attack() -> void:
 	match _active_attack_slot:
@@ -299,6 +307,8 @@ func _rehydrate_active_attack() -> void:
 # ============================================================
 
 func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_multiplier: float = 1.0) -> void:
+	if _is_stunned():
+		return
 	# Check cooldown
 	if is_primary and _primary_cooldown > 0: return
 	if not is_primary and _secondary_cooldown > 0: return
@@ -310,6 +320,7 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_mu
 		_active_attack = null
 		_active_attack_slot = 0
 		_active_damage_multiplier = 1.0
+		_active_r_stun_token = _snapshot_r_stun_token()
 		current_attack_state = AttackState.STARTUP
 		_state_timer = 0.1
 		sync_attack_count += 1
@@ -319,6 +330,7 @@ func _try_start_attack(definition: AttackDefinition, is_primary: bool, damage_mu
 	_active_attack = attack_def
 	_active_attack_slot = 1 if is_primary else 2
 	_active_damage_multiplier = damage_multiplier
+	_active_r_stun_token = _snapshot_r_stun_token()
 	current_attack_state = AttackState.STARTUP
 	_state_timer = attack_def.startup_time
 	sync_attack_count += 1
@@ -493,6 +505,8 @@ func _execute_projectile(attack_def: AttackDefinition, damage_multiplier: float 
 
 	# Initialize projectile before tree insertion so spawn replication captures
 	# local position, direction, and speed without racing per-tick sync/despawn.
+	if _object_has_property(projectile, "r_stun_token"):
+		projectile.set("r_stun_token", _active_r_stun_token)
 	if projectile.has_method("initialize"):
 		projectile.initialize(
 			direction,
@@ -549,6 +563,7 @@ func _handle_hit(collider: Node, hit_damage: int, hit_knockback: float) -> void:
 		
 		# === APPLY DAMAGE ===
 		hurtbox.receive_hit_data(hit_damage, entity)
+		_try_consume_r_stun(target)
 
 		# === APPLY KNOCKBACK via ServerState — temporarily disabled for playtesting ===
 		# if target.has_node("ServerState"):
@@ -564,3 +579,32 @@ func _apply_difficulty(amount: float) -> float:
 	if difficulty <= 0.0:
 		return amount
 	return amount * difficulty
+
+func _snapshot_r_stun_token() -> int:
+	if not multiplayer.is_server() or not entity:
+		return 0
+	var ability := entity.get_node_or_null("AbilityComponent")
+	if ability and ability.has_method("snapshot_r_attack_token"):
+		return int(ability.snapshot_r_attack_token())
+	return 0
+
+func _try_consume_r_stun(target: Node) -> void:
+	if _active_r_stun_token <= 0 or not multiplayer.is_server() or not entity:
+		return
+	var ability := entity.get_node_or_null("AbilityComponent")
+	if ability and ability.has_method("server_consume_r_stun_token"):
+		ability.server_consume_r_stun_token(_active_r_stun_token, target)
+
+func _is_stunned() -> bool:
+	if not entity:
+		return false
+	var state := entity.get_node_or_null("ServerState")
+	return state != null and bool(state.get("is_stunned"))
+
+func _object_has_property(object: Object, property_name: String) -> bool:
+	if object == null:
+		return false
+	for property in object.get_property_list():
+		if String(property.get("name", "")) == property_name:
+			return true
+	return false

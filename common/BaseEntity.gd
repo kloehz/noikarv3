@@ -358,6 +358,7 @@ func respawn(new_position: Vector3) -> void:
 	if not multiplayer.is_server(): return
 	global_position = new_position
 	if server_state:
+		server_state.clear_stun()
 		server_state.sync_is_dead = false
 		server_state.sync_health = max_health
 

@@ -73,6 +73,7 @@ const PASSIVE_TICKS_SKIP := 3
 var _tick_stagger: int = 0
 var _perf_probe: Node = null
 var _perf_probe_npc_cost_enabled: bool = false
+var _benchmark_ai_off_logged: bool = false
 
 func _ready() -> void:
 	# AI logic only runs on the server
@@ -118,6 +119,14 @@ func set_patrol_center(center: Vector3) -> void:
 	if _patrol_target == Vector3.ZERO:
 		_patrol_target = center
 
+
+func benchmark_npc_ai_decisions_disabled(args: Array) -> bool:
+	for arg in args:
+		var text := str(arg).strip_edges()
+		if text.begins_with("--benchmark="):
+			return text.replace("--benchmark=", "").strip_edges().to_upper() == "B"
+	return false
+
 func tick(delta: float) -> void:
 	if _perf_probe_npc_cost_enabled:
 		var started_usec := Time.get_ticks_usec()
@@ -138,6 +147,13 @@ func _tick_impl(delta: float) -> void:
 	if not logic:
 		logic = entity.get_node_or_null("LogicComponent")
 		if not logic: return
+
+	if _is_mob and benchmark_npc_ai_decisions_disabled(OS.get_cmdline_user_args()):
+		_stop_inputs()
+		if not _benchmark_ai_off_logged:
+			_benchmark_ai_off_logged = true
+			print("[BENCHMARK] scenario=B NPC AI decisions disabled for %s; physics and replication remain active" % entity.name)
+		return
 
 	# Passive mobs far from any action: stagger decisions or sleep outright.
 	# CHASE/ATTACK (and anything near players) always run at full rate so

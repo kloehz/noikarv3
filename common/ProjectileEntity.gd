@@ -16,6 +16,7 @@ extends CharacterBody3D
 @export var knockback: float = 8.0
 @export var lifetime: float = 3.0
 @export var owner_entity_id: int = -1
+@export var r_stun_token: int = 0
 
 var _lifetime_remaining: float = 3.0
 var _has_hit: bool = false
@@ -28,13 +29,15 @@ const TARGET_COLLISION_MASK := 1 | 2 | 16 | 32 | 64
 
 ## Initialize the projectile after spawning.
 ## Called by CombatComponent on the server before adding to the tree.
-func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id: int, p_knockback: float = 8.0, p_owner_entity: Node = null) -> void:
+func initialize(direction: Vector3, p_speed: float, p_damage: float, p_owner_id: int, p_knockback: float = 8.0, p_owner_entity: Node = null, p_r_stun_token: int = 0) -> void:
 	self.direction = direction.normalized()
 	speed = p_speed
 	damage = p_damage
 	owner_entity_id = p_owner_id
 	knockback = p_knockback
 	_owner_entity = p_owner_entity
+	if p_r_stun_token != 0:
+		r_stun_token = p_r_stun_token
 	_lifetime_remaining = lifetime
 
 func _ready() -> void:
@@ -140,6 +143,7 @@ func _try_hit(collider: Node) -> bool:
 	# Threat tables are keyed by combat entities, so using `self` would leave
 	# mobs with a key they can never resolve to a player or pet target.
 	hurtbox.receive_hit_data(int(damage), _owner_entity)
+	_try_consume_r_stun(target)
 	
 	# Apply knockback via ServerState
 	if target.has_node("ServerState"):
@@ -151,6 +155,13 @@ func _try_hit(collider: Node) -> bool:
 		target_state.knockback_remaining_time = 0.25
 	
 	return true
+
+func _try_consume_r_stun(target: Node) -> void:
+	if r_stun_token <= 0 or not multiplayer.is_server() or not _owner_entity:
+		return
+	var ability := _owner_entity.get_node_or_null("AbilityComponent")
+	if ability and ability.has_method("server_consume_r_stun_token"):
+		ability.server_consume_r_stun_token(r_stun_token, target)
 
 func _despawn() -> void:
 	if multiplayer.is_server():

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 ## Launcher for noikarv3 — wraps the Godot binary so you don't have to
-## remember the path. The Godot binary is detected automatically.
+## remember the path. The Godot binary is detected automatically and can be
+## overridden with GODOT_BIN=/path/to/Godot.
 ##
 ## Usage:
 ##   ./play.sh                # open the game as a CLIENT (with display)
@@ -10,8 +11,12 @@
 ##   ./play.sh up server+client
 ##   ./play.sh status         # print which infra ports are alive
 ##   ./play.sh server+client  # headless server in bg, then client window
+##   ./play.sh local          # start isolated local infra + server/client for manual play
 ##   ./play.sh tests          # run all GUT tests headless
 ##   ./play.sh test <name>    # run a single GUT test by substring
+##
+## Test seam:
+##   PLAY_SH_DRY_RUN=1 ./play.sh local  # print the composed command only
 ##
 ## Infra contract:
 ##   - PostgreSQL on 5432   (auth DB; needed for any login flow)
@@ -23,7 +28,7 @@
 set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GODOT_BIN="/Applications/Godot.app/Contents/MacOS/Godot"
+GODOT_BIN="${GODOT_BIN:-/Applications/Godot.app/Contents/MacOS/Godot}"
 
 PG_PORT="${PG_PORT:-5432}"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
@@ -31,9 +36,19 @@ NORAY_PORT="${NORAY_PORT:-8890}"
 
 if [[ ! -x "$GODOT_BIN" ]]; then
 	echo "Godot binary not found at $GODOT_BIN"
-	echo "Edit GODOT_BIN at the top of this script to point at your install."
+	echo "Set GODOT_BIN=/absolute/path/to/Godot to point at your install."
 	exit 1
 fi
+
+dry_run_or_exec() {
+	if [[ "${PLAY_SH_DRY_RUN:-}" == "1" ]]; then
+		printf "DRY RUN:"
+		printf " %q" "$@"
+		printf "\n"
+		return 0
+	fi
+	exec "$@"
+}
 
 ## Returns 0 if a TCP port is open and accepting, non-zero otherwise.
 port_open() {
@@ -85,12 +100,12 @@ status_check() {
 	local pg be no
 	pg=$(probe_postgres) && pg_ok=1 || pg_ok=0
 	be=$(probe_backend) && be_ok=1 || be_ok=0
-	no=$(probe_noray)   && no_ok=1 || no_ok=0
+	no=$(probe_noray) && no_ok=1 || no_ok=0
 	echo "Infra status:"
 	printf "  postgres (5432)  : %s\n" "$pg"
 	printf "  backend  (8080)  : %s\n" "$be"
 	printf "  noray    (8890)  : %s\n" "$no"
-	local down=$(( (1 - pg_ok) + (1 - be_ok) + (1 - no_ok) ))
+	local down=$(((1 - pg_ok) + (1 - be_ok) + (1 - no_ok)))
 	return $down
 }
 
@@ -144,52 +159,32 @@ preflight() {
 cmd="${1:-client}"
 
 case "$cmd" in
-	client|"")
-		echo "Starting noikarv3 (CLIENT)..."
-		exec "$GODOT_BIN" --path "$PROJECT_DIR"
-		;;
+client | "")
+	echo "Starting noikarv3 (CLIENT)..."
+	exec "$GODOT_BIN" --path "$PROJECT_DIR"
+	;;
+server)
+	echo "Starting noikarv3 (HEADLESS SERVER)..."
+	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR"
+	;;
+up)
+	shift
+	target="${1:-server}"
+	case "$target" in
 	server)
+		preflight manual-server
 		echo "Starting noikarv3 (HEADLESS SERVER)..."
 		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR"
 		;;
-	up)
-		shift
-		target="${1:-server}"
-		case "$target" in
-			server)
-				preflight manual-server
-				echo "Starting noikarv3 (HEADLESS SERVER)..."
-				exec "$GODOT_BIN" --headless --path "$PROJECT_DIR"
-				;;
-			client)
-				preflight
-				echo "Starting noikarv3 (CLIENT)..."
-				exec "$GODOT_BIN" --path "$PROJECT_DIR"
-				;;
-			server+client)
-				preflight manual-server
-				echo "Starting headless server in background..."
-				( "$GODOT_BIN" --headless --path "$PROJECT_DIR" ) &
-				SERVER_PID=$!
-				trap "kill $SERVER_PID 2>/dev/null" EXIT INT TERM
-				echo "Server PID $SERVER_PID — give it ~3s to register with Noray."
-				sleep 3
-				echo "Starting client..."
-				"$GODOT_BIN" --path "$PROJECT_DIR"
-				;;
-			*)
-				echo "Unknown target for 'up': $target"
-				echo "Use: ./play.sh up server | client | server+client"
-				exit 1
-				;;
-		esac
-		;;
-	status)
-		status_check
+	client)
+		preflight
+		echo "Starting noikarv3 (CLIENT)..."
+		exec "$GODOT_BIN" --path "$PROJECT_DIR"
 		;;
 	server+client)
+		preflight manual-server
 		echo "Starting headless server in background..."
-		( "$GODOT_BIN" --headless --path "$PROJECT_DIR" ) &
+		("$GODOT_BIN" --headless --path "$PROJECT_DIR") &
 		SERVER_PID=$!
 		trap "kill $SERVER_PID 2>/dev/null" EXIT INT TERM
 		echo "Server PID $SERVER_PID — give it ~3s to register with Noray."
@@ -197,27 +192,51 @@ case "$cmd" in
 		echo "Starting client..."
 		"$GODOT_BIN" --path "$PROJECT_DIR"
 		;;
-	tests)
-		echo "Running all GUT tests..."
-		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
-			-s addons/gut/gut_cmdln.gd \
-			-gdir=res://tests/unit,res://tests/integration \
-			-ginclude_subdirs \
-			-gexit
-		;;
-	test)
-		shift
-		pattern="${1:-.}"
-		echo "Running GUT tests matching: $pattern"
-		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
-			-s addons/gut/gut_cmdln.gd \
-			-gdir=res://tests/unit,res://tests/integration \
-			-ginclude_subdirs \
-			-gselect="$pattern" -gexit
-		;;
 	*)
-		echo "Unknown command: $cmd"
-		echo "Use: client | server | up <target> | status | server+client | tests | test <pattern>"
+		echo "Unknown target for 'up': $target"
+		echo "Use: ./play.sh up server | client | server+client"
 		exit 1
 		;;
+	esac
+	;;
+status)
+	status_check
+	;;
+local)
+	echo "Starting isolated local noikarv3 test session..."
+	dry_run_or_exec python3 "$PROJECT_DIR/tests/manual/profile_room_scaling.py" --human --godot "$GODOT_BIN"
+	;;
+server+client)
+	echo "Starting headless server in background..."
+	("$GODOT_BIN" --headless --path "$PROJECT_DIR") &
+	SERVER_PID=$!
+	trap "kill $SERVER_PID 2>/dev/null" EXIT INT TERM
+	echo "Server PID $SERVER_PID — give it ~3s to register with Noray."
+	sleep 3
+	echo "Starting client..."
+	"$GODOT_BIN" --path "$PROJECT_DIR"
+	;;
+tests)
+	echo "Running all GUT tests..."
+	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+		-s addons/gut/gut_cmdln.gd \
+		-gdir=res://tests/unit,res://tests/integration \
+		-ginclude_subdirs \
+		-gexit
+	;;
+test)
+	shift
+	pattern="${1:-.}"
+	echo "Running GUT tests matching: $pattern"
+	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
+		-s addons/gut/gut_cmdln.gd \
+		-gdir=res://tests/unit,res://tests/integration \
+		-ginclude_subdirs \
+		-gselect="$pattern" -gexit
+	;;
+*)
+	echo "Unknown command: $cmd"
+	echo "Use: client | server | up <target> | status | server+client | local | tests | test <pattern>"
+	exit 1
+	;;
 esac

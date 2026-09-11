@@ -15,7 +15,7 @@ var _anim_lock_time: float = 0.0
 var _attack_visual_active: bool = false
 var _attack_visual_token: int = 0
 var _hit_flash_actor: CharacterActor
-var _hit_flash_materials: Array[StandardMaterial3D] = []
+var _hit_flash_materials: Array[ShaderMaterial] = []
 var _hit_flash_tween: Tween
 var _preview_mesh: MeshInstance3D
 var _aim_reticle: Control
@@ -37,6 +37,7 @@ const REMOTE_MOVEMENT_ANIMATION_MAX_SAMPLE_GAP_SECONDS := 0.20
 
 ## Preloaded impact VFX scene used by the replicated hit-event flow.
 const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
+const HIT_FLASH_OVERLAY_SHADER := preload("res://client/vfx/hit_flash_overlay.gdshader")
 
 ## Maps the replicated ServerState.character_id to the HUD label name shown
 ## above the local player's HP bar. Falls back to the raw id if a new
@@ -187,7 +188,11 @@ func setup_with_actor(actor: CharacterActor) -> void:
 		print("[DEBUG] VisualComponent %s setup with actor: %s" % [entity.name if entity else &"Entity", _actor.name])
 		_attack_visual_active = false
 		_begin_remote_motion_reset()
-		_setup_hit_flash_overlays()
+		if _uses_attack_priority():
+			_setup_hit_flash_overlays()
+		else:
+			_hit_flash_actor = _actor
+			_hit_flash_materials.clear()
 		if entity:
 			var mesh = entity.get_node_or_null("MeshInstance3D")
 			if mesh: mesh.visible = false
@@ -464,6 +469,14 @@ func _on_entity_died(p_entity: Node3D) -> void:
 ## peer (server + clients) renders the hit VFX on the damaged entity.
 func _on_damage_received(_amount: int, _source: Node) -> void:
 	_play_hit_effect()
+	_play_local_damage_flash()
+
+func _play_local_damage_flash() -> void:
+	if not entity or not entity.is_multiplayer_authority() or not entity.is_in_group(&"players"):
+		return
+	var overlay := get_tree().root.find_child("DamageFlashOverlay", true, false)
+	if overlay and overlay.has_method("flash"):
+		overlay.flash()
 
 ## ServerState emits this only for a real, replicated HealthComponent.healed
 ## event; HP changes from spawning, respawning, or sync do not enter here.
@@ -599,10 +612,9 @@ func _setup_hit_flash_overlays() -> void:
 		var mesh := node as MeshInstance3D
 		if mesh == null or mesh.material_overlay:
 			continue
-		var overlay := StandardMaterial3D.new()
-		overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		overlay.albedo_color = Color(1.0, 1.0, 1.0, 0.0)
+		var overlay := ShaderMaterial.new()
+		overlay.shader = HIT_FLASH_OVERLAY_SHADER
+		overlay.set_shader_parameter(&"flash_strength", 0.0)
 		mesh.material_overlay = overlay
 		_hit_flash_materials.append(overlay)
 
@@ -612,10 +624,17 @@ func _play_hit_flash() -> void:
 	if is_instance_valid(_hit_flash_tween):
 		_hit_flash_tween.kill()
 	for material in _hit_flash_materials:
-		material.albedo_color = Color(1.0, 1.0, 1.0, 0.35)
+		material.set_shader_parameter(&"flash_strength", 1.0)
 	_hit_flash_tween = create_tween().set_parallel(true)
 	for material in _hit_flash_materials:
-		_hit_flash_tween.tween_property(material, "albedo_color:a", 0.0, 0.1)
+		var overlay := material
+		_hit_flash_tween.tween_method(
+			func(strength: float) -> void:
+				overlay.set_shader_parameter(&"flash_strength", strength),
+			1.0,
+			0.0,
+			0.1
+		)
 
 ## Spawn the VFXHit_02 impact scene at the entity's current position.
 ## Spawned under the current scene root (not as a child of the entity) so

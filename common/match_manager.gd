@@ -24,6 +24,14 @@ const STAGE_TYPES: Array[String] = ["HECARIM_TANK", "IVERN_HEAL", "KOGMAW_DMG"]
 const BOSS_DEFINITION := { "type": "AATROX", "prefix": "BOSS_" }
 const PROFILE_FIXED_POPULATION_SEED: int = 120120
 const PROFILE_BACKEND_URLS: Array[String] = ["http://127.0.0.1:18090", "http://localhost:18090"]
+const BENCHMARK_SCENARIOS := {
+	"A": {"players": 0, "mobs": 0, "ai_decisions": true, "requires_client_probe": false, "rollback_check": false},
+	"B": {"players": 0, "mobs": 20, "ai_decisions": false, "requires_client_probe": false, "rollback_check": false},
+	"C": {"players": 0, "mobs": 20, "ai_decisions": true, "requires_client_probe": false, "rollback_check": false},
+	"D": {"players": 1, "mobs": 0, "ai_decisions": true, "requires_client_probe": true, "rollback_check": false},
+	"E": {"players": 1, "mobs": 20, "ai_decisions": true, "requires_client_probe": true, "rollback_check": false},
+	"F": {"players": 1, "mobs": 20, "ai_decisions": true, "requires_client_probe": true, "rollback_check": true},
+}
 
 ## Per-team-member mob scaling curve. With `n` players on the opposing team:
 ##   n=1 → 1.0 (+0%)   — solo / training
@@ -62,6 +70,8 @@ const NETWORK_SPAWN_SETTLE_TIME: float = 1.0
 # ---------------------------------
 
 var _shutdown_timer: SceneTreeTimer = null
+var _benchmark_invalid_logged := false
+var _benchmark_start_logged := false
 
 # --- STABLE SPAWN IDs ---
 ## Server-assigned, deterministic per match. Format: {PREFIX}_{seed_hex}_{seq}.
@@ -303,6 +313,8 @@ func _reset_stage_progression_counters(active: bool) -> void:
 func _profile_fixed_population_enabled() -> bool:
 	if not GameManager._is_headless_environment():
 		return false
+	if not _benchmark_scenario().is_empty():
+		return true
 	if OS.get_environment("NOIKAR_PERF_PROBE") != "1":
 		return false
 	if OS.get_environment("NOIKAR_PROFILE_FIXED_POPULATION") != "1":
@@ -312,10 +324,55 @@ func _profile_fixed_population_enabled() -> bool:
 	return ["0", "1", "20"].has(OS.get_environment("NOIKAR_PROFILE_MOB_COUNT"))
 
 func _profile_fixed_population_count() -> int:
+	var scenario := _benchmark_scenario()
+	if not scenario.is_empty():
+		return int(benchmark_config_for_scenario(scenario).get("mobs", 0))
 	return int(OS.get_environment("NOIKAR_PROFILE_MOB_COUNT"))
+
+static func benchmark_scenario_from_args(args: Array) -> String:
+	for arg in args:
+		var text := str(arg).strip_edges()
+		if text.begins_with("--benchmark="):
+			var selected := text.replace("--benchmark=", "").strip_edges().to_upper()
+			return selected if BENCHMARK_SCENARIOS.has(selected) else ""
+	return ""
+
+func _benchmark_scenario() -> String:
+	var raw_args := OS.get_cmdline_user_args()
+	var scenario := benchmark_scenario_from_args(raw_args)
+	if scenario.is_empty() and _has_benchmark_arg(raw_args) and not _benchmark_invalid_logged:
+		_benchmark_invalid_logged = true
+		printerr("[BENCHMARK] invalid --benchmark selection; expected one of A,B,C,D,E,F")
+	return scenario
+
+func _has_benchmark_arg(args: Array) -> bool:
+	for arg in args:
+		if str(arg).strip_edges().begins_with("--benchmark="):
+			return true
+	return false
+
+static func benchmark_config_for_scenario(scenario: String) -> Dictionary:
+	return (BENCHMARK_SCENARIOS.get(scenario.to_upper(), {}) as Dictionary).duplicate()
+
+func _log_benchmark_start_if_needed(expected_mobs: int) -> void:
+	if _benchmark_start_logged:
+		return
+	var scenario := _benchmark_scenario()
+	if scenario.is_empty():
+		return
+	_benchmark_start_logged = true
+	var config := benchmark_config_for_scenario(scenario)
+	print("[BENCHMARK] scenario=%s configured_players=%d configured_mobs=%d ai_decisions=%s physics=active transform_replication=unchanged fixed_population=true" % [scenario, int(config.get("players", 0)), expected_mobs, str(config.get("ai_decisions", true))])
+	if bool(config.get("requires_client_probe", false)):
+		print("[BENCHMARK] scenario=%s requires authenticated player via existing Noray/client-probe flow; raw headless process cannot invent one" % scenario)
+	if scenario == "B":
+		print("[BENCHMARK] scenario=B NPC AI decisions disabled only; spawned NPCs, authoritative simulation, transform replication, and physics remain active")
+	if bool(config.get("rollback_check", false)):
+		print("[BENCHMARK] scenario=F verifying NPC rollback exclusion from observable nodes; NPCs are expected to snapshot-sync when they lack RollbackSynchronizer")
 
 func _spawn_profile_fixed_population() -> void:
 	var expected_count := _profile_fixed_population_count()
+	_log_benchmark_start_if_needed(expected_count)
 	var specs := _profile_fixed_population_specs()
 	for i in range(expected_count):
 		var spec: Dictionary = specs[i]
@@ -325,10 +382,31 @@ func _spawn_profile_fixed_population() -> void:
 			if ai and ai.has_method("set_patrol_center"):
 				ai.set_patrol_center(spec["position"])
 	var actual_count := mobs_container.get_child_count()
+	_log_benchmark_rollback_observations()
 	if actual_count == expected_count:
 		print("[PROFILE_POPULATION_READY] mode=fixed_population expectedcount=%d actualcount=%d seed=%d" % [expected_count, actual_count, PROFILE_FIXED_POPULATION_SEED])
 	else:
 		print("[PROFILE_POPULATION_FAILED] mode=fixed_population expectedcount=%d actualcount=%d seed=%d" % [expected_count, actual_count, PROFILE_FIXED_POPULATION_SEED])
+
+func _log_benchmark_rollback_observations() -> void:
+	if _benchmark_scenario() != "F":
+		return
+	var mobs_with_rollback := 0
+	var mobs_with_snapshot_state := 0
+	for mob in mobs_container.get_children():
+		if mob.get_node_or_null("RollbackSynchronizer") != null:
+			mobs_with_rollback += 1
+		if mob.get_node_or_null("StateSynchronizer") != null or mob.get_node_or_null("ServerState") != null:
+			mobs_with_snapshot_state += 1
+	print("[BENCHMARK] scenario=F npc_rollback_synchronizers=%d npc_snapshot_sync_observable=%d synchronized_entities_observable=%d" % [mobs_with_rollback, mobs_with_snapshot_state, _observable_synchronized_entity_count()])
+
+func _observable_synchronized_entity_count() -> int:
+	var count := 0
+	for group in [&"players", &"pets", &"mobs", &"projectiles"]:
+		for node in get_tree().get_nodes_in_group(group):
+			if node.get_node_or_null("RollbackSynchronizer") != null or node.get_node_or_null("StateSynchronizer") != null or node.get_node_or_null("ServerState") != null:
+				count += 1
+	return count
 
 func _profile_fixed_population_specs() -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()

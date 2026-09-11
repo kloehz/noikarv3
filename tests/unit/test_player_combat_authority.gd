@@ -74,6 +74,21 @@ func test_player_scene_keeps_combat_state_server_owned_and_sanitizes_client_snap
 	assert_false(snapshot.has("CombatComponent:_primary_cooldown"), "Client must not overwrite cooldown")
 	assert_true(snapshot.has("LogicComponent:is_shooting"), "Client input intentions remain client-owned")
 
+
+func test_respawn_clears_stale_stun_state() -> void:
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+	var player: Node = PLAYER_SCENE.instantiate()
+	player.name = "77"
+	add_child_autofree(player)
+	var server_state: ServerState = player.get_node("ServerState")
+	server_state.apply_stun(1.5)
+	server_state.sync_is_dead = true
+
+	player.respawn(Vector3(1.0, 2.0, 3.0))
+	assert_false(server_state.sync_is_dead)
+	assert_false(server_state.is_stunned, "Respawn must clear stale stun flag")
+	assert_almost_eq(server_state.stun_remaining_time, 0.0, 0.001, "Respawn must clear stale stun timer")
+
 func test_player_scene_diff_encoder_excludes_predicted_combat_from_client_owned_state() -> void:
 	_client_peer = ENetMultiplayerPeer.new()
 	_client_peer.create_client("127.0.0.1", 44999)

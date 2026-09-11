@@ -6,6 +6,9 @@ func _make_actor() -> CharacterActor:
 	var actor := CharacterActor.new()
 	actor.anim_attack = "Attack"
 	actor.anim_hit = "Hit"
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	actor.add_child(mesh)
 	var player := AnimationPlayer.new()
 	var library := AnimationLibrary.new()
 	var attack := Animation.new()
@@ -74,6 +77,36 @@ func test_player_damage_behavior_is_unchanged() -> void:
 	visual._play_hit_effect()
 	assert_eq(actor.get_current_animation(), "Hit",
 		"Players retain the current hurt-animation behavior until explicitly redesigned")
+	var mesh := actor.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	assert_null(mesh.material_overlay,
+		"The white model hit flash remains enemy/pet-only and is not added to players")
+
+func test_mob_setup_gets_shader_hit_flash_overlay() -> void:
+	var setup := await _make_visual(&"mobs")
+	var actor: CharacterActor = setup[1]
+	var mesh := actor.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+
+	assert_not_null(mesh.material_overlay,
+		"Enemies get a dedicated overlay material for hit flash")
+	assert_true(mesh.material_overlay is ShaderMaterial,
+		"Enemy hit flash uses a shader overlay instead of a transparent StandardMaterial3D")
+
+
+func test_enemy_and_pet_hit_flash_shader_strength_rises_then_decays() -> void:
+	for group in [&"mobs", &"pets"]:
+		var setup := await _make_visual(group)
+		var visual = setup[0]
+		var actor: CharacterActor = setup[1]
+		var mesh := actor.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+		var material := mesh.material_overlay as ShaderMaterial
+		assert_not_null(material)
+
+		visual._play_hit_effect()
+		assert_gt(material.get_shader_parameter(&"flash_strength"), 0.75,
+			"%s hit flash should become clearly visible immediately" % group)
+		await get_tree().create_timer(0.16).timeout
+		assert_almost_eq(material.get_shader_parameter(&"flash_strength"), 0.0, 0.01,
+			"%s hit flash should decay quickly" % group)
 
 func test_every_tiered_pet_actor_resolves_an_attack_clip() -> void:
 	for scene_path in [

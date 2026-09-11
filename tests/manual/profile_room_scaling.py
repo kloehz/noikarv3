@@ -36,6 +36,14 @@ RELAY_RANGE = range(20000, 20101)
 FORBIDDEN_PORTS = {8080, 8090}
 FORBIDDEN_PID = 95146
 LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+BENCHMARK_SCENARIOS = {
+    "A": {"players": 0, "mobs": 0, "connected": False},
+    "B": {"players": 0, "mobs": 20, "connected": False},
+    "C": {"players": 0, "mobs": 20, "connected": False},
+    "D": {"players": 1, "mobs": 0, "connected": True},
+    "E": {"players": 1, "mobs": 20, "connected": True},
+    "F": {"players": 1, "mobs": 20, "connected": True},
+}
 SERVER_READY_RE = re.compile(r"players\s*=\s*1\s+entities\s*=\s*21")
 POPULATION_READY_RE = re.compile(
     r"\[PROFILE_POPULATION_READY\]\s+mode=fixed_population\s+expectedcount=(?P<expected>\d+)\s+actualcount=(?P<actual>\d+)\s+seed=120120"
@@ -768,6 +776,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--npc-rate-hz", type=int, default=30, choices=[30, 15, 10])
     parser.add_argument("--mob-count", type=int, default=None, choices=[0, 1, 20])
+    parser.add_argument(
+        "--benchmark",
+        choices=sorted(BENCHMARK_SCENARIOS),
+        default=None,
+        help="connected server benchmark scenario; valid Noray/client-probe selections are D, E, and F",
+    )
     parser.add_argument("--warmup-seconds", type=finite_nonnegative_float, default=0.0)
     parser.add_argument("--sample-seconds", type=finite_nonnegative_float, default=0.0)
     parser.add_argument("--keep-artifacts", action="store_true")
@@ -780,6 +794,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.deadline_seconds is None:
         args.deadline_seconds = 1800 if args.human else 180
+    if args.benchmark is not None:
+        scenario = BENCHMARK_SCENARIOS[args.benchmark]
+        if not scenario["connected"]:
+            parser.error(
+                "--benchmark A/B/C are direct headless-only scenarios; use D, E, or F with this Noray/client-probe harness"
+            )
+        if args.rooms != 1:
+            parser.error("--benchmark D/E/F require --rooms 1")
+        if args.human:
+            parser.error(
+                "--benchmark D/E/F require the automated client-probe route, not --human"
+            )
+        expected_mobs = int(scenario["mobs"])
+        if args.mob_count is not None and args.mob_count != expected_mobs:
+            parser.error(
+                f"--benchmark {args.benchmark} requires --mob-count {expected_mobs}"
+            )
+        args.mob_count = expected_mobs
     if args.human:
         if args.rooms != 1:
             parser.error("--human supports exactly one room")
@@ -821,6 +853,7 @@ def noray_env(
     provisioner: str,
     npc_rate_hz: int = 30,
     mob_count: int | None = None,
+    benchmark: str | None = None,
 ) -> dict[str, str]:
     env = {
         "NOIKAR_BACKEND_URL": "http://127.0.0.1:18090",
@@ -841,6 +874,8 @@ def noray_env(
     if mob_count is not None:
         env["NOIKAR_PROFILE_FIXED_POPULATION"] = "1"
         env["NOIKAR_PROFILE_MOB_COUNT"] = str(mob_count)
+    if benchmark is not None:
+        env["NOIKAR_BENCHMARK_SCENARIO"] = benchmark
     return complete_env(env)
 
 

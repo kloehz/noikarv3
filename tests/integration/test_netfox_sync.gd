@@ -270,7 +270,11 @@ func test_mob_state_synchronizer_omits_logic_velocity_but_keeps_transform_snapsh
 		"Mob StateSynchronizer must keep authoritative global_position snapshots")
 	assert_true(_state_sync_has_property(sync, ":quaternion"),
 		"Mob StateSynchronizer must keep authoritative quaternion snapshots")
-	_assert_state_sync_property_count(sync, 20,
+	assert_true(_state_sync_has_property(sync, ":sync_ability_r_window_remaining"),
+		"Mob-compatible ServerState schema should include replicated R window HUD state")
+	assert_true(_state_sync_has_property(sync, ":sync_ability_r_cooldown_remaining"),
+		"Mob-compatible ServerState schema should include replicated R cooldown HUD state")
+	_assert_state_sync_property_count(sync, 22,
 		"Mob")
 
 func test_pet_state_synchronizer_omits_logic_velocity_but_keeps_pet_data() -> void:
@@ -284,7 +288,11 @@ func test_pet_state_synchronizer_omits_logic_velocity_but_keeps_pet_data() -> vo
 		"Pet type remains synchronized after the velocity reduction")
 	assert_true(_state_sync_has_property(sync, ":power_level_sync"),
 		"Pet power level remains synchronized after the velocity reduction")
-	_assert_state_sync_property_count(sync, 20,
+	assert_true(_state_sync_has_property(sync, ":sync_ability_r_window_remaining"),
+		"Pet-compatible ServerState schema should include replicated R window HUD state")
+	assert_true(_state_sync_has_property(sync, ":sync_ability_r_cooldown_remaining"),
+		"Pet-compatible ServerState schema should include replicated R cooldown HUD state")
+	_assert_state_sync_property_count(sync, 22,
 		"Pet")
 
 func test_player_rollback_synchronizer_retains_logic_velocity_state() -> void:

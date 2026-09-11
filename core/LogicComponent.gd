@@ -10,6 +10,9 @@ extends Node
 @export var current_velocity: Vector3 = Vector3.ZERO
 @export var input_axis: Vector2 = Vector2.ZERO
 @export var is_shooting: bool = false
+@export var ability_q_pressed: bool = false
+@export var ability_e_pressed: bool = false
+@export var ability_r_pressed: bool = false
 @export var is_dashing: bool = false
 @export var summon_type: int = -1 # 0: Attack, 1: Tank, 2: Heal
 
@@ -31,6 +34,7 @@ var preview_cancelled: bool = false
 
 var camera_pivot: Node3D
 var _server_state: Node
+var _ability_component: Node = null
 var _perf_probe: Node = null
 var _perf_probe_npc_cost_enabled: bool = false
 @export var mouse_sensitivity: float = 0.005
@@ -51,6 +55,7 @@ func _ready() -> void:
 		print("[DEBUG] LogicComponent %s: Initial rotation captured" % entity_name)
 	
 	_server_state = get_parent().get_node_or_null("ServerState")
+	_ability_component = get_parent().get_node_or_null("AbilityComponent")
 	_setup_perf_probe()
 
 	if not _server_state:
@@ -72,26 +77,47 @@ func _gather_input() -> void:
 
 	input_axis = Input.get_vector("move_left", "move_right", "move_forward", "move_backward")
 	is_shooting = Input.is_action_pressed("shoot")
+	ability_q_pressed = Input.is_action_just_pressed("ability_q")
+	ability_e_pressed = Input.is_action_just_pressed("ability_e")
+	ability_r_pressed = Input.is_action_just_pressed("ability_r")
 
 	# Dash trigger (prediction handled by netfox)
 	if Input.is_action_just_pressed("dash") and dash_cooldown <= 0 and not is_dashing:
 		_start_dash()
+
+func consume_ability_q_intent() -> bool:
+	var was_pressed := ability_q_pressed
+	ability_q_pressed = false
+	return was_pressed
+
+func consume_ability_e_intent() -> bool:
+	var was_pressed := ability_e_pressed
+	ability_e_pressed = false
+	return was_pressed
+
+func consume_ability_r_intent() -> bool:
+	var was_pressed := ability_r_pressed
+	ability_r_pressed = false
+	return was_pressed
 
 func _start_dash() -> void:
 	is_dashing = true
 	dash_timer = DASH_DURATION
 	dash_cooldown = DASH_COOLDOWN_TIME
 
-	# Dash in movement direction, or forward if standing still
-	var move_dir = Vector3.ZERO
-	if input_axis.length() > 0:
-		var forward = -entity.global_transform.basis.z
-		var right = entity.global_transform.basis.x
-		move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
-	else:
+	# Dash in movement direction, or forward if standing still.
+	var move_dir := _input_axis_to_world_direction()
+	if input_axis.length() == 0:
 		move_dir = -entity.global_transform.basis.z
 
 	dash_direction = move_dir
+
+func _input_axis_to_world_direction() -> Vector3:
+	if not entity or input_axis.length() == 0:
+		return Vector3.ZERO
+	var forward := -entity.global_transform.basis.z
+	var right := entity.global_transform.basis.x
+	return (forward * -input_axis.y + right * input_axis.x).normalized()
 
 func _input(event: InputEvent) -> void:
 	# CRITICAL: Only human-controlled entities should process input.
@@ -155,13 +181,13 @@ func _handle_preview_input(event: InputEvent) -> void:
 func _setup_entity() -> void:
 	entity = get_parent() as CharacterBody3D
 
-func _rollback_tick(delta: float, tick: int, _is_fresh: bool) -> void:
-	_simulate_tick(delta, tick)
+func _rollback_tick(delta: float, tick: int, is_fresh: bool) -> void:
+	_simulate_tick(delta, tick, is_fresh)
 
 func simulate_authoritative_tick(delta: float, tick: int) -> void:
 	_simulate_tick(delta, tick)
 
-func _simulate_tick(delta: float, _tick: int) -> void:
+func _simulate_tick(delta: float, _tick: int, is_fresh: bool = true) -> void:
 	if not entity or entity.get("sync_is_dead"): 
 		input_axis = Vector2.ZERO
 		return
@@ -174,16 +200,29 @@ func _simulate_tick(delta: float, _tick: int) -> void:
 		current_velocity = Vector3.ZERO
 		return
 	
-	# Handle Stun — temporarily disabled for playtesting (re-enable when wanted)
-	# if _server_state and _server_state.is_stunned:
-	# 	input_axis = Vector2.ZERO
-	# 	is_shooting = false
-	# 	if multiplayer.is_server():
-	# 		_server_state.stun_remaining_time -= delta
-	# 		if _server_state.stun_remaining_time <= 0:
-	# 			_server_state.is_stunned = false
-	# 	_apply_movement(delta)
-	# 	return
+	if is_fresh and _ability_component and multiplayer.is_server():
+		if _ability_component.has_method("server_tick"):
+			_ability_component.server_tick(delta)
+		if _ability_component.has_method("server_process_intents"):
+			_ability_component.server_process_intents(self)
+		if _server_state and _server_state.has_method("sync_ability_r_state"):
+			_server_state.sync_ability_r_state(
+				float(_ability_component.get("r_window_remaining")),
+				float(_ability_component.get("r_cooldown_remaining"))
+			)
+
+	if _server_state and _server_state.is_stunned:
+		input_axis = Vector2.ZERO
+		is_shooting = false
+		is_dashing = false
+		dash_timer = 0.0
+		dash_direction = Vector3.ZERO
+		current_velocity = Vector3.ZERO
+		entity.velocity = Vector3.ZERO
+		if is_fresh and multiplayer.is_server() and _server_state.has_method("tick_stun"):
+			_server_state.tick_stun(delta)
+		_apply_movement(delta)
+		return
 		
 	var is_human = entity.name.is_valid_int()
 
@@ -260,11 +299,7 @@ func _apply_movement(delta: float) -> void:
 		entity.rotation.y = look_yaw
 		
 		# Direction
-		var move_dir = Vector3.ZERO
-		if input_axis.length() > 0:
-			var forward = -entity.global_transform.basis.z
-			var right = entity.global_transform.basis.x
-			move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+		var move_dir := _input_axis_to_world_direction()
 		
 		# Basic Velocity
 		var target_vel = move_dir * max_speed
@@ -320,11 +355,7 @@ func _apply_timed_npc_movement(delta: float) -> void:
 	else:
 		# Normal Input-based movement
 		entity.rotation.y = look_yaw
-		var move_dir = Vector3.ZERO
-		if input_axis.length() > 0:
-			var forward = -entity.global_transform.basis.z
-			var right = entity.global_transform.basis.x
-			move_dir = (forward * -input_axis.y + right * input_axis.x).normalized()
+		var move_dir := _input_axis_to_world_direction()
 		var target_vel = move_dir * max_speed
 		current_velocity = current_velocity.move_toward(target_vel, acceleration * 10.0 * delta)
 	_perf_probe.record_npc_cost(&"movement_prepare", Time.get_ticks_usec() - prepare_started_usec)

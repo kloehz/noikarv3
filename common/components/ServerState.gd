@@ -135,7 +135,31 @@ func decay_threat(amount: int) -> void:
 @export var is_stunned: bool = false
 @export var stun_remaining_time: float = 0.0
 
+@export var sync_ability_r_window_remaining: float = 0.0
+@export var sync_ability_r_cooldown_remaining: float = 0.0
+
 @export var sync_is_dashing: bool = false
+
+func apply_stun(duration: float) -> void:
+	if duration <= 0.0:
+		return
+	is_stunned = true
+	stun_remaining_time = maxf(stun_remaining_time, duration)
+
+func tick_stun(delta: float) -> void:
+	if not is_stunned:
+		return
+	stun_remaining_time = maxf(0.0, stun_remaining_time - delta)
+	if stun_remaining_time <= 0.0:
+		clear_stun()
+
+func clear_stun() -> void:
+	is_stunned = false
+	stun_remaining_time = 0.0
+
+func sync_ability_r_state(window_remaining: float, cooldown_remaining: float) -> void:
+	sync_ability_r_window_remaining = maxf(0.0, window_remaining)
+	sync_ability_r_cooldown_remaining = maxf(0.0, cooldown_remaining)
 
 ## Server-authored heal event. The amount is written first, then incrementing
 ## the sequence replicates one visual event to every peer.
@@ -194,6 +218,8 @@ func _ready() -> void:
 			"sync_damage_sequence",
 			"is_stunned",
 			"stun_remaining_time",
+			"sync_ability_r_window_remaining",
+			"sync_ability_r_cooldown_remaining",
 		]
 		if is_npc:
 			properties.append("npc_snapshot_stride")
