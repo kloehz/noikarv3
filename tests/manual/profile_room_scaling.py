@@ -1032,6 +1032,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 provisioner,
                 npc_rate_hz=args.npc_rate_hz,
                 mob_count=args.mob_count,
+                benchmark=args.benchmark,
             ),
             log_path=noray_log,
             cleanup=cleanup,

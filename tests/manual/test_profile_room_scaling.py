@@ -253,6 +253,63 @@ class ProfileRoomScalingTests(unittest.TestCase):
         self.assertNotIn("NOIKAR_NPC_SNAPSHOT_HZ", client_env)
         self.assertNotIn("NOIKAR_PERF_PROBE_NPC_COST", client_env)
 
+    def test_run_passes_benchmark_scenario_only_to_selected_noray_start(self):
+        def capture_noray_env(argv: list[str]) -> dict[str, str]:
+            with tempfile.TemporaryDirectory() as temp_s:
+                temp = Path(temp_s)
+                repo = temp / "repo"
+                noray_root = temp / "noikar-noray"
+                (repo / "backend").mkdir(parents=True)
+                (repo / "project.godot").write_text("", encoding="utf-8")
+                (noray_root / "bin").mkdir(parents=True)
+                (noray_root / "bin" / "noray.mjs").write_text("", encoding="utf-8")
+                godot = temp / "Godot"
+                godot.write_text("", encoding="utf-8")
+                captured: dict[str, str] = {}
+
+                class StopAfterNorayStart(RuntimeError):
+                    pass
+
+                def fake_start_process(args, *, cwd, env, log_path, cleanup):
+                    if args[:2] == ["node", "bin/noray.mjs"]:
+                        captured.update(env)
+                        raise StopAfterNorayStart()
+                    return mock.Mock(pid=1000, poll=mock.Mock(return_value=0))
+
+                with (
+                    mock.patch.object(prs, "repo_root_from_script", return_value=repo),
+                    mock.patch.object(prs, "preflight_ports"),
+                    mock.patch.object(prs.subprocess, "run"),
+                    mock.patch.object(prs, "wait_pg"),
+                    mock.patch.object(prs, "wait_http"),
+                    mock.patch.object(prs, "register_account"),
+                    mock.patch.object(
+                        prs, "start_process", side_effect=fake_start_process
+                    ),
+                    mock.patch.object(prs.CleanupPlan, "run"),
+                    mock.patch.object(prs, "assert_ports_clear", return_value={}),
+                ):
+                    rc = prs.run(["--godot", str(godot), *argv])
+
+                self.assertEqual(rc, 1)
+                self.assertTrue(captured)
+                return captured
+
+        selected = capture_noray_env(
+            [
+                "--benchmark",
+                "D",
+                "--warmup-seconds",
+                "1",
+                "--sample-seconds",
+                "1",
+            ]
+        )
+        self.assertEqual(selected["NOIKAR_BENCHMARK_SCENARIO"], "D")
+
+        normal = capture_noray_env([])
+        self.assertNotIn("NOIKAR_BENCHMARK_SCENARIO", normal)
+
     def test_sample_window_excludes_warmup_and_weights_cpu_by_actual_sample_wall(self):
         samples = {42: [(10.0, 1.0, 100), (13.0, 2.0, 150), (15.0, 4.0, 200)]}
         result = prs.build_result(
