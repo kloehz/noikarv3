@@ -62,6 +62,17 @@ func test_server_fps_override_rejects_invalid_or_unsafe_values() -> void:
 func test_has_default_port_constant() -> void:
 	assert_eq(_game_manager.DEFAULT_PORT, 7777)
 
+func test_raw_headless_benchmark_server_eligibility_accepts_only_a_b_c_when_headless() -> void:
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=A"], true), "A")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=b"], true), "B")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=C"], true), "C")
+
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=D"], true), "")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=F"], true), "")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=A"], false), "")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args(["--benchmark=Z"], true), "")
+	assert_eq(_game_manager.raw_headless_benchmark_scenario_from_args([], true), "")
+
 ## Test: GameManager is a Node
 func test_game_manager_is_node() -> void:
 	assert_true(_game_manager is Node)

@@ -4,6 +4,7 @@ extends Node
 ## Uses Netfox for server authority and client prediction.
 
 const DEFAULT_PORT = 7777
+const RAW_HEADLESS_BENCHMARK_SCENARIOS: Array[String] = ["A", "B", "C"]
 const SERVER_MIN_FPS = 30
 const SERVER_MAX_FPS = 60
 const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
@@ -42,7 +43,22 @@ func resolve_server_max_fps_override(raw_value: String, is_server_runtime: bool)
 		return SERVER_MAX_FPS
 	return requested_fps
 
+static func raw_headless_benchmark_scenario_from_args(args: Array, is_headless_runtime: bool) -> String:
+	if not is_headless_runtime:
+		return ""
+	for arg in args:
+		var text := str(arg).strip_edges()
+		if text.begins_with("--benchmark="):
+			var selected := text.replace("--benchmark=", "").strip_edges().to_upper()
+			return selected if RAW_HEADLESS_BENCHMARK_SCENARIOS.has(selected) else ""
+	return ""
+
 func _start_as_server() -> void:
+	var raw_benchmark_scenario := raw_headless_benchmark_scenario_from_args(OS.get_cmdline_user_args(), _is_headless_environment())
+	if not raw_benchmark_scenario.is_empty():
+		_start_raw_headless_benchmark_server(raw_benchmark_scenario)
+		return
+
 	print("[GameManager] Server environment starting. Connecting to Noray...")
 	if DisplayServer.get_name() != "headless":
 		print("[WARNING] DisplayServer is not headless, but we are a server. macOS may crash.")
@@ -134,6 +150,19 @@ func _start_as_server() -> void:
 	print("[GameManager] HEADLESS SERVER READY")
 	print("[GameManager] ROOM ID (OID): ", Noray.oid)
 	print("==================================================")
+
+func _start_raw_headless_benchmark_server(scenario: String) -> void:
+	print("[GameManager] Raw headless benchmark %s starting local ENet server on default port %d" % [scenario, DEFAULT_PORT])
+	if DisplayServer.get_name() != "headless":
+		print("[WARNING] DisplayServer is not headless, but raw benchmark server bootstrap was requested.")
+	var peer := ENetMultiplayerPeer.new()
+	var err := peer.create_server(DEFAULT_PORT)
+	if err != OK:
+		print("[GameManager] Failed to host raw benchmark ENet server: ", err)
+		return
+	multiplayer.call_deferred("set_multiplayer_peer", peer)
+	print("[GameManager] RAW HEADLESS BENCHMARK SERVER STARTED")
+	EventBus.call_deferred("emit_signal", "server_started")
 
 func _on_noray_connect_nat(address: String, port: int) -> void:
 	if multiplayer.is_server():

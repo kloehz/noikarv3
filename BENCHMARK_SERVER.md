@@ -4,16 +4,25 @@ This harness measures server behavior only. It does not optimize, tune, or chang
 
 ## Scenarios
 
-| Scenario | Players | Mobs | AI decisions | Rollback note | Result |
-| --- | ---: | ---: | --- | --- | --- |
-| A | 0 | 0 | normal | no player rollback participant | pending |
-| B | 0 | 20 | NPC decisions off | no player rollback participant | pending |
-| C | 0 | 20 | normal | no player rollback participant | pending |
-| D | 1 | 0 | normal | player rollback unchanged | pending |
-| E | 1 | 20 | normal | player rollback unchanged | pending |
-| F | 1 | 20 | normal | player rollback unchanged; NPCs are validated as excluded from rollback when they have no `RollbackSynchronizer` and are reported as snapshot-sync participants when observable | pending |
+| Scenario | Players | Mobs | AI decisions | Rollback note | CPU avg | CPU peak | RAM / RSS | Result |
+| --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- |
+| A | 0 | 0 | normal | no player rollback participant | 1.02% | 1.50% | latest 83,952 KiB; max 119,344 KiB | passed, 60 s local sample |
+| B | 0 | 20 | off | no player rollback participant | 8.00% | 9.90% | latest 114,656 KiB; max 154,224 KiB | passed, 60 s local sample |
+| C | 0 | 20 | normal | no player rollback participant | 9.42% | 9.70% | latest 98,848 KiB; max 154,400 KiB | passed, 60 s local sample |
+| D | 1 | 0 | normal | player rollback unchanged | 7.51% | not reported by harness | 92,592 KiB reported | passed, 65.92 s stable local sample |
+| E | 1 | 20 | normal | player rollback unchanged | 11.76% | not reported by harness | 131,168 KiB reported | passed, 65.54 s stable local sample |
+| F | 1 | 20 | normal | player rollback unchanged; NPC rollback synchronizers=0, snapshot-sync observable=20 | 11.89% | not reported by harness | 131,840 KiB reported | passed, 65.63 s stable local sample |
 
-No fabricated results are included here. Fill the `Result` column only from recorded local/VPS runs.
+The measurements above are real **local macOS** observations, not VPS measurements. A-C use the owned-child `ps` sampler; D-F use the existing profile harness, which reports average CPU and RSS but does not emit a separate CPU peak. Re-run the same matrix on the 2-vCPU VPS before treating these values as production capacity data.
+
+## Observed comparison
+
+- A established a 1.02% average local process baseline with zero mobs.
+- B added 20 spawned mobs with AI decisions disabled: 8.00% average CPU.
+- C enabled normal AI for the same population: 9.42% average CPU. This is a 1.42 percentage-point increase in this single local run, not a statistically conclusive attribution.
+- D added one authenticated player with zero mobs: 7.51% average CPU. Its telemetry showed one observable rollback node and 125-151 rollback events per interval.
+- E, the representative 1-player/20-mob scenario, averaged 11.76% CPU. Its 20-NPC interval reported 3,020 AI calls (16,636 µs total), 3,020 movement calls (27,340 µs), and 3,020 combat calls (5,313 µs).
+- F averaged 11.89% CPU, within 0.13 percentage points of E. It confirmed `npc_rollback_synchronizers=0`, `npc_snapshot_sync_observable=20`, and `synchronized_entities_observable=21`. Therefore E/F do not test a newly-disabled mob rollback path: mobs were already authoritative snapshot participants. More repeated VPS samples are required before inferring a CPU difference.
 
 ## Godot usage
 
@@ -26,6 +35,8 @@ Pass the benchmark selector as a Godot user argument:
 Valid selectors are `A`, `B`, `C`, `D`, `E`, and `F`. Invalid selections are logged as `[BENCHMARK] invalid --benchmark selection; expected one of A,B,C,D,E,F` and do not activate the benchmark mode.
 
 The benchmark mode reuses the existing fixed-population/profile path and `PerfProbe`. Every five seconds, headless runs emit `[BENCHMARK]` lines with reliable in-process fields only: scenario, uptime, configured/live player and mob counts, FPS/frames when available, frame/physics monitor values, tick settings, observable rollback/snapshot/synchronized entity counts, and observable Netfox custom monitors. CPU and RSS are external process metrics and are labelled `cpu=external rss=external` in Godot logs.
+
+For raw local headless runs, only `A`, `B`, and `C` bypass Noray/backend provisioning: `GameManager` opens the default local ENet port directly, then `MatchManager` defers fixed-population spawning until the server-start signal. `A` emits the ready marker with `0` mobs; `B` and `C` emit it with `20` mobs. `D`, `E`, `F`, invalid selectors, and ordinary headless runs stay on the existing provisioned Noray/client-probe path.
 
 ## Connected-player scenarios
 
@@ -98,8 +109,8 @@ At the end it reports average/max CPU and latest/max RSS. It sends `TERM` only t
 
 ## Limitations
 
-- No live benchmark results are checked into this file.
-- CPU/RSS are unavailable inside Godot logs and must come from the Linux sampler or another external process sampler.
+- The recorded samples are local macOS results. They are useful for relative comparison but do not represent the 2-vCPU VPS; re-run the same matrix there.
+- CPU/RSS are unavailable inside Godot logs and must come from the owned-child Linux sampler, the existing profile harness, or another external process sampler.
 - In-process entity counts are observable counts, not proof of network delivery to every client.
 - Netfox custom monitor fields appear only when the monitor exists at runtime.
 - Connected scenarios depend on backend/Noray/client-probe availability and authentication state.

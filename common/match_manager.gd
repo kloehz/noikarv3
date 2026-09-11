@@ -354,6 +354,17 @@ func _has_benchmark_arg(args: Array) -> bool:
 static func benchmark_config_for_scenario(scenario: String) -> Dictionary:
 	return (BENCHMARK_SCENARIOS.get(scenario.to_upper(), {}) as Dictionary).duplicate()
 
+static func raw_headless_benchmark_population_count_from_args(args: Array, is_headless_runtime: bool) -> int:
+	if not is_headless_runtime:
+		return -1
+	var scenario := benchmark_scenario_from_args(args)
+	if not ["A", "B", "C"].has(scenario):
+		return -1
+	return int(benchmark_config_for_scenario(scenario).get("mobs", 0))
+
+func _raw_headless_benchmark_population_count() -> int:
+	return raw_headless_benchmark_population_count_from_args(OS.get_cmdline_user_args(), GameManager._is_headless_environment())
+
 func _log_benchmark_start_if_needed(expected_mobs: int) -> void:
 	if _benchmark_start_logged:
 		return
@@ -695,7 +706,20 @@ func _strip_visual_nodes_recursive(node: Node) -> void:
 		child.free()
 
 func _on_server_started() -> void:
+	var raw_benchmark_population_count := _raw_headless_benchmark_population_count()
+	if raw_benchmark_population_count >= 0:
+		print("[MatchManager] Raw headless benchmark server initialized; deferring fixed population spawn")
+		_spawn_raw_headless_benchmark_population.call_deferred()
+		return
 	print("[MatchManager] Match started as server")
+
+func _spawn_raw_headless_benchmark_population() -> void:
+	if not multiplayer.is_server():
+		return
+	if _raw_headless_benchmark_population_count() < 0:
+		return
+	_reset_stage_progression_counters(false)
+	_spawn_profile_fixed_population()
 
 func _on_client_connected(peer_id: int) -> void:
 	if not multiplayer.is_server():
