@@ -187,6 +187,22 @@ class ProfileRoomScalingTests(unittest.TestCase):
                 ]
             )
 
+    def test_player_count_allows_explicit_production_mob_count(self):
+        args = prs.parse_args(
+            [
+                "--player-count",
+                "4",
+                "--mob-count",
+                "20",
+                "--warmup-seconds",
+                "1",
+                "--sample-seconds",
+                "2",
+            ]
+        )
+        self.assertEqual(args.player_count, 4)
+        self.assertEqual(args.mob_count, 20)
+
     def test_mob_count_requires_single_nonhuman_positive_long_sample(self):
         args = prs.parse_args(
             ["--mob-count", "20", "--warmup-seconds", "1", "--sample-seconds", "2"]

@@ -1004,7 +1004,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         choices=[1, 2, 4, 8],
-        help="launch one hosted no-mob room with this many automated clients",
+        help="launch one hosted room with this many automated clients; defaults to 0 mobs unless --mob-count 20 is supplied",
     )
     parser.add_argument("--human", action="store_true")
     parser.add_argument("--deadline-seconds", type=int, default=None)
@@ -1040,15 +1040,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             parser.error("--player-count is incompatible with --human")
         if args.benchmark is not None:
             parser.error(
-                "--player-count is a no-mob connected scaling mode; do not combine it with --benchmark"
+                "--player-count is a connected scaling mode; do not combine it with --benchmark"
             )
-        if args.mob_count not in (None, 0):
+        if args.mob_count not in (None, 0, 20):
             parser.error(
-                "--player-count requires --mob-count 0 when --mob-count is supplied"
+                "--player-count supports --mob-count 0 or 20 when --mob-count is supplied"
             )
         if args.warmup_seconds <= 0.0 or args.sample_seconds <= 0.0:
             parser.error("--player-count requires positive warmup and sample windows")
-        args.mob_count = 0
+        if args.mob_count is None:
+            args.mob_count = 0
     if args.benchmark is not None:
         scenario = BENCHMARK_SCENARIOS[args.benchmark]
         if not scenario["connected"]:

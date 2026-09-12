@@ -217,7 +217,7 @@ func _send_full_state(tick: int, peer: int = 0) -> void:
 		NetworkPerformance.push_sent_state(full_state_snapshot)
 
 # `serialized_state` is a serialized _PropertySnapshot
-@rpc("any_peer", "unreliable_ordered", "call_remote")
+@rpc("any_peer", "reliable", "call_remote")
 func _submit_full_state(data: Array, tick: int) -> void:
 	if not _is_initialized: return
 
