@@ -189,3 +189,72 @@ func test_npc_movement_child_cost_summary_reports_and_resets_under_same_opt_in_f
 	assert_eq(empty_summary.movement_prepare.total_usec, 0)
 	assert_eq(empty_summary.movement_slide.calls, 0)
 	assert_eq(empty_summary.movement_flush.calls, 0)
+
+func test_benchmark_perf_line_includes_authoritative_npc_stride_counts() -> void:
+	var probe := PERF_PROBE_SCRIPT.new()
+	add_child_autofree(probe)
+	var metrics := {
+		"scenario": "E",
+		"configured_players": 1,
+		"configured_mobs": 20,
+		"live_players": 1,
+		"live_mobs": 20,
+		"fps": 0.0,
+		"frames": 0,
+		"frame_ms": 0.0,
+		"physics_ms": 0.0,
+		"physics_ticks_per_second": 60,
+		"max_fps": 60,
+		"players": 1,
+		"entities": 21,
+		"rollback_events": 0,
+		"rollback_avg_ticks": 0.0,
+		"rollback_max_ticks": 0,
+		"rollback_nodes_observable": 0,
+		"snapshot_nodes_observable": 20,
+		"synchronized_entities_observable": 21,
+		"netfox": {},
+		"npc_authoritative_stride_counts": {2: 20},
+	}
+
+	var line: String = probe._format_perf_line(metrics)
+
+	assert_true(line.contains("npc_authoritative_stride_counts={2:20}"))
+
+func test_authoritative_npc_stride_counts_reports_missing_and_unknown() -> void:
+	var probe := PERF_PROBE_SCRIPT.new()
+	add_child_autofree(probe)
+	var mob_with_sync := Node.new()
+	mob_with_sync.name = "mob_with_sync"
+	mob_with_sync.add_to_group("mobs")
+	var state := Node.new()
+	state.name = "ServerState"
+	state.set_meta("npc_snapshot_stride", 2)
+	var sync := Node.new()
+	sync.name = "StateSynchronizer"
+	state.add_child(sync)
+	mob_with_sync.add_child(state)
+	add_child_autofree(mob_with_sync)
+	var mob_missing_sync := Node.new()
+	mob_missing_sync.name = "mob_missing_sync"
+	mob_missing_sync.add_to_group("mobs")
+	var missing_state := Node.new()
+	missing_state.name = "ServerState"
+	mob_missing_sync.add_child(missing_state)
+	add_child_autofree(mob_missing_sync)
+	var mob_unknown := Node.new()
+	mob_unknown.name = "mob_unknown"
+	mob_unknown.add_to_group("mobs")
+	var unknown_state := Node.new()
+	unknown_state.name = "ServerState"
+	var unknown_sync := Node.new()
+	unknown_sync.name = "StateSynchronizer"
+	unknown_state.add_child(unknown_sync)
+	mob_unknown.add_child(unknown_state)
+	add_child_autofree(mob_unknown)
+
+	var counts: Dictionary = probe._count_authoritative_npc_stride_counts()
+
+	assert_eq(counts["2"], 1)
+	assert_eq(counts["missing"], 1)
+	assert_eq(counts["unknown"], 1)

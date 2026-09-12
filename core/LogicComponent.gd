@@ -377,6 +377,7 @@ func _apply_timed_npc_movement(delta: float) -> void:
 
 func _is_local_authority() -> bool:
 	if not entity: return false
+	if multiplayer == null or not multiplayer.has_multiplayer_peer(): return false
 	var owner_id = entity.name.to_int() if entity.name.is_valid_int() else 1
 	return multiplayer.get_unique_id() == owner_id
 

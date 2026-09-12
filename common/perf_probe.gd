@@ -201,6 +201,8 @@ func _collect_metrics() -> Dictionary:
 		"synchronized_entities_observable": _count_synchronized_entities(),
 		"netfox": _collect_netfox_monitors(),
 	}
+	if not scenario.is_empty():
+		metrics["npc_authoritative_stride_counts"] = _count_authoritative_npc_stride_counts()
 	if npc_cost_recording_enabled:
 		metrics["npc_costs"] = _consume_npc_cost_summary()
 	return metrics
@@ -244,6 +246,40 @@ func _count_synchronized_entities() -> int:
 				count += 1
 	return count
 
+func _count_authoritative_npc_stride_counts() -> Dictionary:
+	var counts := {}
+	for mob in get_tree().get_nodes_in_group(&"mobs"):
+		var sync := mob.get_node_or_null("ServerState/StateSynchronizer")
+		if sync == null:
+			_increment_count(counts, "missing")
+			continue
+		var stride := _authoritative_stride_for_sync(sync)
+		if stride <= 0:
+			_increment_count(counts, "unknown")
+			continue
+		_increment_count(counts, str(stride))
+	return counts
+
+func _authoritative_stride_for_sync(sync: Node) -> int:
+	if sync.has_method("get_effective_snapshot_stride"):
+		return maxi(1, int(sync.call("get_effective_snapshot_stride")))
+	var configured_stride = sync.get("npc_snapshot_stride")
+	if configured_stride != null:
+		return maxi(1, int(configured_stride))
+	if sync.has_meta("npc_snapshot_stride"):
+		return maxi(1, int(sync.get_meta("npc_snapshot_stride")))
+	var server_state := sync.get_parent()
+	if server_state != null:
+		var server_stride = server_state.get("npc_snapshot_stride")
+		if server_stride != null:
+			return maxi(1, int(server_stride))
+		if server_state.has_meta("npc_snapshot_stride"):
+			return maxi(1, int(server_state.get_meta("npc_snapshot_stride")))
+	return 0
+
+func _increment_count(counts: Dictionary, key: String) -> void:
+	counts[key] = int(counts.get(key, 0)) + 1
+
 func _collect_netfox_monitors() -> Dictionary:
 	var values := {}
 	for metric_name in NETFOX_MONITORS:
@@ -285,6 +321,9 @@ func _format_perf_line(metrics: Dictionary) -> String:
 		if netfox.has(metric_name):
 			parts.append("%s=%s" % [metric_name, _format_number(netfox[metric_name])])
 
+	if metrics.has("npc_authoritative_stride_counts"):
+		parts.append("npc_authoritative_stride_counts=%s" % _format_int_count_dict(metrics.npc_authoritative_stride_counts))
+
 	if metrics.has("npc_costs"):
 		_append_npc_cost_parts(parts, metrics.npc_costs)
 
@@ -316,3 +355,26 @@ func _format_number(value: Variant) -> String:
 	if value is float:
 		return "%.2f" % value
 	return str(value)
+
+func _format_int_count_dict(counts: Dictionary) -> String:
+	var numeric_keys := []
+	var extra_keys := []
+	for key in counts.keys():
+		var key_text := str(key)
+		if key_text.is_valid_int():
+			numeric_keys.append(key_text)
+		else:
+			extra_keys.append(key_text)
+	numeric_keys.sort_custom(func(a, b): return int(a) < int(b))
+	extra_keys.sort()
+	var entries := []
+	for key in numeric_keys + extra_keys:
+		entries.append("%s:%d" % [key, _int_count_value(counts, key)])
+	return "{%s}" % ",".join(entries)
+
+func _int_count_value(counts: Dictionary, key: String) -> int:
+	if counts.has(key):
+		return int(counts[key])
+	if key.is_valid_int() and counts.has(int(key)):
+		return int(counts[int(key)])
+	return 0

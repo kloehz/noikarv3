@@ -12,6 +12,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import profile_room_scaling as prs
 
 
+def _combined_with_authoritative_stride(
+    counts: dict[str, int],
+) -> prs.CombinedLogParser:
+    parser = prs.CombinedLogParser()
+    body = ",".join(f"{key}:{value}" for key, value in counts.items())
+    parser.feed(f"[BENCHMARK] scenario=E npc_authoritative_stride_counts={{{body}}}")
+    return parser
+
+
 class ProfileRoomScalingTests(unittest.TestCase):
     def test_parse_ps_time_formats(self):
         self.assertEqual(prs.parse_ps_time("00:01"), 1)
@@ -370,13 +379,234 @@ class ProfileRoomScalingTests(unittest.TestCase):
     def test_perf_npc_cost_lines_get_structured_interval_summary(self):
         parser = prs.CombinedLogParser()
         parser.feed(
-            "[PERF] fps=60.0 npc_ai_inclusive_total_usec=300 npc_ai_inclusive_calls=3 npc_ai_inclusive_max_usec=200 npc_target_scan_visits=7"
+            "[BENCHMARK] scenario=E fps=60.0 "
+            "npc_ai_inclusive_total_usec=300 npc_ai_inclusive_calls=3 npc_ai_inclusive_max_usec=200 "
+            "npc_movement_inclusive_total_usec=50 npc_movement_prepare_child_total_usec=10 "
+            "npc_movement_slide_child_calls=2 npc_movement_flush_child_max_usec=7 "
+            "npc_combat_total_usec=9 npc_target_scan_visits=7 npc_avoidance_visits=8"
         )
+        self.assertEqual(parser.perf_lines[0].split()[0], "[BENCHMARK]")
         ai_cost = cast(dict[str, int], parser.npc_cost_intervals[0]["npc_ai_inclusive"])
         self.assertEqual(ai_cost["total_usec"], 300)
         self.assertEqual(ai_cost["calls"], 3)
         self.assertEqual(ai_cost["max_usec"], 200)
+        movement = cast(
+            dict[str, int], parser.npc_cost_intervals[0]["npc_movement_inclusive"]
+        )
+        self.assertEqual(movement["total_usec"], 50)
+        prepare = cast(
+            dict[str, int], parser.npc_cost_intervals[0]["npc_movement_prepare_child"]
+        )
+        self.assertEqual(prepare["total_usec"], 10)
+        slide = cast(
+            dict[str, int], parser.npc_cost_intervals[0]["npc_movement_slide_child"]
+        )
+        self.assertEqual(slide["calls"], 2)
+        flush = cast(
+            dict[str, int], parser.npc_cost_intervals[0]["npc_movement_flush_child"]
+        )
+        self.assertEqual(flush["max_usec"], 7)
+        combat = cast(dict[str, int], parser.npc_cost_intervals[0]["npc_combat"])
+        self.assertEqual(combat["total_usec"], 9)
         self.assertEqual(parser.npc_cost_intervals[0]["npc_target_scan_visits"], 7)
+        self.assertEqual(parser.npc_cost_intervals[0]["npc_avoidance_visits"], 8)
+
+    def test_healthy_sync_telemetry_is_not_classified_as_error(self):
+        server = prs.ServerLogParser()
+        server.feed(
+            "[BENCHMARK] npc_snapshot_sync_observable=20 synchronized_entities_observable=21\n"
+        )
+        self.assertEqual(server.errors, [])
+        self.assertEqual(len(server.perf_lines), 1)
+        combined = prs.CombinedLogParser()
+        combined.feed(
+            "[BENCHMARK] npc_snapshot_sync_observable=20 synchronized_entities_observable=21\n"
+        )
+        self.assertEqual(combined.errors, [])
+        self.assertEqual(len(combined.perf_lines), 1)
+        server.feed(
+            "[PROFILE_POPULATION_FAILED] mode=fixed_population expectedcount=20 actualcount=0 seed=120120\n"
+        )
+        self.assertEqual(len(server.errors), 1)
+
+    def test_authoritative_stride_counts_parse_and_drive_fixed_population_gate(self):
+        parser = prs.CombinedLogParser()
+        parser.feed(
+            "[BENCHMARK] scenario=E fps=60.0 "
+            "npc_authoritative_stride_counts={2:20} "
+            "npc_ai_inclusive_total_usec=300 npc_ai_inclusive_calls=3 npc_ai_inclusive_max_usec=200"
+        )
+
+        self.assertEqual(parser.authoritative_stride_intervals, [{"2": 20}])
+
+        client = mock.Mock(
+            process=mock.Mock(returncode=0),
+            index=0,
+            account=prs.Account("u", "p"),
+            parser=mock.Mock(
+                ready=True,
+                passed=True,
+                fixed_workload_ended=True,
+                metrics={
+                    "dead": False,
+                    "mobs_start": 20,
+                    "mobs_end": 20,
+                    "max_projectiles": 1,
+                    "movement": 10.0,
+                    "mob_displacement": 1.0,
+                    "observed_npcs_within_90m": {"max": 10},
+                    "workload_invalid": False,
+                },
+                errors=[],
+                telemetry={"npc_stride_counts": {"1": 10, "2": 10}},
+            ),
+        )
+        result = prs.build_result(
+            1,
+            [client],
+            {42: [(0.0, 1.0, 100), (2.0, 2.0, 120)]},
+            {},
+            parser,
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(1.0, 1.0, 0.0),
+            npc_rate_hz=15,
+            mob_count=20,
+        )
+
+        self.assertTrue(cast(dict[str, object], result["gate"])["npc_stride_counts"])
+        stride = cast(dict[str, object], result["npc_stride_observed"])
+        self.assertEqual(stride["source"], "server_authoritative_perf_probe")
+        self.assertEqual(stride["authoritative_observed"], {"2": 20})
+        clients = cast(list[dict[str, object]], stride["clients"])
+        self.assertEqual(clients[0]["observed"], {"1": 10, "2": 10})
+        self.assertTrue(clients[0]["diagnostic_only"])
+
+    def test_authoritative_stride_gate_rejects_missing_wrong_and_unknown_evidence(self):
+        def result_for(lines: list[str]):
+            parser = prs.CombinedLogParser()
+            parser.feed("\n".join(lines))
+            return prs.build_result(
+                1,
+                [],
+                {42: [(0.0, 1.0, 100), (2.0, 2.0, 120)]},
+                {},
+                parser,
+                prs.StableGate(True, True, True, 8.1, {42}),
+                Path("artifacts"),
+                profile=prs.ProfileWindow(1.0, 1.0, 0.0),
+                npc_rate_hz=15,
+                mob_count=20,
+            )
+
+        missing = cast(dict[str, object], result_for([])["npc_stride_observed"])
+        self.assertFalse(missing["ok"])
+        self.assertEqual(missing["reason"], "missing_authoritative_perf_probe_evidence")
+
+        wrong = cast(
+            dict[str, object],
+            result_for(
+                ["[BENCHMARK] scenario=E npc_authoritative_stride_counts={1:10,2:10}"]
+            )["npc_stride_observed"],
+        )
+        self.assertFalse(wrong["ok"])
+        self.assertEqual(wrong["authoritative_observed"], {"1": 10, "2": 10})
+
+        unknown = cast(
+            dict[str, object],
+            result_for(
+                [
+                    "[BENCHMARK] scenario=E npc_authoritative_stride_counts={2:19,unknown:1}"
+                ]
+            )["npc_stride_observed"],
+        )
+        self.assertFalse(unknown["ok"])
+        self.assertEqual(unknown["authoritative_unknown"], 1)
+
+    def test_fixed_population_stride_gate_requires_expected_stride_for_all_mobs(self):
+        def make_client(strides: dict[str, int]):
+            return mock.Mock(
+                process=mock.Mock(returncode=0),
+                index=0,
+                account=prs.Account("u", "p"),
+                parser=mock.Mock(
+                    ready=True,
+                    passed=True,
+                    fixed_workload_ended=True,
+                    metrics={
+                        "dead": False,
+                        "mobs_start": 20,
+                        "mobs_end": 20,
+                        "max_projectiles": 1,
+                        "movement": 10.0,
+                        "mob_displacement": 1.0,
+                        "observed_npcs_within_90m": {"max": 20},
+                        "workload_invalid": False,
+                    },
+                    errors=[],
+                    telemetry={"npc_stride_counts": strides},
+                ),
+            )
+
+        matching = prs.build_result(
+            1,
+            [make_client({"2": 20})],
+            {42: [(0.0, 1.0, 100), (2.0, 2.0, 120), (3.0, 2.5, 130)]},
+            {},
+            _combined_with_authoritative_stride({"2": 20}),
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(1.0, 2.0, 0.0),
+            npc_rate_hz=15,
+            mob_count=20,
+        )
+        self.assertTrue(cast(dict[str, object], matching["gate"])["npc_stride_counts"])
+        self.assertEqual(
+            cast(dict[str, object], matching["npc_stride_observed"])["expected_stride"],
+            2,
+        )
+        room = cast(list[dict[str, object]], matching["rooms"])[0]
+        self.assertEqual(room["cpu_interval_peak_percent"], 50.0)
+        self.assertEqual(room["cpu_interval_sample_resolution_seconds"], 1.0)
+        aggregate = cast(dict[str, object], matching["aggregate"])
+        self.assertEqual(aggregate["cpu_interval_peak_percent"], 50.0)
+
+        mismatching = prs.build_result(
+            1,
+            [make_client({"1": 20})],
+            {42: [(0.0, 1.0, 100), (2.0, 2.0, 120)]},
+            {},
+            prs.CombinedLogParser(),
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(1.0, 1.0, 0.0),
+            npc_rate_hz=15,
+            mob_count=20,
+        )
+        self.assertFalse(
+            cast(dict[str, object], mismatching["gate"])["npc_stride_counts"]
+        )
+        mismatch_stride = cast(dict[str, object], mismatching["npc_stride_observed"])
+        mismatch_clients = cast(list[dict[str, object]], mismatch_stride["clients"])
+        self.assertEqual(mismatch_clients[0]["observed"], {"1": 20})
+
+    def test_zero_mob_fixed_population_is_exempt_from_stride_gate(self):
+        result = prs.build_result(
+            1,
+            [],
+            {42: [(0.0, 1.0, 100), (1.0, 2.0, 120)]},
+            {},
+            prs.CombinedLogParser(),
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(1.0, 1.0, 0.0),
+            npc_rate_hz=10,
+            mob_count=0,
+        )
+        self.assertTrue(cast(dict[str, object], result["gate"])["npc_stride_counts"])
+        self.assertTrue(
+            cast(dict[str, object], result["npc_stride_observed"])["exempt"]
+        )
 
     def test_client_parser_captures_telemetry_without_pass_decision(self):
         parser = prs.ClientLogParser()
@@ -1055,6 +1285,401 @@ class ProfileRoomScalingTests(unittest.TestCase):
         self.assertEqual(result["supervisor_pid"], 999)
         self.assertEqual(result["client_pids"], [501])
         self.assertFalse(cast(dict[str, object], result["gate"])["functional"])
+
+    def test_player_count_args_force_one_no_mob_room_with_sample_window(self):
+        args = prs.parse_args(
+            ["--player-count", "4", "--warmup-seconds", "1", "--sample-seconds", "2"]
+        )
+        self.assertEqual(args.player_count, 4)
+        self.assertEqual(args.rooms, 1)
+        self.assertEqual(args.mob_count, 0)
+        self.assertEqual(
+            prs.parse_args(
+                [
+                    "--player-count",
+                    "8",
+                    "--mob-count",
+                    "0",
+                    "--warmup-seconds",
+                    "1",
+                    "--sample-seconds",
+                    "2",
+                ]
+            ).player_count,
+            8,
+        )
+        with self.assertRaises(SystemExit):
+            prs.parse_args(
+                [
+                    "--player-count",
+                    "3",
+                    "--warmup-seconds",
+                    "1",
+                    "--sample-seconds",
+                    "2",
+                ]
+            )
+        with self.assertRaises(SystemExit):
+            prs.parse_args(["--player-count", "2", "--warmup-seconds", "1"])
+        with self.assertRaises(SystemExit):
+            prs.parse_args(
+                [
+                    "--player-count",
+                    "2",
+                    "--rooms",
+                    "2",
+                    "--warmup-seconds",
+                    "1",
+                    "--sample-seconds",
+                    "2",
+                ]
+            )
+        with self.assertRaises(SystemExit):
+            prs.parse_args(
+                [
+                    "--player-count",
+                    "2",
+                    "--benchmark",
+                    "D",
+                    "--warmup-seconds",
+                    "1",
+                    "--sample-seconds",
+                    "2",
+                ]
+            )
+
+    def test_player_count_env_wires_host_and_joiner_roles(self):
+        host_env = prs.client_probe_env(
+            account=prs.Account("u0", "p"),
+            lobby_hold_seconds=0.0,
+            warmup_seconds=1.0,
+            sample_seconds=2.0,
+            mob_count=0,
+            player_count=4,
+            player_index=0,
+        )
+        join_env = prs.client_probe_env(
+            account=prs.Account("u1", "p"),
+            lobby_hold_seconds=0.0,
+            warmup_seconds=1.0,
+            sample_seconds=2.0,
+            mob_count=0,
+            player_count=4,
+            player_index=1,
+            room_oid="room-oid",
+        )
+        self.assertEqual(host_env["NOIKAR_PROFILE_PLAYER_COUNT"], "4")
+        self.assertEqual(host_env["NOIKAR_PROFILE_PLAYER_INDEX"], "0")
+        self.assertNotIn("NOIKAR_PROFILE_JOIN_OID", host_env)
+        self.assertEqual(join_env["NOIKAR_PROFILE_JOIN_OID"], "room-oid")
+        self.assertEqual(join_env["NOIKAR_PROFILE_EXPECTED_MOB_COUNT"], "0")
+        self.assertEqual(join_env["NOIKAR_PROFILE_FIXED_ROUTE"], "1")
+
+    def test_client_probe_env_wires_supervisor_release_file(self):
+        env = prs.client_probe_env(
+            account=prs.Account("u", "p"),
+            lobby_hold_seconds=0.0,
+            warmup_seconds=1.0,
+            sample_seconds=2.0,
+            release_file=Path("noikar-release"),
+        )
+
+        self.assertEqual(env["NOIKAR_PROFILE_RELEASE_FILE"], "noikar-release")
+
+    def test_incremental_log_reader_only_returns_appended_complete_lines(self):
+        with tempfile.TemporaryDirectory() as temp_s:
+            log = Path(temp_s) / "noray.log"
+            log.write_text("active error\n", encoding="utf-8")
+            chunk, offset = prs.read_incremental_text(log, 0)
+            self.assertEqual(chunk, "active error\n")
+            partial_offset = offset
+            log.write_text(
+                log.read_text(encoding="utf-8") + "teardown er",
+                encoding="utf-8",
+            )
+            chunk, offset = prs.read_incremental_text(log, offset)
+            self.assertEqual(chunk, "")
+            self.assertEqual(offset, partial_offset)
+            log.write_text(
+                log.read_text(encoding="utf-8") + "ror\nnext line\nfragment",
+                encoding="utf-8",
+            )
+            chunk, offset = prs.read_incremental_text(log, offset)
+            self.assertEqual(chunk, "teardown error\nnext line\n")
+            chunk, offset = prs.read_incremental_text(log, offset)
+            self.assertEqual(chunk, "")
+
+    def test_server_parser_routes_teardown_errors_without_hiding_active_errors(self):
+        server = prs.ServerLogParser(expected_mob_count=0)
+        combined = prs.CombinedLogParser()
+
+        server.feed("RPC ERROR active\n", teardown_only=False)
+        combined.feed("RPC ERROR active\n", teardown_only=False)
+        server.feed("RPC ERROR teardown\n", teardown_only=True)
+        combined.feed("RPC ERROR teardown\n", teardown_only=True)
+
+        self.assertEqual(server.errors, ["RPC ERROR active"])
+        self.assertEqual(server.active_errors, ["RPC ERROR active"])
+        self.assertEqual(server.teardown_errors, ["RPC ERROR teardown"])
+        self.assertEqual(combined.errors, ["RPC ERROR active"])
+        self.assertEqual(combined.teardown_errors, ["RPC ERROR teardown"])
+
+    def test_same_poll_workload_completion_routes_new_noray_errors_to_teardown(self):
+        with tempfile.TemporaryDirectory() as temp_s:
+            log = Path(temp_s) / "noray.log"
+            log.write_text("[BENCHMARK] active perf row\n", encoding="utf-8")
+            combined = prs.CombinedLogParser()
+            server = prs.ServerLogParser(expected_mob_count=0)
+            offset = prs.route_incremental_noray_log(
+                log,
+                0,
+                combined,
+                {42: server},
+                teardown_only=False,
+            )
+            client_parser = prs.ClientLogParser(expected_mob_count=0)
+            client_parser.feed("[LIVE-PROBE] FIXED_WORKLOAD_END\n")
+            client = mock.Mock(parser=client_parser, end_monotonic=None)
+            closed = prs.update_fixed_workload_closed(False, [client], mob_count=0)
+            log.write_text(
+                log.read_text(encoding="utf-8") + "RPC ERROR after release\n",
+                encoding="utf-8",
+            )
+            offset = prs.route_incremental_noray_log(
+                log,
+                offset,
+                combined,
+                {42: server},
+                teardown_only=closed,
+            )
+
+            self.assertTrue(closed)
+            self.assertEqual(server.errors, [])
+            self.assertEqual(server.teardown_errors, ["RPC ERROR after release"])
+            self.assertEqual(combined.errors, [])
+            self.assertEqual(combined.teardown_errors, ["RPC ERROR after release"])
+            self.assertGreater(offset, 0)
+
+    def test_server_teardown_errors_are_reported_without_failing_active_error_gate(
+        self,
+    ):
+        client = mock.Mock(
+            process=mock.Mock(returncode=0),
+            index=0,
+            account=prs.Account("u", "p"),
+            parser=mock.Mock(
+                ready=True,
+                passed=True,
+                fixed_workload_ended=True,
+                metrics={
+                    "dead": False,
+                    "mobs_start": 0,
+                    "mobs_end": 0,
+                    "max_projectiles": 1,
+                    "movement": 10.0,
+                    "mob_displacement": 0.0,
+                    "workload_invalid": False,
+                },
+                errors=[],
+                telemetry={},
+            ),
+        )
+        server = prs.ServerLogParser(expected_mob_count=0)
+        combined = prs.CombinedLogParser()
+        server.feed("RPC ERROR after release\n", teardown_only=True)
+        combined.feed("RPC ERROR after release\n", teardown_only=True)
+
+        result = prs.build_result(
+            1,
+            [client],
+            {42: [(0.0, 1.0, 100), (1.0, 2.0, 120)]},
+            {42: server},
+            combined,
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(0.0, 1.0, 0.0),
+            mob_count=0,
+        )
+
+        gate = cast(dict[str, object], result["gate"])
+        proof = cast(dict[str, object], result["active_sample_proof"])
+        rooms = cast(list[dict[str, object]], result["rooms"])
+        self.assertTrue(gate["active_sample_errors"])
+        self.assertEqual(proof["active_server_error_count"], 0)
+        self.assertEqual(proof["teardown_server_error_count"], 1)
+        self.assertEqual(rooms[0]["sync_rpc_errors"], [])
+        self.assertEqual(rooms[0]["teardown_rpc_errors"], ["RPC ERROR after release"])
+        self.assertEqual(
+            result["combined_server_teardown_errors"], ["RPC ERROR after release"]
+        )
+
+    def test_active_server_errors_remain_blocking_even_with_teardown_errors(self):
+        client = mock.Mock(
+            process=mock.Mock(returncode=0),
+            index=0,
+            account=prs.Account("u", "p"),
+            parser=mock.Mock(
+                ready=True,
+                passed=True,
+                fixed_workload_ended=True,
+                metrics={
+                    "dead": False,
+                    "mobs_start": 0,
+                    "mobs_end": 0,
+                    "max_projectiles": 1,
+                    "movement": 10.0,
+                    "mob_displacement": 0.0,
+                    "workload_invalid": False,
+                },
+                errors=[],
+                telemetry={},
+            ),
+        )
+        server = prs.ServerLogParser(expected_mob_count=0)
+        combined = prs.CombinedLogParser()
+        server.feed("RPC ERROR active\n", teardown_only=False)
+        combined.feed("RPC ERROR active\n", teardown_only=False)
+        server.feed("RPC ERROR teardown\n", teardown_only=True)
+        combined.feed("RPC ERROR teardown\n", teardown_only=True)
+
+        result = prs.build_result(
+            1,
+            [client],
+            {42: [(0.0, 1.0, 100), (1.0, 2.0, 120)]},
+            {42: server},
+            combined,
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(0.0, 1.0, 0.0),
+            mob_count=0,
+        )
+
+        gate = cast(dict[str, object], result["gate"])
+        proof = cast(dict[str, object], result["active_sample_proof"])
+        self.assertFalse(gate["active_sample_errors"])
+        self.assertEqual(proof["active_server_error_count"], 1)
+        self.assertEqual(proof["teardown_server_error_count"], 1)
+
+    def test_client_parser_classifies_post_pass_errors_as_teardown_only(self):
+        parser = prs.ClientLogParser(expected_mob_count=0)
+        parser.feed("RPC ERROR during active sample\n")
+        parser.feed("[LIVE-PROBE] FIXED_WORKLOAD_END\n")
+        parser.feed("RPC ERROR after workload finished\n")
+        parser.feed("[LIVE-PROBE] PASS oid=abc\n")
+        parser.feed("ERROR after pass\n")
+
+        self.assertEqual(parser.active_errors, ["RPC ERROR during active sample"])
+        self.assertEqual(
+            parser.teardown_errors,
+            ["RPC ERROR after workload finished", "ERROR after pass"],
+        )
+
+    def test_active_sample_errors_fail_result_gate_but_teardown_errors_are_reported(
+        self,
+    ):
+        parser = prs.ClientLogParser(expected_mob_count=0)
+        parser.feed(
+            "[LIVE-PROBE] spawned player=123 mobs=0 fixed_population=true\n"
+            "[LIVE-PROBE] movement=10.0m mob_displacement=0.0m max_projectiles=1 "
+            "attacks=0->1 dead=false mobs=0->0 workload=fixed_route sample=1.00s "
+            "nearest_npc_m=null/null/null observed_npcs_90m=0/0 alive_npcs=0 "
+            "player_sample_travel=10.0m endpoint=0.0m invalid=false\n"
+            "RPC ERROR active\n"
+            "[LIVE-PROBE] FIXED_WORKLOAD_END\n"
+            "[LIVE-PROBE] PASS oid=abc\n"
+            "RPC ERROR teardown\n"
+        )
+        client = mock.Mock(
+            process=mock.Mock(returncode=0),
+            index=0,
+            account=prs.Account("u", "p"),
+            parser=parser,
+        )
+
+        result = prs.build_result(
+            1,
+            [client],
+            {42: [(0.0, 1.0, 100), (1.0, 2.0, 120)]},
+            {},
+            prs.CombinedLogParser(),
+            prs.StableGate(True, True, True, 8.1, {42}),
+            Path("artifacts"),
+            profile=prs.ProfileWindow(0.0, 1.0, 0.0),
+            mob_count=0,
+        )
+
+        gate = cast(dict[str, object], result["gate"])
+        proof = cast(dict[str, object], result["active_sample_proof"])
+        clients = cast(list[dict[str, object]], result["clients"])
+        self.assertFalse(gate["active_sample_errors"])
+        self.assertEqual(proof["active_error_count"], 1)
+        self.assertEqual(proof["teardown_error_count"], 1)
+        self.assertEqual(clients[0]["teardown_errors"], ["RPC ERROR teardown"])
+
+    def test_client_parser_captures_admitted_oid_for_joiners(self):
+        parser = prs.ClientLogParser(expected_mob_count=0)
+        parser.feed("[LIVE-PROBE] admitted oid=abc123\n")
+        self.assertEqual(parser.admitted_oid, "abc123")
+
+    def test_player_count_result_reports_clients_separately_from_one_server_room(self):
+        clients = []
+        for index in range(4):
+            clients.append(
+                mock.Mock(
+                    process=mock.Mock(returncode=0),
+                    index=index,
+                    account=prs.Account(f"u{index}", "p"),
+                    end_monotonic=None,
+                    parser=mock.Mock(
+                        ready=True,
+                        passed=True,
+                        fixed_workload_ended=True,
+                        metrics={
+                            "dead": False,
+                            "mobs_start": 0,
+                            "mobs_end": 0,
+                            "max_projectiles": 0,
+                            "movement": 10.0,
+                            "mob_displacement": 0.0,
+                            "workload_invalid": False,
+                        },
+                        errors=[],
+                        telemetry={},
+                    ),
+                )
+            )
+        gate = prs.evaluate_stable_gate(
+            rooms=1,
+            active_pids=[42],
+            clients=clients,
+            stable_started=10.0,
+            now=18.1,
+            samples={42: [(10.0, 1.0, 100), (12.0, 2.0, 200)]},
+            pinned_pids={42},
+            server_parsers={42: prs.ServerLogParser(expected_mob_count=0)},
+            mob_count=0,
+            expected_clients=4,
+        )
+        result = prs.build_result(
+            1,
+            clients,
+            {42: [(11.0, 1.0, 100), (13.0, 2.0, 200)]},
+            {},
+            prs.CombinedLogParser(),
+            gate,
+            Path("artifacts"),
+            profile=prs.ProfileWindow(1.0, 2.0, 10.0),
+            mob_count=0,
+            player_count=4,
+        )
+        self.assertEqual(result["rooms_requested"], 1)
+        self.assertEqual(result["player_count"], 4)
+        self.assertEqual(len(cast(list[dict[str, object]], result["clients"])), 4)
+        self.assertEqual(len(cast(list[dict[str, object]], result["rooms"])), 1)
+        gate_result = cast(dict[str, object], result["gate"])
+        self.assertTrue(gate_result["clients_ready"])
+        self.assertFalse(gate_result["projectile"])
+        self.assertTrue(gate_result["mob_movement"])
 
     def test_signal_handler_context_requests_stop_and_restores_handlers(self):
         original_int = signal.getsignal(signal.SIGINT)

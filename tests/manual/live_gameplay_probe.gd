@@ -13,6 +13,7 @@ const FIXED_ROUTE_CENTER := Vector3(0.0, 0.0, -240.0)
 const FIXED_ROUTE_RADIUS := 60.0
 const FIXED_ROUTE_WAYPOINT_REACHED := 8.0
 const FIXED_ROUTE_POLL_MARGIN_SEC := 6.0
+const RELEASE_TIMEOUT_SEC := 120.0
 
 var _main: Node
 var _menu: CanvasLayer
@@ -46,9 +47,14 @@ func _run() -> void:
 		_fail("login did not reach ROOM")
 		return
 
-	_menu._on_host_pressed()
+	var join_oid := OS.get_environment("NOIKAR_PROFILE_JOIN_OID").strip_edges()
+	if join_oid.is_empty():
+		_menu._on_host_pressed()
+	else:
+		_menu.room_id_edit.text = join_oid
+		_menu._on_join_pressed()
 	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.TEAM_LOBBY, FLOW_TIMEOUT_SEC):
-		_fail("host flow did not reach authenticated lobby")
+		_fail("room flow did not reach authenticated lobby")
 		return
 	print("[LIVE-PROBE] admitted oid=%s" % _menu._current_oid)
 	var lobby_hold_sec := clampf(float(OS.get_environment("NOIKAR_PROFILE_LOBBY_HOLD_SEC")), 0.0, 30.0)
@@ -56,15 +62,26 @@ func _run() -> void:
 		print("[LIVE-PROBE] holding authenticated lobby for %.1fs" % lobby_hold_sec)
 		await create_timer(lobby_hold_sec).timeout
 
-	_menu._on_team_choice_pressed(TeamId.RED)
-	if not await _wait_until(func() -> bool: return int(_menu._snapshot.get("team", TeamId.NONE)) == TeamId.RED, 5.0):
-		_fail("server did not accept RED team choice")
+	var player_index := _profile_player_index()
+	var desired_team := _team_for_profile_player(player_index)
+	_menu._on_team_choice_pressed(desired_team)
+	if not await _wait_until(func() -> bool: return int(_menu._snapshot.get("team", TeamId.NONE)) == desired_team, 5.0):
+		_fail("server did not accept team choice %d" % desired_team)
 		return
-	_menu._on_lobby_ready_toggled(true)
-	if not await _wait_until(func() -> bool: return bool(_menu._snapshot.get("self_lobby_ready", false)), 5.0):
+	if not await _ensure_lobby_ready(8.0):
 		_fail("server did not accept lobby ready")
 		return
-	_menu._on_start_selection_pressed()
+	var expected_players := _expected_player_count()
+	if join_oid.is_empty() and expected_players > 1:
+		if not await _host_start_selection_when_joined(expected_players):
+			_fail("host could not start character selection for %d players; saw members=%d ready=%d" % [expected_players, _lobby_member_count(), _lobby_ready_count()])
+			return
+	elif not join_oid.is_empty():
+		if not await _joiner_wait_for_character_selection(desired_team):
+			_fail("joiner did not observe character selection start")
+			return
+	else:
+		_menu._on_start_selection_pressed()
 	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.CHARACTER_SELECT, 5.0):
 		_fail("character selection did not start")
 		return
@@ -76,7 +93,10 @@ func _run() -> void:
 
 	var player_ref: Array[Node3D] = [null]
 	if not await _wait_until(func() -> bool:
-		player_ref[0] = _main.get_node_or_null("Players/%s" % _menu.multiplayer.get_unique_id()) as Node3D
+		var peer_id := _local_peer_id()
+		if peer_id <= 0:
+			return false
+		player_ref[0] = _main.get_node_or_null("Players/%s" % peer_id) as Node3D
 		return player_ref[0] != null,
 		GAMEPLAY_TIMEOUT_SEC):
 		_fail("owned player did not spawn")
@@ -184,13 +204,87 @@ func _run() -> void:
 	if expected_mob_count != 0 and max_mob_displacement < 0.1:
 		_fail("authoritative mob movement did not replicate")
 		return
-	if max_projectiles == 0:
+	if expected_mob_count != 0 and max_projectiles == 0:
 		_fail("projectile spawn did not replicate")
 		return
 
-	_close_peer()
 	print("[LIVE-PROBE] PASS oid=%s" % _menu._current_oid)
+	if not await _await_supervisor_release():
+		_fail("supervisor release barrier timed out")
+		return
+	_close_peer()
 	quit(0)
+
+func _expected_player_count() -> int:
+	var raw := OS.get_environment("NOIKAR_PROFILE_PLAYER_COUNT")
+	if raw in ["1", "2", "4", "8"]:
+		return int(raw)
+	return 1
+
+func _local_peer_id() -> int:
+	if _menu == null:
+		return 0
+	var multiplayer_api := _menu.get_multiplayer()
+	if multiplayer_api == null or not multiplayer_api.has_multiplayer_peer():
+		return 0
+	return multiplayer_api.get_unique_id()
+
+func _profile_player_index() -> int:
+	var raw := OS.get_environment("NOIKAR_PROFILE_PLAYER_INDEX")
+	if raw.is_valid_int():
+		return max(0, int(raw))
+	return 0
+
+func _team_for_profile_player(index: int) -> int:
+	var max_per_team := 3
+	if _menu != null:
+		max_per_team = max(1, _menu._max_players_per_team())
+	return TeamId.RED if int(index / max_per_team) % 2 == 0 else TeamId.BLUE
+
+func _lobby_member_count() -> int:
+	return (_menu._snapshot.get("red_members", []) as Array).size() + (_menu._snapshot.get("blue_members", []) as Array).size()
+
+func _lobby_ready_count() -> int:
+	var count := 0
+	for member in (_menu._snapshot.get("red_members", []) as Array):
+		if bool(member.get("lobby_ready", false)):
+			count += 1
+	for member in (_menu._snapshot.get("blue_members", []) as Array):
+		if bool(member.get("lobby_ready", false)):
+			count += 1
+	return count
+
+func _ensure_lobby_ready(timeout_sec: float) -> bool:
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if bool(_menu._snapshot.get("self_lobby_ready", false)):
+			return true
+		_menu._on_lobby_ready_toggled(true)
+		await create_timer(0.25).timeout
+	return bool(_menu._snapshot.get("self_lobby_ready", false))
+
+func _host_start_selection_when_joined(expected_players: int) -> bool:
+	var deadline := Time.get_ticks_msec() + int(FLOW_TIMEOUT_SEC * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if _menu.current_state == _menu.State.CHARACTER_SELECT:
+			return true
+		if _lobby_member_count() >= expected_players:
+			if not bool(_menu._snapshot.get("self_lobby_ready", false)):
+				_menu._on_lobby_ready_toggled(true)
+			elif _lobby_ready_count() >= expected_players:
+				_menu._on_start_selection_pressed()
+		await create_timer(0.25).timeout
+	return _menu.current_state == _menu.State.CHARACTER_SELECT
+
+func _joiner_wait_for_character_selection(desired_team: int) -> bool:
+	var deadline := Time.get_ticks_msec() + int(FLOW_TIMEOUT_SEC * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if _menu.current_state == _menu.State.CHARACTER_SELECT:
+			return true
+		if int(_menu._snapshot.get("team", TeamId.NONE)) == desired_team:
+			_menu._on_lobby_ready_toggled(true)
+		await create_timer(0.25).timeout
+	return _menu.current_state == _menu.State.CHARACTER_SELECT
 
 func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Dictionary, logic: Node, warmup_sec: float, sample_sec: float) -> Dictionary:
 	var max_projectiles := _observed_projectile_spawns
@@ -450,6 +544,21 @@ func _closest_mob(player: Node3D, mobs: Node) -> Node3D:
 			closest = child
 			closest_distance = distance
 	return closest
+
+func _await_supervisor_release() -> bool:
+	var release_file := OS.get_environment("NOIKAR_PROFILE_RELEASE_FILE").strip_edges()
+	if release_file.is_empty():
+		return true
+	var timeout_sec := RELEASE_TIMEOUT_SEC
+	var timeout_env := OS.get_environment("NOIKAR_PROFILE_RELEASE_TIMEOUT_SEC").strip_edges()
+	if timeout_env.is_valid_float():
+		timeout_sec = maxf(0.0, float(timeout_env))
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000.0)
+	while Time.get_ticks_msec() <= deadline:
+		if FileAccess.file_exists(release_file):
+			return true
+		await process_frame
+	return false
 
 func _close_peer() -> void:
 	Input.action_release("move_forward")

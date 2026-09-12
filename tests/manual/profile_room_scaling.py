@@ -52,6 +52,7 @@ POPULATION_FAILED_RE = re.compile(
     r"\[PROFILE_POPULATION_FAILED\]\s+mode=fixed_population\s+expectedcount=(?P<expected>\d+)\s+actualcount=(?P<actual>\d+)\s+seed=(?P<seed>\d+)"
 )
 PASS_RE = re.compile(r"\[LIVE-PROBE\]\s+PASS\b")
+ADMITTED_OID_RE = re.compile(r"\[LIVE-PROBE\]\s+admitted\s+oid=(?P<oid>\S+)")
 FIXED_WORKLOAD_END_RE = re.compile(r"\[LIVE-PROBE\]\s+FIXED_WORKLOAD_END\b")
 SPAWN_READY_RE = re.compile(
     r"\[LIVE-PROBE\]\s+spawned\s+player=.+\s+mobs=(?P<mobs>\d+)\b"
@@ -67,13 +68,16 @@ WORKLOAD_DISTANCE_RE = re.compile(
     r"alive_npcs=(?P<alive>\d+)\s+player_sample_travel=(?P<travel>[0-9.]+)m\s+"
     r"endpoint=(?P<endpoint>[0-9.]+)m\s+invalid=(?P<invalid>\w+)"
 )
-ERROR_RE = re.compile(r"(sync|rpc|error|exception|fail)", re.IGNORECASE)
+ERROR_RE = re.compile(r"(rpc|error|exception|fail)", re.IGNORECASE)
 TELEMETRY_RE = re.compile(
     r"\[LIVE-PROBE\]\s+telemetry\s+npc_stride_counts=(?P<strides>\{[^}]*\})\s+"
     r"interpolator_buffer_counts=(?P<buffers>\{[^}]*\})"
 )
+AUTHORITATIVE_STRIDE_RE = re.compile(
+    r"npc_authoritative_stride_counts=(?P<strides>\{[^}]*\})"
+)
 NPC_COST_KEY_RE = re.compile(
-    r"(?P<name>npc_(?:ai_inclusive|movement|combat))_(?P<field>total_usec|calls|max_usec)=(?P<value>\d+)"
+    r"(?P<name>npc_(?:ai_inclusive|movement_inclusive|movement_prepare_child|movement_slide_child|movement_flush_child|combat))_(?P<field>total_usec|calls|max_usec)=(?P<value>\d+)"
 )
 NPC_COUNTER_KEY_RE = re.compile(
     r"(?P<name>npc_(?:target_scan|avoidance)_visits)=(?P<value>\d+)"
@@ -269,9 +273,11 @@ class ServerLogParser:
             "verified": expected_mob_count is None,
         }
         self.errors: list[str] = []
+        self.active_errors: list[str] = []
+        self.teardown_errors: list[str] = []
         self.perf_lines: list[str] = []
 
-    def feed(self, text: str) -> None:
+    def feed(self, text: str, *, teardown_only: bool = False) -> None:
         for line in text.splitlines():
             if SERVER_READY_RE.search(line):
                 self.ready = True
@@ -304,9 +310,13 @@ class ServerLogParser:
                     "failed": True,
                     "verified": False,
                 }
-            if ERROR_RE.search(line):
-                self.errors.append(line)
-            if "PerfProbe" in line or "perf" in line.lower():
+            if is_error_line(line):
+                if teardown_only:
+                    self.teardown_errors.append(line)
+                else:
+                    self.errors.append(line)
+                    self.active_errors.append(line)
+            if is_perf_line(line):
                 self.perf_lines.append(line)
 
 
@@ -319,10 +329,17 @@ class ClientLogParser:
         self.telemetry: dict[str, dict[str, int]] = {}
         self.human_ready = False
         self.fixed_workload_ended = False
+        self.admitted_oid: str | None = None
         self.errors: list[str] = []
+        self.active_errors: list[str] = []
+        self.teardown_errors: list[str] = []
+        self._active_complete_seen = False
 
     def feed(self, text: str) -> None:
         for line in text.splitlines():
+            admitted = ADMITTED_OID_RE.search(line)
+            if admitted:
+                self.admitted_oid = admitted.group("oid")
             spawn = SPAWN_READY_RE.search(line)
             if spawn:
                 mobs = int(spawn.group("mobs"))
@@ -336,8 +353,10 @@ class ClientLogParser:
                 self.human_ready = True
             if FIXED_WORKLOAD_END_RE.search(line):
                 self.fixed_workload_ended = True
+                self._active_complete_seen = True
             if PASS_RE.search(line):
                 self.passed = True
+                self._active_complete_seen = True
             metric = METRICS_RE.search(line)
             if metric:
                 self.metrics = {
@@ -398,27 +417,42 @@ class ClientLogParser:
                         telemetry.group("buffers")
                     ),
                 }
-            if ERROR_RE.search(line):
+            if is_error_line(line):
                 self.errors.append(line)
+                if self._active_complete_seen:
+                    self.teardown_errors.append(line)
+                else:
+                    self.active_errors.append(line)
 
 
 class CombinedLogParser:
     def __init__(self) -> None:
         self.perf_lines: list[str] = []
         self.npc_cost_intervals: list[dict[str, object]] = []
+        self.authoritative_stride_intervals: list[dict[str, int]] = []
         self.errors: list[str] = []
+        self.active_errors: list[str] = []
+        self.teardown_errors: list[str] = []
 
-    def feed(self, text: str) -> None:
+    def feed(self, text: str, *, teardown_only: bool = False) -> None:
         for line in text.splitlines():
-            if (
-                "PerfProbe" in line or "perf" in line.lower()
-            ) and line not in self.perf_lines:
+            if is_perf_line(line) and line not in self.perf_lines:
                 self.perf_lines.append(line)
                 cost = parse_npc_cost_interval(line)
                 if cost and len(self.npc_cost_intervals) < 40:
                     self.npc_cost_intervals.append(cost)
-            if ERROR_RE.search(line):
-                self.errors.append(line)
+                authoritative = parse_authoritative_stride_interval(line)
+                if (
+                    authoritative is not None
+                    and len(self.authoritative_stride_intervals) < 40
+                ):
+                    self.authoritative_stride_intervals.append(authoritative)
+            if is_error_line(line):
+                if teardown_only:
+                    self.teardown_errors.append(line)
+                else:
+                    self.errors.append(line)
+                    self.active_errors.append(line)
 
 
 def _parse_nullable_float(text: str) -> float | None:
@@ -429,7 +463,7 @@ def _parse_int_dict(text: str) -> dict[str, int]:
     try:
         raw = ast.literal_eval(text)
     except (SyntaxError, ValueError):
-        return {}
+        return _parse_loose_int_dict(text)
     if not isinstance(raw, dict):
         return {}
     parsed: dict[str, int] = {}
@@ -441,6 +475,39 @@ def _parse_int_dict(text: str) -> dict[str, int]:
     return parsed
 
 
+def _parse_loose_int_dict(text: str) -> dict[str, int]:
+    stripped = text.strip()
+    if not stripped.startswith("{") or not stripped.endswith("}"):
+        return {}
+    body = stripped[1:-1].strip()
+    if not body:
+        return {}
+    parsed: dict[str, int] = {}
+    for entry in body.split(","):
+        if ":" not in entry:
+            continue
+        key, value = entry.split(":", 1)
+        key = key.strip().strip("'\"")
+        try:
+            parsed[key] = int(value.strip())
+        except ValueError:
+            continue
+    return parsed
+
+
+def is_perf_line(line: str) -> bool:
+    return "[BENCHMARK]" in line or "PerfProbe" in line or "perf" in line.lower()
+
+
+def is_error_line(line: str) -> bool:
+    return ERROR_RE.search(line) is not None
+
+
+def parser_list_attr(parser: object, name: str) -> list[str]:
+    value = getattr(parser, name, [])
+    return value if isinstance(value, list) else []
+
+
 def parse_npc_cost_interval(line: str) -> dict[str, object]:
     interval: dict[str, object] = {}
     for match in NPC_COST_KEY_RE.finditer(line):
@@ -450,6 +517,121 @@ def parse_npc_cost_interval(line: str) -> dict[str, object]:
     for match in NPC_COUNTER_KEY_RE.finditer(line):
         interval[match.group("name")] = int(match.group("value"))
     return interval
+
+
+def parse_authoritative_stride_interval(line: str) -> dict[str, int] | None:
+    match = AUTHORITATIVE_STRIDE_RE.search(line)
+    if not match:
+        return None
+    return _parse_int_dict(match.group("strides"))
+
+
+def cpu_interval_peak(
+    rows: list[tuple[float, float, int]],
+) -> tuple[float, float]:
+    peak = 0.0
+    resolution = 0.0
+    for index in range(len(rows) - 1):
+        start, end = rows[index], rows[index + 1]
+        wall_seconds = max(0.0, end[0] - start[0])
+        if wall_seconds <= 0.0:
+            continue
+        interval_cpu = cpu_percent_delta(start[1], end[1], wall_seconds)
+        if interval_cpu > peak:
+            peak = interval_cpu
+        if resolution == 0.0 or wall_seconds < resolution:
+            resolution = wall_seconds
+    return peak, resolution
+
+
+def npc_stride_proof(
+    client_results: list[dict[str, object]],
+    npc_rate_hz: int,
+    mob_count: int | None,
+    authoritative_intervals: Sequence[dict[str, int]] | None = None,
+) -> dict[str, object]:
+    stride_by_rate = {30: 1, 15: 2, 10: 3}
+    expected_stride = stride_by_rate.get(npc_rate_hz)
+    exempt = mob_count is None or mob_count == 0
+    client_proofs = []
+    for client in client_results:
+        telemetry = client.get("telemetry", {})
+        observed: dict[str, int] = {}
+        if isinstance(telemetry, dict):
+            raw = telemetry.get("npc_stride_counts", {})
+            if isinstance(raw, dict):
+                observed = {str(key): int(value) for key, value in raw.items()}
+        client_proofs.append(
+            {
+                "index": client.get("index"),
+                "observed": observed,
+                "ok": True
+                if exempt
+                else expected_stride is not None
+                and observed.get(str(expected_stride)) == mob_count,
+                "diagnostic_only": mob_count is not None and mob_count > 0,
+            }
+        )
+    if exempt:
+        return {
+            "ok": True,
+            "exempt": True,
+            "expected_stride": expected_stride,
+            "expected_population": mob_count,
+            "source": "exempt_zero_or_unspecified_population",
+            "clients": client_proofs,
+        }
+    if mob_count is not None and mob_count > 0:
+        intervals = list(authoritative_intervals or [])
+        if not intervals:
+            return {
+                "ok": False,
+                "exempt": False,
+                "expected_stride": expected_stride,
+                "expected_population": mob_count,
+                "source": "server_authoritative_perf_probe",
+                "reason": "missing_authoritative_perf_probe_evidence",
+                "authoritative_observed": {},
+                "authoritative_missing": 0,
+                "authoritative_unknown": 0,
+                "clients": client_proofs,
+            }
+        observed = {str(key): int(value) for key, value in intervals[-1].items()}
+        missing = observed.get("missing", 0)
+        unknown = observed.get("unknown", 0)
+        expected_count = (
+            observed.get(str(expected_stride), 0) if expected_stride is not None else 0
+        )
+        ok = (
+            expected_stride is not None
+            and expected_count == mob_count
+            and missing == 0
+            and unknown == 0
+        )
+        reason = "ok" if ok else "authoritative_stride_mismatch_or_incomplete"
+        return {
+            "ok": ok,
+            "exempt": False,
+            "expected_stride": expected_stride,
+            "expected_population": mob_count,
+            "source": "server_authoritative_perf_probe",
+            "reason": reason,
+            "authoritative_observed": observed,
+            "authoritative_missing": missing,
+            "authoritative_unknown": unknown,
+            "clients": client_proofs,
+        }
+    ok = bool(client_results) and all(
+        client.get("ok", False) for client in client_proofs
+    )
+    return {
+        "ok": ok,
+        "exempt": False,
+        "expected_stride": expected_stride,
+        "expected_population": mob_count,
+        "source": "client_diagnostic_legacy",
+        "clients": client_proofs,
+    }
 
 
 def repo_root_from_script() -> Path:
@@ -756,6 +938,54 @@ def tail(path: Path, lines: int = 80) -> str:
     return "\n".join(data[-lines:])
 
 
+def read_incremental_text(path: Path, offset: int) -> tuple[str, int]:
+    if not path.exists():
+        return "", 0
+    size = path.stat().st_size
+    start = offset if 0 <= offset <= size else 0
+    with path.open("rb") as handle:
+        handle.seek(start)
+        data = handle.read()
+    if not data:
+        return "", start
+    last_newline = data.rfind(b"\n")
+    if last_newline < 0:
+        return "", start
+    safe_end = last_newline + 1
+    return data[:safe_end].decode(errors="replace"), start + safe_end
+
+
+def fixed_workload_completion_seen(clients: Sequence[ClientProcess]) -> bool:
+    return any(
+        cp.parser.fixed_workload_ended or cp.end_monotonic is not None for cp in clients
+    )
+
+
+def update_fixed_workload_closed(
+    current: bool, clients: Sequence[ClientProcess], mob_count: int | None
+) -> bool:
+    return current or (
+        mob_count is not None and fixed_workload_completion_seen(clients)
+    )
+
+
+def route_incremental_noray_log(
+    path: Path,
+    offset: int,
+    combined_parser: CombinedLogParser,
+    server_parsers: dict[int, ServerLogParser],
+    *,
+    teardown_only: bool,
+) -> int:
+    noray_text, new_size = read_incremental_text(path, offset)
+    if not noray_text and new_size == offset:
+        return offset
+    combined_parser.feed(noray_text, teardown_only=teardown_only)
+    for parser in server_parsers.values():
+        parser.feed(noray_text, teardown_only=teardown_only)
+    return new_size
+
+
 def finite_nonnegative_float(value: str) -> float:
     try:
         parsed = float(value)
@@ -769,6 +999,13 @@ def finite_nonnegative_float(value: str) -> float:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rooms", type=int, default=1, choices=[1, 2, 3])
+    parser.add_argument(
+        "--player-count",
+        type=int,
+        default=None,
+        choices=[1, 2, 4, 8],
+        help="launch one hosted no-mob room with this many automated clients",
+    )
     parser.add_argument("--human", action="store_true")
     parser.add_argument("--deadline-seconds", type=int, default=None)
     parser.add_argument(
@@ -794,6 +1031,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.deadline_seconds is None:
         args.deadline_seconds = 1800 if args.human else 180
+    if args.player_count is not None:
+        if args.rooms != 1:
+            parser.error(
+                "--player-count uses one hosted room; do not combine it with --rooms"
+            )
+        if args.human:
+            parser.error("--player-count is incompatible with --human")
+        if args.benchmark is not None:
+            parser.error(
+                "--player-count is a no-mob connected scaling mode; do not combine it with --benchmark"
+            )
+        if args.mob_count not in (None, 0):
+            parser.error(
+                "--player-count requires --mob-count 0 when --mob-count is supplied"
+            )
+        if args.warmup_seconds <= 0.0 or args.sample_seconds <= 0.0:
+            parser.error("--player-count requires positive warmup and sample windows")
+        args.mob_count = 0
     if args.benchmark is not None:
         scenario = BENCHMARK_SCENARIOS[args.benchmark]
         if not scenario["connected"]:
@@ -887,6 +1142,10 @@ def client_probe_env(
     sample_seconds: float,
     human: bool = False,
     mob_count: int | None = None,
+    player_count: int | None = None,
+    player_index: int | None = None,
+    room_oid: str | None = None,
+    release_file: Path | None = None,
 ) -> dict[str, str]:
     env = {
         "NOIKAR_PROFILE_ACCOUNT": account.username,
@@ -904,6 +1163,14 @@ def client_probe_env(
     if mob_count is not None:
         env["NOIKAR_PROFILE_EXPECTED_MOB_COUNT"] = str(mob_count)
         env["NOIKAR_PROFILE_FIXED_ROUTE"] = "1"
+    if player_count is not None:
+        env["NOIKAR_PROFILE_PLAYER_COUNT"] = str(player_count)
+    if player_index is not None:
+        env["NOIKAR_PROFILE_PLAYER_INDEX"] = str(player_index)
+    if room_oid:
+        env["NOIKAR_PROFILE_JOIN_OID"] = room_oid
+    if release_file is not None:
+        env["NOIKAR_PROFILE_RELEASE_FILE"] = str(release_file)
     return complete_env(env)
 
 
@@ -918,11 +1185,15 @@ def evaluate_stable_gate(
     pinned_pids: set[int] | None = None,
     server_parsers: dict[int, ServerLogParser] | None = None,
     mob_count: int | None = None,
+    expected_clients: int | None = None,
 ) -> StableGate:
     stable_wall = 0.0 if stable_started is None else max(0.0, now - stable_started)
     expected_pids = set(active_pids) if pinned_pids is None else set(pinned_pids)
     exact_server_count = len(active_pids) == rooms and set(active_pids) == expected_pids
-    clients_ready = len(clients) == rooms and all(cp.parser.ready for cp in clients)
+    required_clients = rooms if expected_clients is None else expected_clients
+    clients_ready = len(clients) == required_clients and all(
+        cp.parser.ready for cp in clients
+    )
     sampling_ok = (
         len(samples) == rooms
         and set(samples) == expected_pids
@@ -978,6 +1249,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     combined_parser = CombinedLogParser()
     clients: list[ClientProcess] = []
     samples: dict[int, list[tuple[float, float, int]]] = {}
+    release_file = tmp / "release-clients"
     success = False
     run_started = time.monotonic()
     stop_request = StopRequest()
@@ -1017,7 +1289,8 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         wait_http("http://127.0.0.1:18090/api/v1/health", time.monotonic() + 60)
 
-        accounts = generate_accounts(args.rooms)
+        expected_clients = args.player_count or args.rooms
+        accounts = generate_accounts(expected_clients)
         secrets_to_redact.extend(a.password for a in accounts)
         for account in accounts:
             register_account("http://127.0.0.1:18090", account, secrets_to_redact)
@@ -1040,7 +1313,9 @@ def run(argv: Sequence[str] | None = None) -> int:
 
         wait_listener("127.0.0.1", 8890, time.monotonic() + 45, "Noray")
 
-        for i, account in enumerate(accounts):
+        def launch_client(
+            i: int, account: Account, room_oid: str | None = None
+        ) -> None:
             client_log = tmp / f"client-{i}.log"
             client_env = client_probe_env(
                 account=account,
@@ -1049,6 +1324,10 @@ def run(argv: Sequence[str] | None = None) -> int:
                 sample_seconds=args.sample_seconds,
                 human=args.human,
                 mob_count=args.mob_count,
+                player_count=args.player_count,
+                player_index=i if args.player_count is not None else None,
+                room_oid=room_oid,
+                release_file=release_file,
             )
 
             proc = start_process(
@@ -1074,6 +1353,28 @@ def run(argv: Sequence[str] | None = None) -> int:
                 )
             )
 
+        if args.player_count is None:
+            for i, account in enumerate(accounts):
+                launch_client(i, account)
+        else:
+            launch_client(0, accounts[0])
+            oid_deadline = time.monotonic() + min(
+                60.0, max(10.0, args.deadline_seconds / 3.0)
+            )
+            while time.monotonic() < oid_deadline:
+                host = clients[0]
+                if host.log_path.exists():
+                    host.parser.feed(host.log_path.read_text(errors="replace"))
+                if host.parser.admitted_oid:
+                    break
+                if host.process.poll() is not None:
+                    raise RuntimeError("host client exited before publishing room OID")
+                time.sleep(0.5)
+            if not clients[0].parser.admitted_oid:
+                raise RuntimeError("timed out waiting for host room OID")
+            for i, account in enumerate(accounts[1:], start=1):
+                launch_client(i, account, clients[0].parser.admitted_oid)
+
         deadline = time.monotonic() + args.deadline_seconds
         stable_started: float | None = None
         pinned_pids: set[int] | None = None
@@ -1092,6 +1393,16 @@ def run(argv: Sequence[str] | None = None) -> int:
                 if cp.process.poll() is not None and cp.end_monotonic is None:
                     cp.end_monotonic = now
 
+        def refresh_noray_log(*, teardown_only: bool) -> None:
+            nonlocal last_noray_size
+            last_noray_size = route_incremental_noray_log(
+                noray_log,
+                last_noray_size,
+                combined_parser,
+                server_parsers,
+                teardown_only=teardown_only,
+            )
+
         while time.monotonic() < deadline and not stop_request.requested:
             now = time.monotonic()
             rows = read_process_rows()
@@ -1099,16 +1410,21 @@ def run(argv: Sequence[str] | None = None) -> int:
             cleanup.server_pids.update(server_pids)
             for pid in server_pids:
                 server_parsers.setdefault(pid, ServerLogParser(args.mob_count))
-            if noray_log.exists() and noray_log.stat().st_size != last_noray_size:
-                noray_text = noray_log.read_text(errors="replace")
-                combined_parser.feed(noray_text)
-                for parser in server_parsers.values():
-                    parser.feed(noray_text)
-                last_noray_size = noray_log.stat().st_size
             refresh_client_logs(now)
+            fixed_workload_closed = update_fixed_workload_closed(
+                fixed_workload_closed, clients, args.mob_count
+            )
+            refresh_noray_log(teardown_only=fixed_workload_closed)
+            if (
+                clients
+                and all(cp.parser.passed for cp in clients)
+                and not release_file.exists()
+            ):
+                release_file.write_text("release\n", encoding="utf-8")
             if (
                 pinned_pids is None
                 and len(server_pids) == args.rooms
+                and len(clients) == expected_clients
                 and all(cp.parser.ready for cp in clients)
                 and (
                     args.mob_count is None
@@ -1131,13 +1447,12 @@ def run(argv: Sequence[str] | None = None) -> int:
                         if sample:
                             if args.mob_count is not None:
                                 refresh_client_logs(time.monotonic())
-                                if any(
-                                    cp.parser.fixed_workload_ended
-                                    or cp.process.poll() is not None
-                                    for cp in clients
+                                if fixed_workload_completion_seen(clients) or any(
+                                    cp.process.poll() is not None for cp in clients
                                 ):
                                     active_end_rows_discarded += 1
                                     fixed_workload_closed = True
+                                    refresh_noray_log(teardown_only=True)
                                     continue
                             samples.setdefault(pid, []).append(
                                 (sample_time, sample[0], sample[1])
@@ -1167,6 +1482,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             time.sleep(1)
 
         refresh_client_logs(time.monotonic())
+        refresh_noray_log(teardown_only=fixed_workload_closed)
 
         if args.human:
             active_pids = filter_owned_server_pids(
@@ -1182,6 +1498,7 @@ def run(argv: Sequence[str] | None = None) -> int:
                 pinned_pids=pinned_pids,
                 server_parsers=server_parsers,
                 mob_count=args.mob_count,
+                expected_clients=expected_clients,
             )
             result = build_result(
                 args.rooms,
@@ -1229,6 +1546,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             pinned_pids=pinned_pids,
             server_parsers=server_parsers,
             mob_count=args.mob_count,
+            expected_clients=expected_clients,
         )
         if not gate.ok and legacy_mode:
             raise RuntimeError(f"stable sampling gate failed: {gate}")
@@ -1253,6 +1571,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             ),
             npc_rate_hz=args.npc_rate_hz,
             mob_count=args.mob_count,
+            player_count=args.player_count,
         )
 
         print_summary(result, secrets_to_redact)
@@ -1267,6 +1586,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             and (gate.stable_wall_seconds >= 8.0 if legacy_mode else True)
             and isinstance(result_gate, dict)
             and bool(result_gate["sample_window"])
+            and bool(result_gate["active_sample_errors"])
             and bool(result_gate["alive"])
             and bool(result_gate["mob_population_stable"])
             and bool(result_gate["movement"])
@@ -1275,6 +1595,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             and bool(result_gate["observed_near_npc"])
             and bool(result_gate["marker_verified"])
             and bool(result_gate["workload_valid"])
+            and bool(result_gate["npc_stride_counts"])
             and bool(result_gate["fixed_workload_end_observed"])
             and isinstance(room_results, list)
             and len(room_results) == args.rooms
@@ -1330,6 +1651,7 @@ def build_result(
     human: bool = False,
     supervisor_pid: int | None = None,
     requested_deadline_seconds: int | None = None,
+    player_count: int | None = None,
 ) -> dict[str, object]:
     profile = profile or ProfileWindow(stable_started=None)
     sample_start = (
@@ -1339,6 +1661,7 @@ def build_result(
     )
     per_room = []
     cpu_values = []
+    cpu_interval_peaks = []
     rss_values = []
     sample_durations = []
     for pid, rows in sorted(samples.items()):
@@ -1351,22 +1674,30 @@ def build_result(
                 )
         if len(sample_rows) < 2:
             cpu = 0.0
+            peak_cpu = 0.0
+            peak_resolution = 0.0
             rss = 0
         else:
             start_row, end_row = sample_rows[0], sample_rows[-1]
             duration = max(0.0, end_row[0] - start_row[0])
             sample_durations.append(duration)
             cpu = cpu_percent_delta(start_row[1], end_row[1], duration)
+            peak_cpu, peak_resolution = cpu_interval_peak(sample_rows)
             rss = max(r[2] for r in sample_rows)
         cpu_values.append(cpu)
+        cpu_interval_peaks.append(peak_cpu)
         rss_values.append(rss)
         parser = server_parsers.get(pid, ServerLogParser())
         per_room.append(
             {
                 "pid": pid,
                 "cpu_percent": round(cpu, 2),
+                "cpu_interval_peak_percent": round(peak_cpu, 2),
+                "cpu_interval_sample_resolution_seconds": round(peak_resolution, 2),
+                "cpu_interval_peak_source": "adjacent ps CPU-time deltas over sampled rows",
                 "rss_kb": rss,
                 "sync_rpc_errors": parser.errors[:10],
+                "teardown_rpc_errors": parser.teardown_errors[:10],
                 "perf_probe": parser.perf_lines[-10:],
                 "sample_count": len(sample_rows),
             }
@@ -1383,6 +1714,8 @@ def build_result(
                 "metrics": cp.parser.metrics,
                 "telemetry": cp.parser.telemetry,
                 "errors": cp.parser.errors[:10],
+                "active_errors": parser_list_attr(cp.parser, "active_errors")[:10],
+                "teardown_errors": parser_list_attr(cp.parser, "teardown_errors")[:10],
             }
         )
     actual_sample_duration = min(sample_durations) if sample_durations else 0.0
@@ -1433,6 +1766,30 @@ def build_result(
         if not fixed_population_mode
         else all(getattr(cp.parser, "fixed_workload_ended", False) for cp in clients)
     )
+    active_server_error_count = (
+        len(combined_parser.errors)
+        if combined_parser.errors
+        else sum(len(parser.errors) for parser in server_parsers.values())
+    )
+    teardown_server_error_count = (
+        len(combined_parser.teardown_errors)
+        if combined_parser.teardown_errors
+        else sum(len(parser.teardown_errors) for parser in server_parsers.values())
+    )
+    active_error_count = (
+        sum(len(parser_list_attr(cp.parser, "active_errors")) for cp in clients)
+        + active_server_error_count
+    )
+    teardown_error_count = (
+        sum(len(parser_list_attr(cp.parser, "teardown_errors")) for cp in clients)
+        + teardown_server_error_count
+    )
+    stride_proof = npc_stride_proof(
+        client_results,
+        npc_rate_hz,
+        mob_count,
+        combined_parser.authoritative_stride_intervals,
+    )
     population_markers = [
         dict(server_parsers[pid].population_marker, pid=pid)
         for pid in sorted(samples)
@@ -1440,6 +1797,7 @@ def build_result(
     ]
     result = {
         "rooms_requested": rooms,
+        "player_count": player_count if player_count is not None else len(clients),
         "requested_npc_rate_hz": npc_rate_hz,
         "requested_warmup_seconds": profile.requested_warmup_seconds,
         "requested_sample_seconds": profile.requested_sample_seconds,
@@ -1453,15 +1811,21 @@ def build_result(
         "fixed_population_mode": fixed_population_mode,
         "marker_verified": gate.population_marker_verified,
         "population_markers": population_markers,
+        "npc_stride_observed": stride_proof,
         "active_sample_proof": {
             "fixed_workload_end_observed": fixed_workload_end_observed,
             "discarded_end_rows": profile.active_end_rows_discarded,
+            "active_error_count": active_error_count,
+            "teardown_error_count": teardown_error_count,
+            "active_server_error_count": active_server_error_count,
+            "teardown_server_error_count": teardown_server_error_count,
         },
         "clients": client_results,
         "gate": {
             "functional": all(
                 c["passed"] and c["returncode"] == 0 for c in client_results
             ),
+            "active_sample_errors": active_error_count == 0,
             "sampling": gate.sampling_ok,
             "sample_window": sample_window_ok,
             "stable_wall_seconds": round(gate.stable_wall_seconds, 2),
@@ -1476,15 +1840,22 @@ def build_result(
             "workload_valid": workload_valid,
             "fixed_workload_end_observed": fixed_workload_end_observed,
             "marker_verified": gate.population_marker_verified,
+            "npc_stride_counts": bool(stride_proof["ok"]),
             "no_early_client_exit": gate.no_early_client_exit,
             "pass_count": sum(1 for c in client_results if c["passed"]),
         },
         "rooms": per_room,
         "combined_server_perf_probe": combined_parser.perf_lines[-20:],
         "npc_cost_intervals": combined_parser.npc_cost_intervals[-20:],
+        "npc_authoritative_stride_intervals": combined_parser.authoritative_stride_intervals[
+            -20:
+        ],
         "combined_server_errors": combined_parser.errors[:20],
+        "combined_server_teardown_errors": combined_parser.teardown_errors[:20],
         "aggregate": {
             "cpu_percent_total": round(sum(cpu_values), 2),
+            "cpu_interval_peak_percent": round(max(cpu_interval_peaks, default=0.0), 2),
+            "cpu_interval_peak_source": "max adjacent ps CPU-time delta across rooms",
             "rss_kb_total": sum(rss_values),
             "cpu_variance": round(variance(cpu_values), 2),
             "rss_variance": round(variance(rss_values), 2),
@@ -1515,6 +1886,7 @@ def variance(values: Sequence[float]) -> float:
 
 def print_summary(result: dict[str, object], secrets_to_redact: Iterable[str]) -> None:
     print("Noikar local room profiling summary")
+    print(f"Players: {result.get('player_count')} rooms={result['rooms_requested']}")
     print(f"Gate: {result['gate']}")
     for client in result["clients"]:  # type: ignore[index]
         print(

@@ -1,0 +1,611 @@
+{
+  "environment": {
+    "godot_version": "4.7",
+    "os": "macOS local",
+    "run_order": "alternating rates across three replicate groups: R1 30/15/10, R2 10/15/30, R3 15/30/10",
+    "sample_seconds_requested": 65,
+    "warmup_seconds": 10,
+    "workload": "one connected client, 20 NPC fixed population"
+  },
+  "gates": {
+    "all_nine_gate_all_true": true,
+    "all_nine_stride_ok": true,
+    "total_error_counts": {
+      "client_errors": 0,
+      "combined_server_errors": 0,
+      "room_sync_rpc_errors": 0,
+      "sync_rpc_errors": 0
+    }
+  },
+  "limitations": [
+    "Python interval CPU estimator differs from earlier A-C shell estimator.",
+    "A-C bypassed Noray; D-A is not player-only cost.",
+    "Earlier B retained components, physics, and sync; it was not pure physics.",
+    "Closest workload distances near 28-31 m do not prove melee-heavy combat.",
+    "Route differences, client load, and local OS prevent VPS conclusions.",
+    "FPS and automated gates are not visual jitter validation.",
+    "No production rates or player rollback behavior changed."
+  ],
+  "relative_cpu_reductions_from_medians": {
+    "10_vs_15_percent": 4.07,
+    "10_vs_30_percent": 9.36,
+    "15_vs_30_percent": 5.52
+  },
+  "runs": [
+    {
+      "actual_sample_duration_seconds": 65.55,
+      "client_actual_sample_seconds": 65.0,
+      "cpu_avg_percent": 12.22,
+      "cpu_interval_peak_percent": 13.47,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "room_sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.21,
+        "workload_valid": true
+      },
+      "order": 1,
+      "rate_hz": 30,
+      "replicate": "R1",
+      "rss_kb_total": 131408,
+      "sample_count": null,
+      "source_sha256": "cb7d22fd4ae11517cb5b31560ad1907ecbf0226332cded6876f8a8497374243c",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 1,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 1,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    },
+    {
+      "actual_sample_duration_seconds": 65.61,
+      "client_actual_sample_seconds": 65.0,
+      "cpu_avg_percent": 11.43,
+      "cpu_interval_peak_percent": 12.56,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "room_sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.3,
+        "workload_valid": true
+      },
+      "order": 2,
+      "rate_hz": 15,
+      "replicate": "R1",
+      "rss_kb_total": 123792,
+      "sample_count": null,
+      "source_sha256": "7a9dfcd41d2da6aa357b1c68de863fdee523d9fc5e986721ac00769b48c16a27",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 2,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 2,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    },
+    {
+      "actual_sample_duration_seconds": 65.62,
+      "client_actual_sample_seconds": 65.0,
+      "cpu_avg_percent": 10.85,
+      "cpu_interval_peak_percent": 12.44,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "room_sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.31,
+        "workload_valid": true
+      },
+      "order": 3,
+      "rate_hz": 10,
+      "replicate": "R1",
+      "rss_kb_total": 126656,
+      "sample_count": null,
+      "source_sha256": "1c99cc8d98ef6a7f1544e4d7a4ea660cc968e25192f01f1e375fbccafda55e45",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 3,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 3,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    },
+    {
+      "actual_sample_duration_seconds": 65.62,
+      "client_actual_sample_seconds": null,
+      "cpu_avg_percent": 10.84,
+      "cpu_interval_peak_percent": 12.44,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.27,
+        "workload_valid": true
+      },
+      "order": 4,
+      "rate_hz": 10,
+      "replicate": "R2",
+      "rss_kb_total": 126768,
+      "sample_count": 64,
+      "source_sha256": "f832ad401ea9d9feb0bffa8aa19fd05844952812be38b46774129d0ffe410d7b",
+      "startup_duration_seconds": 8.19,
+      "stride_proof": {
+        "expected_stride": 3,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 3,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": 10.0
+    },
+    {
+      "actual_sample_duration_seconds": 65.48,
+      "client_actual_sample_seconds": null,
+      "cpu_avg_percent": 11.24,
+      "cpu_interval_peak_percent": 12.54,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.1,
+        "workload_valid": true
+      },
+      "order": 5,
+      "rate_hz": 15,
+      "replicate": "R2",
+      "rss_kb_total": 122480,
+      "sample_count": 64,
+      "source_sha256": "7cf7b2363bb00c3cf0dc3bc3e0459017cb6d6fa16cb65f484ae4a748705cac8d",
+      "startup_duration_seconds": 8.0,
+      "stride_proof": {
+        "expected_stride": 2,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 2,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": 10.0
+    },
+    {
+      "actual_sample_duration_seconds": 65.56,
+      "client_actual_sample_seconds": null,
+      "cpu_avg_percent": 11.96,
+      "cpu_interval_peak_percent": 13.48,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.17,
+        "workload_valid": true
+      },
+      "order": 6,
+      "rate_hz": 30,
+      "replicate": "R2",
+      "rss_kb_total": 102400,
+      "sample_count": 64,
+      "source_sha256": "f8db8c9ca325dd2b36d7a1a478143a943a027312fcad516432975f9822153fd6",
+      "startup_duration_seconds": 8.02,
+      "stride_proof": {
+        "expected_stride": 1,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 1,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": 10.0
+    },
+    {
+      "actual_sample_duration_seconds": 65.59,
+      "client_actual_sample_seconds": 65.0,
+      "client_travel_m": {
+        "movement": 83.67,
+        "player_sample_endpoint": 33.45,
+        "player_sample_travel": 717.11
+      },
+      "cpu_avg_percent": 11.3,
+      "cpu_interval_peak_percent": 12.46,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 80.2,
+        "workload_valid": true
+      },
+      "nearest_npc_distance_m": {
+        "max": 49.56,
+        "mean": 41.83,
+        "min": 28.55
+      },
+      "observed_npcs_within_90m": {
+        "max": 10,
+        "min": 10
+      },
+      "order": 7,
+      "rate_hz": 15,
+      "replicate": "R3",
+      "rss_kb_total": 121488,
+      "sample_count": null,
+      "source_sha256": "9c35e1decb11a4309f7586bd941fb2102ebb12f83f8d23ce1181492099985d1f",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 2,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 2,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    },
+    {
+      "actual_sample_duration_seconds": 65.42,
+      "client_actual_sample_seconds": 65.0,
+      "client_travel_m": {
+        "movement": 51.0,
+        "player_sample_endpoint": 88.3,
+        "player_sample_travel": 635.97
+      },
+      "cpu_avg_percent": 11.85,
+      "cpu_interval_peak_percent": 13.53,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.13,
+        "workload_valid": true
+      },
+      "nearest_npc_distance_m": {
+        "max": 52.22,
+        "mean": 40.32,
+        "min": 29.54
+      },
+      "observed_npcs_within_90m": {
+        "max": 10,
+        "min": 10
+      },
+      "order": 8,
+      "rate_hz": 30,
+      "replicate": "R3",
+      "rss_kb_total": 127920,
+      "sample_count": null,
+      "source_sha256": "484995609c49457a97dba36e1dd6da0aad9bc058a7889768570440894095e5ba",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 1,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 1,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    },
+    {
+      "actual_sample_duration_seconds": 65.59,
+      "client_actual_sample_seconds": 65.0,
+      "client_travel_m": {
+        "movement": 40.73,
+        "player_sample_endpoint": 81.11,
+        "player_sample_travel": 643.64
+      },
+      "cpu_avg_percent": 10.7,
+      "cpu_interval_peak_percent": 11.59,
+      "cpu_interval_sample_resolution_seconds": 1.03,
+      "error_counts": {
+        "client_errors": 0,
+        "combined_server_errors": 0,
+        "sync_rpc_errors": 0
+      },
+      "gate_all_true": true,
+      "gates": {
+        "alive": true,
+        "clients_ready": true,
+        "exact_server_count": true,
+        "fixed_workload_end_observed": true,
+        "functional": true,
+        "marker_verified": true,
+        "mob_movement": true,
+        "mob_population_stable": true,
+        "movement": true,
+        "no_early_client_exit": true,
+        "npc_stride_counts": true,
+        "observed_near_npc": true,
+        "pass_count": 1,
+        "projectile": true,
+        "sample_window": true,
+        "sampling": true,
+        "stable_wall_seconds": 81.26,
+        "workload_valid": true
+      },
+      "nearest_npc_distance_m": {
+        "max": 50.83,
+        "mean": 40.79,
+        "min": 29.8
+      },
+      "observed_npcs_within_90m": {
+        "max": 10,
+        "min": 10
+      },
+      "order": 9,
+      "rate_hz": 10,
+      "replicate": "R3",
+      "rss_kb_total": 123280,
+      "sample_count": null,
+      "source_sha256": "22a54c975d17604d5168d76afd3d994870917f0199cbdb933b2dc14208802da0",
+      "startup_duration_seconds": null,
+      "stride_proof": {
+        "expected_stride": 3,
+        "missing": 0,
+        "observed_count": 20,
+        "observed_stride": 3,
+        "ok": true,
+        "unknown": 0
+      },
+      "warmup_duration_seconds": null
+    }
+  ],
+  "sanitization": "Numeric benchmark metrics only; raw logs, URLs, credentials, artifact paths, and private stdout strings excluded.",
+  "schema_version": 1,
+  "source_content_sha256": {
+    "common/perf_probe.gd": "4981847fe575ef48f0db787544bc1d7a5e37576863c2deaaae2de9d097f5ad15",
+    "tests/manual/profile_room_scaling.py": "7eccb517d90bdb32b242d4f162a9ff7aab028c7002fcaf043d2dcf82b586d64e"
+  },
+  "summary_by_rate_hz": {
+    "10": {
+      "actual_sample_duration_seconds": {
+        "max": 65.62,
+        "median": 65.62,
+        "min": 65.59
+      },
+      "cpu_avg_percent": {
+        "max": 10.85,
+        "median": 10.84,
+        "min": 10.7,
+        "values": [
+          10.85,
+          10.84,
+          10.7
+        ]
+      },
+      "cpu_interval_peak_percent": {
+        "max": 12.44,
+        "median": 12.44,
+        "min": 11.59
+      },
+      "n": 3,
+      "rss_kb_total": {
+        "max": 126768,
+        "median": 126656,
+        "min": 123280
+      }
+    },
+    "15": {
+      "actual_sample_duration_seconds": {
+        "max": 65.61,
+        "median": 65.59,
+        "min": 65.48
+      },
+      "cpu_avg_percent": {
+        "max": 11.43,
+        "median": 11.3,
+        "min": 11.24,
+        "values": [
+          11.43,
+          11.24,
+          11.3
+        ]
+      },
+      "cpu_interval_peak_percent": {
+        "max": 12.56,
+        "median": 12.54,
+        "min": 12.46
+      },
+      "n": 3,
+      "rss_kb_total": {
+        "max": 123792,
+        "median": 122480,
+        "min": 121488
+      }
+    },
+    "30": {
+      "actual_sample_duration_seconds": {
+        "max": 65.56,
+        "median": 65.55,
+        "min": 65.42
+      },
+      "cpu_avg_percent": {
+        "max": 12.22,
+        "median": 11.96,
+        "min": 11.85,
+        "values": [
+          12.22,
+          11.96,
+          11.85
+        ]
+      },
+      "cpu_interval_peak_percent": {
+        "max": 13.53,
+        "median": 13.48,
+        "min": 13.47
+      },
+      "n": 3,
+      "rss_kb_total": {
+        "max": 131408,
+        "median": 127920,
+        "min": 102400
+      }
+    }
+  }
+}

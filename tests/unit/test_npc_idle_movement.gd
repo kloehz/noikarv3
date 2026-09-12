@@ -219,6 +219,13 @@ func test_player_path_stays_out_of_npc_timed_fastpath() -> void:
 	var summary: Dictionary = _probe._consume_npc_cost_summary()
 	assert_eq(summary.movement.calls, 0, "Human/player movement is not counted as NPC fastpath work")
 
+func test_local_authority_returns_false_without_multiplayer_peer() -> void:
+	var body := _make_body("2")
+	var logic: LogicComponent = body.get_node("LogicComponent") as LogicComponent
+	multiplayer.multiplayer_peer = null
+
+	assert_false(logic._is_local_authority(), "Teardown/no-peer authority checks fail closed without Godot multiplayer errors")
+
 func test_telemetry_off_does_not_record_child_movement_costs() -> void:
 	_probe._set_npc_cost_recording_for_tests(false)
 	var body := _make_body("MOB_IDLE_TEST")
