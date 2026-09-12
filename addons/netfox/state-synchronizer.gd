@@ -57,6 +57,7 @@ var _diff_state_encoder: _DiffHistoryEncoder
 
 # State
 var _ackd_state: Dictionary = {}
+var _replica_ready_peers: Dictionary = {}
 var _next_full_state_tick: int
 var _next_diff_ack_tick: int
 
@@ -121,12 +122,34 @@ func _get_configuration_warnings() -> PackedStringArray:
 	)
 
 func _connect_signals() -> void:
-	NetworkTime.after_tick.connect(_after_tick)
-	NetworkTime.after_tick_loop.connect(_after_loop)
+	if not is_inside_tree():
+		return
+	if not NetworkTime.after_tick.is_connected(_after_tick):
+		NetworkTime.after_tick.connect(_after_tick)
+	if not NetworkTime.after_tick_loop.is_connected(_after_loop):
+		NetworkTime.after_tick_loop.connect(_after_loop)
 
 func _disconnect_signals() -> void:
-	NetworkTime.after_tick.disconnect(_after_tick)
-	NetworkTime.after_tick_loop.disconnect(_after_loop)
+	if NetworkTime.after_tick.is_connected(_after_tick):
+		NetworkTime.after_tick.disconnect(_after_tick)
+	if NetworkTime.after_tick_loop.is_connected(_after_loop):
+		NetworkTime.after_tick_loop.disconnect(_after_loop)
+
+func _connect_peer_disconnect_signal() -> void:
+	if multiplayer and not multiplayer.peer_disconnected.is_connected(_handle_peer_disconnected):
+		multiplayer.peer_disconnected.connect(_handle_peer_disconnected)
+
+func _disconnect_peer_disconnect_signal() -> void:
+	if multiplayer and multiplayer.peer_disconnected.is_connected(_handle_peer_disconnected):
+		multiplayer.peer_disconnected.disconnect(_handle_peer_disconnected)
+
+func _connect_connected_to_server_signal() -> void:
+	if multiplayer and not multiplayer.connected_to_server.is_connected(_handle_connected_to_server):
+		multiplayer.connected_to_server.connect(_handle_connected_to_server)
+
+func _disconnect_connected_to_server_signal() -> void:
+	if multiplayer and multiplayer.connected_to_server.is_connected(_handle_connected_to_server):
+		multiplayer.connected_to_server.disconnect(_handle_connected_to_server)
 
 func _enter_tree() -> void:
 	if Engine.is_editor_hint():
@@ -134,17 +157,24 @@ func _enter_tree() -> void:
 
 	if not visibility_filter:
 		visibility_filter = PeerVisibilityFilter.new()
-	if not visibility_filter.get_parent():
-		add_child(visibility_filter)
+	_install_replica_ready_visibility_filter()
+	_ensure_visibility_filter_in_tree()
 
+	_connect_peer_disconnect_signal()
+	_connect_connected_to_server_signal()
 	_connect_signals.call_deferred()
 	process_settings.call_deferred()
+	_send_replica_ready_ack.call_deferred()
 
 func _exit_tree() -> void:
 	if Engine.is_editor_hint():
 		return
 
 	_disconnect_signals()
+	_disconnect_peer_disconnect_signal()
+	_disconnect_connected_to_server_signal()
+	_uninstall_replica_ready_visibility_filter()
+	_replica_ready_peers.clear()
 
 func _after_tick(_dt: float, tick: int) -> void:
 	if is_multiplayer_authority():
@@ -165,6 +195,83 @@ func _reprocess_settings() -> void:
 
 	_properties_dirty = false
 	process_settings()
+
+func _ensure_visibility_filter_in_tree() -> void:
+	if visibility_filter and not visibility_filter.get_parent() and _has_multiplayer_peer():
+		add_child(visibility_filter)
+
+func _install_replica_ready_visibility_filter() -> void:
+	if visibility_filter:
+		visibility_filter.add_visibility_filter(_is_peer_replica_ready)
+
+func _uninstall_replica_ready_visibility_filter() -> void:
+	if visibility_filter:
+		visibility_filter.remove_visibility_filter(_is_peer_replica_ready)
+
+func _is_peer_replica_ready(peer_id: int) -> bool:
+	if not is_multiplayer_authority():
+		return true
+	return _replica_ready_peers.has(peer_id)
+
+func _get_connected_peer_ids() -> PackedInt32Array:
+	if not multiplayer:
+		return PackedInt32Array()
+	return multiplayer.get_peers()
+
+func _mark_replica_ready_if_connected(peer_id: int, connected_peers: Variant = null) -> bool:
+	var peers: PackedInt32Array = connected_peers if connected_peers != null else _get_connected_peer_ids()
+	if peer_id <= 0 or not peers.has(peer_id):
+		return false
+
+	_replica_ready_peers[peer_id] = true
+	_refresh_replica_ready_visibility(peers)
+	return true
+
+func _mark_replica_not_ready(peer_id: int) -> void:
+	_replica_ready_peers.erase(peer_id)
+	_ackd_state.erase(peer_id)
+	_refresh_replica_ready_visibility()
+
+func _refresh_replica_ready_visibility(peers: Variant = null) -> void:
+	if visibility_filter:
+		if peers == null:
+			visibility_filter.update_visibility()
+		else:
+			visibility_filter.update_visibility(peers)
+
+func _handle_peer_disconnected(peer_id: int) -> void:
+	_mark_replica_not_ready(peer_id)
+
+func _handle_connected_to_server() -> void:
+	_ensure_visibility_filter_in_tree()
+	_send_replica_ready_ack()
+
+func _has_multiplayer_peer() -> bool:
+	return multiplayer and multiplayer.multiplayer_peer != null
+
+func _can_send_replica_ready_ack() -> bool:
+	if not is_inside_tree():
+		return false
+	if not _has_multiplayer_peer():
+		return false
+	if is_multiplayer_authority():
+		return false
+	return get_multiplayer_authority() > 0
+
+func _send_replica_ready_ack() -> void:
+	if not _can_send_replica_ready_ack():
+		return
+
+	_ack_replica_ready.rpc_id(get_multiplayer_authority())
+
+@rpc("any_peer", "reliable", "call_remote")
+func _ack_replica_ready() -> void:
+	if not is_multiplayer_authority():
+		return
+
+	var sender_id := multiplayer.get_remote_sender_id()
+	if _mark_replica_ready_if_connected(sender_id):
+		_logger.trace("Peer %d ack'd replica readiness", [sender_id])
 
 func _broadcast_state(tick: int, state: _PropertySnapshot) -> void:
 	var is_sending_diffs: bool = NetworkRollback.enable_diff_states # TODO: Don't tie to a rollback setting?
