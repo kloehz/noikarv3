@@ -1,6 +1,6 @@
 # Netfox Audit
 
-This audit is based on the current project code and existing local benchmark artifacts. Absolute CPU percentages are local-machine observations only; conclusions below focus on scaling shape and code paths.
+This audit is based on the current project code, existing local benchmark artifacts, and the first production VPS evidence from deployment commit `50395c0`. Local CPU percentages remain local-machine observations only; production VPS results below are evidence for that host and run shape, not capacity limits.
 
 ## Current Architecture
 
@@ -233,9 +233,29 @@ Impact of reducing rates:
 - Reducing AI target search from 5 Hz could reduce group scans, but combat responsiveness and pet/mob target switching may degrade.
 - Reducing server simulation/physics below 30 Hz is higher risk because player rollback, movement, dash, projectiles, cooldowns, and combat timing all currently share that clock.
 
+## Production VPS Evidence and Correctness Blocker
+
+Deployment commit `50395c0` completed successfully through Deploy World Runtime run `34666205456`; the VPS current symlink pointed to that commit for the measurements below. The VPS has 2 vCPU and 8,136,536 KiB RAM. Production rooms use 20 mobs; the test deliberately did not mutate global Noray or service configuration to force zero mobs.
+
+Valid production evidence so far:
+
+| Players | Window | Mobs | Result | CPU avg | CPU interval peak | RSS max | Notes |
+| ---: | --- | ---: | --- | ---: | ---: | ---: | --- |
+| 1 | 5 s warmup, 65 s sample | 20 | client PASS; zero active client errors; 65 sample rows | 26.73% | 49.08% | 103,768 KiB | Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-1p-xyzc_tyd`; remote `/proc` utime+stime and resident pages sampled over one persistent SSH connection. Treat as one run, not capacity. |
+| 2 | 2 s warmup, 10 s sample | 20 | both clients PASS; zero active errors | 36.50% | 41.61% | 104,680 KiB | Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-2p-a98ovbt2`; short smoke after peer guards only, not comparable to the long 1-player result. |
+
+Invalid or blocked production evidence:
+
+- A long 2-player attempt is invalid because the player node was freed during workload. The harness now fails cleanly instead of dereferencing a freed instance.
+- 4-player production attempts are invalid because dynamic Player and Mob `StateSynchronizer` paths were missing before nodes materialized, producing hundreds of `Node not found`, `Failed to get path from RPC`, and `Invalid packet` errors. A discriminating repeat with sequential admission plus a 10 s lobby hold still failed: all four clients were admitted but none passed; RPC missing counts were client0=289, client1=23, client2=223, client3=331, and fixed population observed was 0. Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-4p-impg1qcq`. The failure persisted despite admission and settle timing, which supports a product Netfox spawn/state ordering defect rather than merely simultaneous join timing. The remote room server cleaned up after clients exited.
+
+Peer lifecycle fixes present in `50395c0`: `AbilityHud` and `NpcTickInterpolator` no-peer guards, plus clean probe failure on a freed player. These fixes do **not** fix the spawn/state ordering bug.
+
+Current VPS matrix status: blocked on correctness. Do not report 2-player or 4-player long capacity and do not extrapolate from the single valid long 1-player run or the short 2-player smoke. Next recommendation: fix or gate `StateSynchronizer` delivery until dynamic `MultiplayerSpawner` nodes exist and are ready; validate 4 clients with 20 mobs and zero active RPC path errors; then resume repeated 1/2/4 VPS measurements.
+
 ## Player Scaling Benchmark
 
-Existing measured data now provides a clean local connected 1/2/4-player no-mob matrix with three repeats per count, 5 s warmup, 65 s requested samples, exit 0, all gates passing, and zero `active_sample_errors`. It still does **not** provide production VPS capacity data or a clean 8-player gameplay sample. Local macOS CPU/RSS noise is visible, so conclusions should prefer medians and scaling shape over individual percentages.
+Existing measured data provides a clean local connected 1/2/4-player no-mob matrix with three repeats per count, 5 s warmup, 65 s requested samples, exit 0, all gates passing, and zero `active_sample_errors`. The first production VPS evidence now adds one valid long 1-player/20-mob run and one short 2-player smoke, but the VPS matrix is blocked on a 4-player spawn/state ordering correctness defect and still does **not** provide production capacity. Local macOS CPU/RSS noise is visible, so conclusions should prefer medians and scaling shape over individual percentages.
 
 Existing local observations from `BENCHMARK_SERVER.md`:
 
@@ -247,7 +267,7 @@ Existing local observations from `BENCHMARK_SERVER.md`:
 | 4 | 11.78, 13.32, 13.23% / 13.23% | 12.63, 14.52, 14.46% / 14.46% | 100,320; 124,736; 101,072 KiB / 101,072 KiB | 4 observable rollback nodes | 4 synchronized player entities | not measured | Local connected no-mob repeats; exits 0; gates pass; active errors 0 |
 | 8 | not measured cleanly | not measured cleanly | not measured cleanly | not measured | not measured | not measured | Current room rules likely cap play at 6 total players (`max_players_per_team=3` across RED/BLUE) unless capacity is changed separately |
 
-Do not compare A and D/connected rows as pure player deltas without caveats: A bypasses Noray/backend/client-probe; connected rows use the profile harness. Treat the 1/2/4 local matrix as evidence that CPU and rollback/state breadth increase with players, not as VPS capacity. Treat an eight-player failure under current rules as a capacity/rules finding, not automatically as a benchmark harness failure.
+Do not compare A and D/connected rows as pure player deltas without caveats: A bypasses Noray/backend/client-probe; connected rows use the profile harness. Treat the 1/2/4 local matrix as evidence that CPU and rollback/state breadth increase with players, not as VPS capacity. Treat the single valid long VPS 1-player run as one production observation, not capacity. Treat an eight-player failure under current rules as a capacity/rules finding, not automatically as a benchmark harness failure.
 
 The profile harness now separates `active_sample_errors` from teardown-only server errors. Active sample errors block benchmark validity. Teardown-only errors are reported but nonblocking when they occur after fixed workload completion: 1-player repeats had `[0, 0, 0]`, 2-player repeats `[0, 2, 2]`, and 4-player repeats `[12, 6, 12]`. These do not invalidate the active samples above, but they remain a real disconnect cleanup defect/follow-up.
 
@@ -450,7 +470,7 @@ Current AI runs from the authoritative simulation tick but internally throttles 
 
 - Verify and remove duplicated `StateSynchronizer` properties if Netfox does not de-duplicate them.
 - Keep using `NOIKAR_NPC_SNAPSHOT_HZ=15` or `10` in controlled tests; existing local data suggests measurable CPU reduction for 20 NPCs.
-- Use the completed local no-mob 1/2/4 matrix to guide player rollback/state audit, then repeat the relevant matrix on the VPS before capacity decisions; for 8 players, either adjust room capacity deliberately or record the current six-player cap as the finding.
+- Use the completed local no-mob 1/2/4 matrix to guide player rollback/state audit, but do not resume VPS capacity decisions until the production 4-player spawn/state ordering blocker is fixed and a 4-client/20-mob run has zero active RPC path errors.
 
 ### HIGH IMPACT / MEDIUM RISK
 
@@ -474,7 +494,7 @@ Current AI runs from the authoritative simulation tick but internally throttles 
 - Do not remove player rollback globally.
 - Do not assume Netfox is the primary problem.
 - Do not rewrite mobs; current code already keeps them out of rollback.
-- Do not rely on local CPU percentages for VPS capacity planning.
+- Do not rely on local CPU percentages, a single valid 1-player VPS run, or a short 2-player smoke for VPS capacity planning.
 
 ## Answer: top 3 likely reasons for excess CPU
 
