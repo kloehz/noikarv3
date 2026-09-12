@@ -4,7 +4,7 @@ extends SceneTree
 ## Run without --headless so GameManager starts as a client.
 
 const FLOW_TIMEOUT_SEC := 45.0
-const GAMEPLAY_TIMEOUT_SEC := 20.0
+const GAMEPLAY_TIMEOUT_SEC := 60.0
 const LONG_POLL_MARGIN_SEC := 2.0
 const ORBIT_MIN_DISTANCE := 20.0
 const ORBIT_MAX_DISTANCE := 25.0
@@ -230,6 +230,40 @@ func _local_peer_id() -> int:
 		return 0
 	return multiplayer_api.get_unique_id()
 
+func _has_multiplayer_peer() -> bool:
+	if _menu == null:
+		return false
+	var multiplayer_api := _menu.get_multiplayer()
+	return multiplayer_api != null and multiplayer_api.has_multiplayer_peer()
+
+func _owned_player_invalid_reason(reason: String) -> String:
+	var safe_peer_id := _local_peer_id()
+	return "%s monotonic_msec=%d multiplayer_peer_exists=%s safe_local_peer_id=%d replacement_player_exists=%s players_children=%s" % [
+		reason,
+		Time.get_ticks_msec(),
+		str(_has_multiplayer_peer()).to_lower(),
+		safe_peer_id,
+		str(_replacement_player_exists(safe_peer_id)).to_lower(),
+		str(_players_child_names()),
+	]
+
+func _replacement_player_exists(peer_id: int) -> bool:
+	if _main == null or peer_id <= 0:
+		return false
+	var players := _main.get_node_or_null("Players")
+	return players != null and players.get_node_or_null(str(peer_id)) != null
+
+func _players_child_names() -> Array[String]:
+	var names: Array[String] = []
+	if _main == null:
+		return names
+	var players := _main.get_node_or_null("Players")
+	if players == null:
+		return names
+	for child in players.get_children():
+		names.append(str(child.name))
+	return names
+
 func _profile_player_index() -> int:
 	var raw := OS.get_environment("NOIKAR_PROFILE_PLAYER_INDEX")
 	if raw.is_valid_int():
@@ -302,7 +336,7 @@ func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Diction
 		var now_msec := Time.get_ticks_msec()
 		if not is_instance_valid(player):
 			_close_peer()
-			return {"ok": false, "reason": "owned player disappeared during profiling"}
+			return {"ok": false, "reason": _owned_player_invalid_reason("owned player disappeared during profiling")}
 		if bool(player.get("sync_is_dead")):
 			_close_peer()
 			return {"ok": false, "reason": "owned player died during profiling"}
@@ -321,7 +355,7 @@ func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Diction
 					max_mob_displacement = max(max_mob_displacement, mob_start.distance_to(mob.global_position))
 	_close_peer()
 	if not is_instance_valid(player):
-		return {"ok": false, "reason": "owned player disappeared during profiling"}
+		return {"ok": false, "reason": _owned_player_invalid_reason("owned player disappeared during profiling")}
 	var workload_metrics := _finish_workload_sample(workload_sample, player)
 	if bool(workload_metrics.workload_invalid):
 		return {"ok": false, "reason": "sustained orbit invalid: no NPCs were within 90m during the measurement window"}
@@ -349,7 +383,7 @@ func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: D
 		var now_msec := Time.get_ticks_msec()
 		if not is_instance_valid(player):
 			_close_peer()
-			return {"ok": false, "reason": "owned player disappeared during profiling"}
+			return {"ok": false, "reason": _owned_player_invalid_reason("owned player disappeared during profiling")}
 		if bool(player.get("sync_is_dead")):
 			_close_peer()
 			return {"ok": false, "reason": "owned player died during profiling"}
@@ -371,7 +405,7 @@ func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: D
 	_emit_fixed_workload_end()
 	_close_peer()
 	if not is_instance_valid(player):
-		return {"ok": false, "reason": "owned player disappeared during profiling"}
+		return {"ok": false, "reason": _owned_player_invalid_reason("owned player disappeared during profiling")}
 	var workload_metrics := _finish_workload_sample(workload_sample, player, expected_mob_count)
 	if bool(workload_metrics.workload_invalid):
 		return {"ok": false, "reason": "fixed route invalid: no player travel was recorded during the measurement window"}

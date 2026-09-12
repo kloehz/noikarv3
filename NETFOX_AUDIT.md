@@ -1,6 +1,6 @@
 # Netfox Audit
 
-This audit is based on the current project code, existing local benchmark artifacts, and the first production VPS evidence from deployment commit `50395c0`. Local CPU percentages remain local-machine observations only; production VPS results below are evidence for that host and run shape, not capacity limits.
+This audit is based on the current project code, existing local benchmark artifacts, first production VPS evidence from deployment commit `50395c0`, and follow-up `c30bf6e` spawn/state handshake evidence. Local CPU percentages remain local-machine observations only; production VPS results below are evidence for that host and run shape, not capacity limits.
 
 ## Current Architecture
 
@@ -233,9 +233,9 @@ Impact of reducing rates:
 - Reducing AI target search from 5 Hz could reduce group scans, but combat responsiveness and pet/mob target switching may degrade.
 - Reducing server simulation/physics below 30 Hz is higher risk because player rollback, movement, dash, projectiles, cooldowns, and combat timing all currently share that clock.
 
-## Production VPS Evidence and Correctness Blocker
+## Production VPS Evidence and Current Blocker
 
-Deployment commit `50395c0` completed successfully through Deploy World Runtime run `34666205456`; the VPS current symlink pointed to that commit for the measurements below. The VPS has 2 vCPU and 8,136,536 KiB RAM. Production rooms use 20 mobs; the test deliberately did not mutate global Noray or service configuration to force zero mobs.
+Deployment commit `50395c0` completed successfully through Deploy World Runtime run `34666205456`; the VPS current symlink pointed to that commit for the first measurements below. Later deploy workflow run `34668695652` succeeded for commit `c30bf6e`, which restored full snapshots to `unreliable_ordered` while preserving the per-`StateSynchronizer` peer replica-ready ACK/visibility handshake introduced in `790c13a`. The VPS has 2 vCPU and 8,136,536 KiB RAM. Production rooms use 20 mobs; the tests deliberately did not mutate global Noray or service configuration to force zero mobs.
 
 Valid production evidence so far:
 
@@ -244,18 +244,24 @@ Valid production evidence so far:
 | 1 | 5 s warmup, 65 s sample | 20 | client PASS; zero active client errors; 65 sample rows | 26.73% | 49.08% | 103,768 KiB | Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-1p-xyzc_tyd`; remote `/proc` utime+stime and resident pages sampled over one persistent SSH connection. Treat as one run, not capacity. |
 | 2 | 2 s warmup, 10 s sample | 20 | both clients PASS; zero active errors | 36.50% | 41.61% | 104,680 KiB | Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-2p-a98ovbt2`; short smoke after peer guards only, not comparable to the long 1-player result. |
 
-Invalid or blocked production evidence:
+Invalid or historically blocked production evidence:
 
 - A long 2-player attempt is invalid because the player node was freed during workload. The harness now fails cleanly instead of dereferencing a freed instance.
-- 4-player production attempts are invalid because dynamic Player and Mob `StateSynchronizer` paths were missing before nodes materialized, producing hundreds of `Node not found`, `Failed to get path from RPC`, and `Invalid packet` errors. A discriminating repeat with sequential admission plus a 10 s lobby hold still failed: all four clients were admitted but none passed; RPC missing counts were client0=289, client1=23, client2=223, client3=331, and fixed population observed was 0. Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-4p-impg1qcq`. The failure persisted despite admission and settle timing, which supports a product Netfox spawn/state ordering defect rather than merely simultaneous join timing. The remote room server cleaned up after clients exited.
+- Before the handshake fix, 4-player production attempts were invalid because dynamic Player and Mob `StateSynchronizer` paths were missing before nodes materialized, producing hundreds of `Node not found`, `Failed to get path from RPC`, and `Invalid packet` errors. A discriminating repeat with sequential admission plus a 10 s lobby hold still failed: all four clients were admitted but none passed; RPC missing counts were client0=289, client1=23, client2=223, client3=331, and fixed population observed was 0. Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-4p-impg1qcq`. The failure persisted despite admission and settle timing, which supported a product Netfox spawn/state ordering defect rather than merely simultaneous join timing.
+- Commit `dc9dff4` changed full snapshots to reliable as an experiment. Local validation passed, but VPS evidence showed it was insufficient and that reliable snapshots congested or delayed reliable `MultiplayerSpawner` traffic, so that experiment was reverted.
+- Commit `790c13a` introduced per-`StateSynchronizer` peer replica-ready ACK/visibility gating. Commit `c30bf6e` restored full snapshots to `unreliable_ordered` while preserving that handshake.
 
-Peer lifecycle fixes present in `50395c0`: `AbilityHud` and `NpcTickInterpolator` no-peer guards, plus clean probe failure on a freed player. These fixes do **not** fix the spawn/state ordering bug.
+Current verified outcome after `c30bf6e`:
 
-Current VPS matrix status: blocked on correctness. Do not report 2-player or 4-player long capacity and do not extrapolate from the single valid long 1-player run or the short 2-player smoke. Next recommendation: fix or gate `StateSynchronizer` delivery until dynamic `MultiplayerSpawner` nodes exist and are ready; validate 4 clients with 20 mobs and zero active RPC path errors; then resume repeated 1/2/4 VPS measurements.
+- Local 4-player/20-mob behavior: 4/4 clients functionally PASS, exact 20 mobs throughout, and zero active `StateSynchronizer` RPC/path/invalid-packet errors. The only known remaining evidence gate was `npc_stride_counts`.
+- VPS 4-player/20-mob attempts with the default 20 s gameplay readiness window could still be too short: runs variably saw 0 mobs or only some clients ready, but had zero client-side `StateSynchronizer` path errors after `c30bf6e`.
+- One discriminating VPS run with gameplay readiness increased to 60 s got all four clients ready and exact population, confirming spawns eventually materialize. During profiling, one client lost its multiplayer peer entirely (`multiplayer_peer_exists=false`, peer id reset to 0, no replacement player, empty Players), and the runner aborted. CPU avg 55.1%, peak 65.1%, and RSS 107656 KiB came from only 9 sample rows and are invalid/incomplete; do **not** include them as capacity results. Artifact `/var/folders/kq/sw184q4x2vz7vp4dcxhk4hg40000gn/T/noikar-vps-4p-5wq1t9p0`.
+
+Current VPS matrix status: the original active `StateSynchronizer` spawn-before-state path defect is fixed based on local and VPS evidence. The comparable 4-player matrix remains blocked by a distinct WAN peer-disconnect/startup-latency issue. Teardown may still emit `RollbackSynchronizer` RPC path errors after peers disconnect; do not conflate that teardown defect with the fixed active `StateSynchronizer` defect. Next investigation: determine why Noray/ENet peers drop under 4 players plus 20 mobs and measure transport/bandwidth; do not present optimization as an established cause.
 
 ## Player Scaling Benchmark
 
-Existing measured data provides a clean local connected 1/2/4-player no-mob matrix with three repeats per count, 5 s warmup, 65 s requested samples, exit 0, all gates passing, and zero `active_sample_errors`. The first production VPS evidence now adds one valid long 1-player/20-mob run and one short 2-player smoke, but the VPS matrix is blocked on a 4-player spawn/state ordering correctness defect and still does **not** provide production capacity. Local macOS CPU/RSS noise is visible, so conclusions should prefer medians and scaling shape over individual percentages.
+Existing measured data provides a clean local connected 1/2/4-player no-mob matrix with three repeats per count, 5 s warmup, 65 s requested samples, exit 0, all gates passing, and zero `active_sample_errors`. The first production VPS evidence adds one valid long 1-player/20-mob run and one short 2-player smoke. Follow-up `c30bf6e` evidence fixes the active 4-player `StateSynchronizer` spawn-before-state path defect, but the comparable VPS matrix remains blocked by a distinct WAN peer-disconnect/startup-latency issue and still does **not** provide production capacity. Local macOS CPU/RSS noise is visible, so conclusions should prefer medians and scaling shape over individual percentages.
 
 Existing local observations from `BENCHMARK_SERVER.md`:
 
@@ -470,7 +476,7 @@ Current AI runs from the authoritative simulation tick but internally throttles 
 
 - Verify and remove duplicated `StateSynchronizer` properties if Netfox does not de-duplicate them.
 - Keep using `NOIKAR_NPC_SNAPSHOT_HZ=15` or `10` in controlled tests; existing local data suggests measurable CPU reduction for 20 NPCs.
-- Use the completed local no-mob 1/2/4 matrix to guide player rollback/state audit, but do not resume VPS capacity decisions until the production 4-player spawn/state ordering blocker is fixed and a 4-client/20-mob run has zero active RPC path errors.
+- Use the completed local no-mob 1/2/4 matrix to guide player rollback/state audit, but do not resume VPS capacity decisions until the distinct WAN peer-disconnect/startup-latency issue is understood and comparable 4-client/20-mob runs complete with valid sample windows.
 
 ### HIGH IMPACT / MEDIUM RISK
 
