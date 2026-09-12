@@ -41,7 +41,8 @@ func _run() -> void:
 	var profile_password := OS.get_environment("NOIKAR_PROFILE_PASSWORD")
 	_menu.account_edit.text = profile_account if not profile_account.is_empty() else "debugtest1"
 	_menu.password_edit.text = profile_password if not profile_password.is_empty() else "debugpassword123"
-	_menu.noray_address_edit.text = "127.0.0.1"
+	var noray_host := OS.get_environment("NOIKAR_NORAY_HOST").strip_edges()
+	_menu.noray_address_edit.text = noray_host if not noray_host.is_empty() else "127.0.0.1"
 	_menu._on_enter_lobby_pressed()
 	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.ROOM, 15.0):
 		_fail("login did not reach ROOM")
@@ -299,6 +300,9 @@ func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Diction
 	while Time.get_ticks_msec() < start_msec + int(total_sec * 1000.0):
 		await process_frame
 		var now_msec := Time.get_ticks_msec()
+		if not is_instance_valid(player):
+			_close_peer()
+			return {"ok": false, "reason": "owned player disappeared during profiling"}
 		if bool(player.get("sync_is_dead")):
 			_close_peer()
 			return {"ok": false, "reason": "owned player died during profiling"}
@@ -316,6 +320,8 @@ func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Diction
 					var mob_start: Vector3 = mob_start_positions[mob]
 					max_mob_displacement = max(max_mob_displacement, mob_start.distance_to(mob.global_position))
 	_close_peer()
+	if not is_instance_valid(player):
+		return {"ok": false, "reason": "owned player disappeared during profiling"}
 	var workload_metrics := _finish_workload_sample(workload_sample, player)
 	if bool(workload_metrics.workload_invalid):
 		return {"ok": false, "reason": "sustained orbit invalid: no NPCs were within 90m during the measurement window"}
@@ -341,6 +347,9 @@ func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: D
 	while Time.get_ticks_msec() < start_msec + int(total_sec * 1000.0):
 		await process_frame
 		var now_msec := Time.get_ticks_msec()
+		if not is_instance_valid(player):
+			_close_peer()
+			return {"ok": false, "reason": "owned player disappeared during profiling"}
 		if bool(player.get("sync_is_dead")):
 			_close_peer()
 			return {"ok": false, "reason": "owned player died during profiling"}
@@ -361,6 +370,8 @@ func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: D
 					max_mob_displacement = max(max_mob_displacement, mob_start.distance_to(mob.global_position))
 	_emit_fixed_workload_end()
 	_close_peer()
+	if not is_instance_valid(player):
+		return {"ok": false, "reason": "owned player disappeared during profiling"}
 	var workload_metrics := _finish_workload_sample(workload_sample, player, expected_mob_count)
 	if bool(workload_metrics.workload_invalid):
 		return {"ok": false, "reason": "fixed route invalid: no player travel was recorded during the measurement window"}

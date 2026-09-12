@@ -26,6 +26,8 @@ func _update_labels() -> void:
 		r_label.text = "R: Ready"
 
 func _find_local_player_state() -> ServerState:
+	if not multiplayer.has_multiplayer_peer():
+		return null
 	var players := get_tree().root.find_child("Players", true, false)
 	if players == null:
 		return null

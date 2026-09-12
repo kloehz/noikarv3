@@ -74,8 +74,10 @@ func _uses_sparse_mode() -> bool:
 	return sparse
 
 func _compute_sparse_mode() -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return false
 	var root_is_authority := is_multiplayer_authority()
-	if root != null:
+	if root != null and is_instance_valid(root):
 		root_is_authority = root.is_multiplayer_authority()
 	return enabled and _get_effective_snapshot_stride() > 1 and not root_is_authority
 

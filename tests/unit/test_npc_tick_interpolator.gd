@@ -63,6 +63,23 @@ func test_sparse_mode_uses_received_synchronizer_stride_not_local_interpolator_k
 	assert_false((pair.root as Node3D).is_multiplayer_authority(), "Test fixture simulates a client-side NPC root")
 	assert_true(interpolator.call("_uses_sparse_mode"), "Client sparse mode must follow cached NpcStateSynchronizer effective stride")
 
+func test_sparse_mode_is_disabled_without_multiplayer_peer() -> void:
+	var pair := _make_client_pair(3)
+	var interpolator := pair.interpolator as TickInterpolator
+	multiplayer.multiplayer_peer = null
+
+	assert_false(interpolator.call("_compute_sparse_mode"), "Sparse client interpolation must not query authority state without a multiplayer peer")
+
+func test_sparse_mode_ignores_invalid_root_when_checking_authority() -> void:
+	var interpolator := _interpolator_script.new() as TickInterpolator
+	var stale_root := Node3D.new()
+	interpolator.root = stale_root
+	interpolator.properties = [":global_position", ":quaternion"]
+	stale_root.free()
+	add_child_autofree(interpolator)
+
+	assert_false(interpolator.call("_compute_sparse_mode"), "Invalid root references must not be dereferenced for sparse authority detection")
+
 func test_sparse_samples_interpolate_fractional_positions_between_source_ticks() -> void:
 	var pair := _make_client_pair(3)
 	var root := pair.root as Node3D
