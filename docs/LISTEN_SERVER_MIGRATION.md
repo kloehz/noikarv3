@@ -147,6 +147,15 @@ regression run is **433/433 GUT tests, 2,552 assertions**, still with the six ex
 fixture warnings and 24 reported fixture orphans described above. Temporary logs
 remain local. These diagnostic tests can be rolled back without changing gameplay.
 
+## Disposable account integration fixture
+
+Backend integration tests create their own PostgreSQL cluster with `initdb`/
+`pg_ctl`, random loopback ports, a compiled API child, fresh signing material and
+two disposable accounts. They never read a live `DATABASE_URL` or reuse existing
+accounts. Cleanup terminates only those owned children and that cluster. `-short`
+explicitly excludes these process tests; a passing short run is not database proof.
+This harness is an independently reversible test-only unit.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
