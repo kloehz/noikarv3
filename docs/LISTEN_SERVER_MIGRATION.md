@@ -175,6 +175,23 @@ is additive; rollback disables the new routes, without altering legacy tables.
 No live backend rollout is authorized or performed. Existing Internet HTTP account
 configuration remains an acceptance blocker until HTTPS is separately configured.
 
+## Account-client credential boundary
+
+AuthService now issues/redeems/closes scoped rooms while retaining login only in its
+owner. Remote HTTP is rejected before default login or any listen-room call; debug
+HTTP requires `NOIKAR_ISOLATED_AUTH_API=1` and a numeric loopback URL. Explicit legacy
+diagnostics remain separate. Account/room credentials are never returned in guest
+admission identities. API requests have a ten-second timeout and do not follow
+redirects: an owned origin/trap test reproduced one forwarded GET before the fix,
+then zero after it. Empty 204 responses no longer trigger a JSON parser error.
+
+Five client boundary tests pass. With the pinned `GODOT_BIN` supplied, backend
+`go test -race ./... -count=1` also runs the real Godot HTTP client against an owned
+API/PostgreSQL fixture, verifying create/issue/redeem, replay denial, closed-room
+denial and retained login, plus a real redirect trap. Without `GODOT_BIN`, those
+Godot integrations explicitly skip and are not certified by a backend-only pass.
+Rollback is the AuthService boundary and its tests/probe, not legacy account data.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

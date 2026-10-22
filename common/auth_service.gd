@@ -17,7 +17,7 @@ func _ready() -> void:
 	ProjectSettings.set_setting(API_URL_SETTING, _resolve_api_url(configured_url, OS.get_environment(BACKEND_URL_ENV), _is_headless_runtime()))
 
 func _is_headless_runtime() -> bool:
-	return OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless"
+	return GameManager.is_dedicated_runtime()
 
 func _resolve_api_url(configured_url: String, env_override: String, is_headless: bool) -> String:
 	var normalized_override := env_override.strip_edges().trim_suffix("/")
@@ -58,6 +58,8 @@ func validate_room_creator_ticket(ticket: String, provision_instance_id: String,
 	return {"accepted": response.status == 200 and not validated_account_id.is_empty(), "account_id": validated_account_id}
 
 func _authenticate(path: String, account_name: String, password: String) -> Dictionary:
+	if not OS.get_cmdline_user_args().has("--legacy-dedicated") and not _listen_api_allowed():
+		return {"accepted": false, "reason": "Account API requires HTTPS; isolated debug tests may explicitly opt into numeric loopback HTTP."}
 	var response := await _request(path, {
 		"username": account_name.strip_edges(),
 		"password": password,
@@ -73,6 +75,50 @@ func _authenticate(path: String, account_name: String, password: String) -> Dict
 		return {"accepted": false, "reason": "Invalid authentication response"}
 	return {"accepted": true}
 
+static func listen_api_url_allowed(url: String, debug_build: bool, isolated: bool) -> bool:
+	var secure := RegEx.new()
+	secure.compile("^https://([A-Za-z0-9.-]+|\\[[0-9A-Fa-f:]+\\])(:[0-9]{1,5})?/?$")
+	if secure.search(url) != null: return true
+	if not debug_build or not isolated: return false
+	var loopback := RegEx.new()
+	loopback.compile("^http://(127\\.0\\.0\\.1|\\[::1\\])(:[0-9]{1,5})?/?$")
+	return loopback.search(url) != null
+
+func _listen_api_allowed() -> bool:
+	return listen_api_url_allowed(str(ProjectSettings.get_setting(API_URL_SETTING, DEFAULT_API_URL)), OS.is_debug_build(), OS.get_environment("NOIKAR_ISOLATED_AUTH_API") == "1")
+
+func _listen_request(path: String, body: Dictionary, bearer := "", room_credential := "") -> Dictionary:
+	if not _listen_api_allowed(): return {"status": 0, "data": {"error": "HTTPS account API required"}}
+	var headers := {}
+	if not room_credential.is_empty(): headers["X-Room-Credential"] = room_credential
+	return await _request(path, body, bearer, headers)
+
+func create_listen_room(session_id: String) -> Dictionary:
+	if access_token.is_empty() or session_id.is_empty(): return {"accepted": false}
+	var response := await _listen_request("/api/v1/listen-rooms", {"session_id": session_id}, access_token)
+	var data: Dictionary = response.data
+	var identity = data.get("host_identity", {})
+	if response.status != 201 or not identity is Dictionary or identity.get("account_id") != account_id or str(identity.get("username", "")).is_empty() or str(data.get("room_id", "")).is_empty() or str(data.get("room_credential", "")).is_empty():
+		return {"accepted": false, "reason": str(data.get("error", "Room creation failed"))}
+	return {"accepted": true, "room_id": str(data.room_id), "room_credential": str(data.room_credential), "host_identity": {"account_id": str(identity.account_id), "username": str(identity.username)}}
+
+func issue_listen_ticket(room_id: String) -> Dictionary:
+	if access_token.is_empty() or room_id.is_empty(): return {"accepted": false, "ticket": ""}
+	var response := await _listen_request("/api/v1/listen-rooms/" + room_id.uri_encode() + "/tickets", {"issue": true}, access_token)
+	var ticket := str(response.data.get("ticket", ""))
+	return {"accepted": response.status == 201 and not ticket.is_empty(), "ticket": ticket}
+
+func redeem_listen_ticket(room_id: String, ticket: String, room_credential: String) -> Dictionary:
+	if room_id.is_empty() or ticket.is_empty() or room_credential.is_empty(): return {"accepted": false}
+	var response := await _listen_request("/api/v1/listen-rooms/" + room_id.uri_encode() + "/admissions", {"ticket": ticket}, "", room_credential)
+	var data: Dictionary = response.data
+	if response.status != 200 or str(data.get("account_id", "")).is_empty() or str(data.get("username", "")).is_empty(): return {"accepted": false}
+	return {"accepted": true, "account_id": str(data.account_id), "username": str(data.username)}
+
+func close_listen_room(room_id: String, room_credential: String) -> void:
+	if room_id.is_empty() or room_credential.is_empty(): return
+	await _listen_request("/api/v1/listen-rooms/" + room_id.uri_encode() + "/close", {"close": true}, "", room_credential)
+
 func clear_session() -> void:
 	access_token = ""
 	account_id = ""
@@ -80,6 +126,10 @@ func clear_session() -> void:
 
 func _request(path: String, body: Dictionary, bearer_token := "", extra_headers: Dictionary = {}) -> Dictionary:
 	var request := HTTPRequest.new()
+	request.timeout = 10.0
+	# Never forward bearer/room credentials to a redirect target, including a
+	# downgrade from the configured HTTPS API. Treat redirects as API failures.
+	request.max_redirects = 0
 	add_child(request)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	if not bearer_token.is_empty():
@@ -95,5 +145,5 @@ func _request(path: String, body: Dictionary, bearer_token := "", extra_headers:
 	request.queue_free()
 	var status := int(completed[1]) if completed.size() > 1 else 0
 	var raw: PackedByteArray = completed[3] if completed.size() > 3 else PackedByteArray()
-	var data: Variant = JSON.parse_string(raw.get_string_from_utf8())
+	var data: Variant = JSON.parse_string(raw.get_string_from_utf8()) if not raw.is_empty() else {}
 	return {"status": status, "data": data if data is Dictionary else {}}
