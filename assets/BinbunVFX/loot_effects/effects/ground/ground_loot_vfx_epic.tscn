@@ -256,6 +256,7 @@ mesh = SubResource("CylinderMesh_d4pam")
 [node name="ShapeParticles" type="GPUParticles3D" parent="." unique_id=1307130547]
 material_override = SubResource("ShaderMaterial_rk0nn")
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_2lmkj")
 draw_pass_1 = SubResource("QuadMesh_ompvl")
 

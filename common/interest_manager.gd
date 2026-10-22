@@ -17,6 +17,7 @@ extends RefCounted
 
 ## Entities farther than this from a player's own character are not synced
 ## to that player. Comfortably beyond the visible play area (~40m).
+const PeerAvatarCacheScript = preload("res://common/net/PeerAvatarCache.gd")
 const SYNC_RADIUS := 90.0
 const SYNC_RADIUS_SQ := SYNC_RADIUS * SYNC_RADIUS
 
@@ -31,13 +32,22 @@ static func apply_to_mob(entity: BaseEntity) -> void:
 		_register(ss.visibility_filter, entity, players)
 
 static func _register(filter: PeerVisibilityFilter, entity: BaseEntity, players: Node) -> void:
+	if is_instance_valid(players) and not players.has_meta(&"interest_avatar_cache"):
+		var cache := PeerAvatarCacheScript.new()
+		cache.bind_players(players)
+		players.set_meta(&"interest_avatar_cache", cache)
 	filter.add_visibility_filter(InterestManager._is_visible_to_peer.bind(entity, players))
 	filter.update_mode = PeerVisibilityFilter.UpdateMode.PER_TICK_LOOP
 
 static func _is_visible_to_peer(peer_id: int, entity: BaseEntity, players: Node) -> bool:
 	if not is_instance_valid(entity):
 		return true
-	var player := players.get_node_or_null(str(peer_id)) if is_instance_valid(players) else null
+	var player: Node3D
+	if is_instance_valid(players):
+		if players.has_meta(&"interest_avatar_cache"):
+			player = players.get_meta(&"interest_avatar_cache").avatar(peer_id)
+		else:
+			player = players.get_node_or_null(str(peer_id)) as Node3D
 	if player == null or not (player is Node3D):
 		# Peer has no avatar to measure from (joining, server, spectator):
 		# keep the entity visible rather than dropping state blindly.

@@ -39,6 +39,12 @@ var _perf_probe: Node = null
 var _perf_probe_npc_cost_enabled: bool = false
 @export var mouse_sensitivity: float = 0.005
 
+# Opt-in passive dormancy never disables the body, hurtbox, combat or timers.
+const NPC_DORMANT_RECOVERY_INTERVAL := 0.2
+var _npc_dormant_recovery_remaining: float = 0.0
+var _npc_last_movement_pose := Transform3D.IDENTITY
+var _npc_has_movement_pose: bool = false
+
 func _ready() -> void:
 	if Engine.is_editor_hint(): return
 	
@@ -189,12 +195,14 @@ func simulate_authoritative_tick(delta: float, tick: int) -> void:
 
 func _simulate_tick(delta: float, _tick: int, is_fresh: bool = true) -> void:
 	if not entity or entity.get("sync_is_dead"): 
+		_npc_has_movement_pose = false
 		input_axis = Vector2.ZERO
 		return
 	# RollbackSynchronizer dispatches every rollback-aware descendant itself.
 	# Entity-root grace guards cannot stop this component, so enforce grace here
 	# before AI, dash, or movement mutates simulated state.
 	if entity.has_method("is_spawn_grace_active") and entity.is_spawn_grace_active():
+		_npc_has_movement_pose = false
 		input_axis = Vector2.ZERO
 		is_shooting = false
 		current_velocity = Vector3.ZERO
@@ -325,11 +333,14 @@ func _apply_movement(delta: float) -> void:
 
 func _apply_npc_movement(delta: float, record_npc_movement_children: bool = false) -> void:
 	if not entity: return
+	if _skip_dormant_npc_movement(delta):
+		return
 	if input_axis != Vector2.ZERO or current_velocity != Vector3.ZERO or is_dashing or camera_pivot != null or entity.rotation.y != look_yaw:
 		if record_npc_movement_children:
 			_apply_timed_npc_movement(delta)
 		else:
 			_apply_movement(delta)
+		_record_npc_movement_pose()
 		return
 
 	entity.velocity = Vector3.ZERO
@@ -344,6 +355,37 @@ func _apply_npc_movement(delta: float, record_npc_movement_children: bool = fals
 		entity.move_and_slide()
 		entity.force_update_transform()
 	current_velocity = entity.velocity / NetworkTime.physics_factor
+	_record_npc_movement_pose()
+
+## Stable distant passive mobs omit native movement only between bounded
+## recovery queries. New overlap recovery is delayed at most 200ms; the
+## experiment stays disabled until world/collision tests validate that policy.
+func _skip_dormant_npc_movement(delta: float) -> bool:
+	var ai := entity.get_node_or_null("AIComponent")
+	if ai == null or not ai.has_method("wants_movement_dormancy") or not ai.wants_movement_dormancy():
+		_npc_dormant_recovery_remaining = 0.0
+		return false
+	var pose_changed := not _npc_has_movement_pose or entity.global_transform != _npc_last_movement_pose
+	if pose_changed or input_axis != Vector2.ZERO or current_velocity != Vector3.ZERO \
+		or entity.velocity != Vector3.ZERO or is_dashing or is_shooting \
+		or camera_pivot != null or entity.rotation.y != look_yaw \
+		or (_server_state != null and (_server_state.get("is_stunned") or float(_server_state.get("knockback_remaining_time")) > 0.0)):
+		ai.wake_from_dormancy()
+		_npc_dormant_recovery_remaining = 0.0
+		return false
+	_npc_dormant_recovery_remaining -= delta
+	if _npc_dormant_recovery_remaining <= 0.000001:
+		_npc_dormant_recovery_remaining = NPC_DORMANT_RECOVERY_INTERVAL
+		return false
+	return true
+
+func _record_npc_movement_pose() -> void:
+	if _npc_has_movement_pose and entity.global_transform != _npc_last_movement_pose:
+		var ai := entity.get_node_or_null("AIComponent")
+		if ai != null and ai.has_method("wants_movement_dormancy") and ai.wants_movement_dormancy():
+			ai.wake_from_dormancy()
+	_npc_last_movement_pose = entity.global_transform
+	_npc_has_movement_pose = true
 
 func _apply_timed_npc_movement(delta: float) -> void:
 	var prepare_started_usec := Time.get_ticks_usec()

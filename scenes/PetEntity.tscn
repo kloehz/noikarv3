@@ -46,6 +46,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.786084, 0)
 shape = SubResource("CapsuleShape3D_pet")
 
 [node name="ShapeCast3D" type="ShapeCast3D" parent="." unique_id=1005833532]
+enabled = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, -1)
 shape = SubResource("SphereShape3D_pet_atk")
 target_position = Vector3(0, 0, 0)

@@ -1,18 +1,14 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dtn0vlybqsfs3"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/pets/tank/moo_cow_alistar.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://c311q7agetmd3" path="res://assets/models/pets/tank/moo_cow_alistar.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/pet_tank_t1_alistar.tres" id="9_spec"]
 
-[node name="PetTankT1Alistar" type="Node3D"]
+[node name="PetTankT1Alistar" type="Node3D" unique_id=1632014512]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
-anim_idle = "Idle_Base"
-anim_run = "Run"
 anim_attack = "Attack1"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=690054375 instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "compare30": {
+      "network_hz": 30,
+      "physics_hz": 50,
+      "sync_to_physics": false,
+      "server_max_fps": 75,
+      "client_max_fps": 60,
+      "history_ticks": 150,
+      "display_offset_ticks": 2,
+      "input_delay_ticks": 0,
+      "input_redundancy": 3,
+      "npc_snapshot_hz": 30
+    },
+    "compare60": {
+      "network_hz": 60,
+      "physics_hz": 50,
+      "sync_to_physics": false,
+      "server_max_fps": 75,
+      "client_max_fps": 60,
+      "history_ticks": 300,
+      "display_offset_ticks": 2,
+      "input_delay_ticks": 0,
+      "input_redundancy": 3,
+      "npc_snapshot_hz": 60
+    }
+  }
+}

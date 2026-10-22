@@ -1,10 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bv0abwhffxvqm"]
 
-[ext_resource type="Script" path="res://common/SoulEntity.gd" id="1_soul"]
-[ext_resource type="PackedScene" uid="uid://cvy3jhncal1qp" path="res://assets/BinbunVFX/loot_effects/effects/floating/loot_vfx_rare.tscn" id="2_loot_vfx"]
-
-[sub_resource type="SphereShape3D" id="SphereShape3D_soul"]
-radius = 1.0
+[ext_resource type="Script" uid="uid://byjcnsxvhnxb6" path="res://common/SoulEntity.gd" id="1_soul"]
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_soul"]
 properties/0/path = NodePath(".:global_position")
@@ -14,19 +10,19 @@ properties/1/path = NodePath(".:original_mob_scene_path")
 properties/1/spawn = true
 properties/1/replication_mode = 1
 
-[node name="SoulEntity" type="Area3D"]
+[sub_resource type="SphereShape3D" id="SphereShape3D_soul"]
+radius = 1.0
+
+[node name="SoulEntity" type="Area3D" unique_id=295934078]
 collision_layer = 4
-# RED (16) | BLUE (32): souls detect faction-layered players without
-# physically blocking them.
-collision_mask = 48
 script = ExtResource("1_soul")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=11628136]
 replication_config = SubResource("SceneReplicationConfig_soul")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=991642798]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 shape = SubResource("SphereShape3D_soul")
 
-[node name="LootVFXRare" parent="." instance=ExtResource("2_loot_vfx")]
+[node name="LootVFXRare" type="Node3D" parent="." unique_id=290234625]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)

@@ -244,6 +244,8 @@ func _drive_tick(logic: LogicComponent) -> void:
 	driver.logic = logic
 	add_child_autofree(driver)
 	await driver.drove_tick
+	# Resume outside the emitting physics callback before fixture teardown.
+	await get_tree().process_frame
 
 class GraceBody:
 	extends CharacterBody3D

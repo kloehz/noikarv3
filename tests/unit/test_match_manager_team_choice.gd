@@ -188,3 +188,28 @@ func test_mob_difficulty_uses_correct_team_roster() -> void:
 		"3 RED players → +40% mob stats")
 	assert_almost_eq(_manager._mob_difficulty_for_team(TeamId.BLUE), 1.6, 0.0001,
 		"5 BLUE players → +60% mob stats")
+
+# Observe scheduling only; this inherits the real disconnect/lobby lifecycle.
+class LifecycleManager extends "res://common/match_manager.gd":
+	var broadcast_calls := 0
+	func _broadcast_lobby_snapshots() -> void:
+		broadcast_calls += 1
+
+func test_disconnect_defers_lobby_broadcast_until_transport_poll_finishes() -> void:
+	var manager := LifecycleManager.new()
+	for container_name in ["Players", "Mobs", "Souls", "Totems"]:
+		var container := Node3D.new()
+		container.name = container_name
+		manager.add_child(container)
+	var state := MatchState.new()
+	state.name = "MatchState"
+	manager.add_child(state)
+	add_child_autofree(manager)
+	manager._lobby[2] = _record("Departing", TeamId.RED)
+	manager._lobby[3] = _record("Remaining", TeamId.BLUE)
+	manager._on_client_disconnected(2)
+	assert_false(manager._lobby.has(2), "Identity removal remains immediate")
+	assert_true(manager._lobby.has(3), "Remaining live lobby member is retained")
+	assert_eq(manager.broadcast_calls, 0, "No RPC broadcast during ENet event dispatch")
+	await get_tree().process_frame
+	assert_eq(manager.broadcast_calls, 1, "Remaining peers still receive the deferred broadcast")

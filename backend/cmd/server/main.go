@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -170,7 +172,27 @@ func loadConfig() (config, error) {
 	if utf8.RuneCountInString(provisionerCredential) < minSecretLen {
 		return config{}, fmt.Errorf("PROVISIONER_CREDENTIAL must contain at least %d characters", minSecretLen)
 	}
-	return config{address: ":" + address, databaseURL: databaseURL, jwtSecret: []byte(secret), provisionerCredential: []byte(provisionerCredential)}, nil
+	listenAddress, err := resolveListenAddress(address, strings.TrimSpace(os.Getenv("BIND_HOST")))
+	if err != nil {
+		return config{}, err
+	}
+	return config{address: listenAddress, databaseURL: databaseURL, jwtSecret: []byte(secret), provisionerCredential: []byte(provisionerCredential)}, nil
+}
+
+// The default remains wildcard binding. Disposable benchmark callers opt in to
+// a numeric loopback host; rejecting malformed explicit hosts avoids DNS drift.
+func resolveListenAddress(port, host string) (string, error) {
+	if host == "" {
+		return ":" + port, nil
+	}
+	if net.ParseIP(host) == nil {
+		return "", errors.New("BIND_HOST must be a numeric IP address")
+	}
+	value, err := strconv.Atoi(port)
+	if err != nil || value < 1 || value > 65535 {
+		return "", errors.New("PORT must be 1-65535 when BIND_HOST is set")
+	}
+	return net.JoinHostPort(host, port), nil
 }
 
 func (s *server) health(w http.ResponseWriter, _ *http.Request) {

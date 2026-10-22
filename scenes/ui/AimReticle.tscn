@@ -1,8 +1,8 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cexal6j1yx4ou"]
 
-[ext_resource type="Script" path="res://client/ui/AimReticle.gd" id="1_reticle"]
+[ext_resource type="Script" uid="uid://dxxml1l71preb" path="res://client/ui/AimReticle.gd" id="1_reticle"]
 
-[node name="AimReticle" type="Control"]
+[node name="AimReticle" type="Control" unique_id=1629006931]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0

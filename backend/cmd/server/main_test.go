@@ -163,3 +163,25 @@ func TestMissingBearerTokenIsRejected(t *testing.T) {
 		t.Fatal("parseBearerToken() accepted a request without credentials")
 	}
 }
+
+func TestExplicitListenHostPreservesDefaultAndValidatesBinding(t *testing.T) {
+	for _, tt := range []struct {
+		name, port, host, want string
+		bad                    bool
+	}{
+		{"default", "8080", "", ":8080", false},
+		{"loopback", "18090", "127.0.0.1", "127.0.0.1:18090", false},
+		{"ipv6", "18090", "::1", "[::1]:18090", false},
+		{"dns", "18090", "localhost", "", true},
+		{"invalid-ip", "18090", "127.0.0.999", "", true},
+		{"invalid-port", "0", "127.0.0.1", "", true},
+		{"fractional-port", "80.5", "127.0.0.1", "", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveListenAddress(tt.port, tt.host)
+			if (err != nil) != tt.bad || got != tt.want {
+				t.Fatalf("address=%q err=%v", got, err)
+			}
+		})
+	}
+}

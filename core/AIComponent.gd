@@ -2,6 +2,8 @@
 class_name AIComponent
 extends Node
 
+const DECISION_CLOCK := preload("res://common/npc_decision_clock.gd")
+
 ## AI Brain that simulates inputs for LogicComponent.
 ## Only runs on the Server.
 
@@ -11,6 +13,19 @@ enum State { IDLE, PATROL, CHASE, ATTACK, FOLLOW_OWNER }
 @export var detection_range: float = 15.0
 @export var attack_range: float = 3.0
 @export var follow_distance: float = 4.0
+
+## Experimental A/B switches: disabled until full gameplay/wake validation.
+## Active chase/attack steering, combat and movement keep the network clock.
+@export var decision_budget_enabled: bool = false
+@export_range(5.0, 10.0) var passive_decision_hz: float = 10.0
+@export var distant_dormancy_enabled: bool = false
+
+var _decision_clock := DECISION_CLOCK.new()
+var _budget_initialized: bool = false
+var _distant_passive: bool = false
+var _last_budget_health: int = -1
+var _budget_had_threat: bool = false
+const WAKE_RADIUS := 55.0
 
 ## Patrol behavior tuning. Mobs spend their IDLE window waiting, then
 ## transition to PATROL and wander between random waypoints inside
@@ -155,23 +170,14 @@ func _tick_impl(delta: float) -> void:
 			print("[BENCHMARK] scenario=B NPC AI decisions disabled for %s; physics and replication remain active" % entity.name)
 		return
 
-	# Passive mobs far from any action: stagger decisions or sleep outright.
-	# CHASE/ATTACK (and anything near players) always run at full rate so
-	# combat stays responsive.
-	var passive := state == State.IDLE or state == State.PATROL
-	if _is_mob and passive and not _has_threat():
-		var nearest_sq := _nearest_actor_dist_sq()
-		# INF means the room has no players at all (tests, empty rooms about
-		# to shut down) — stay awake and keep pre-refactor behavior there.
-		if nearest_sq != INF:
-			if nearest_sq > SLEEP_RADIUS * SLEEP_RADIUS:
-				_stop_inputs()
-				return
-			if nearest_sq > STAGGER_RADIUS * STAGGER_RADIUS:
-				_tick_stagger += 1
-				if _tick_stagger % PASSIVE_TICKS_SKIP != 0:
-					return
-				delta *= PASSIVE_TICKS_SKIP
+	if decision_budget_enabled and _is_ordinary_mob():
+		if not _tick_budgeted_passive(delta):
+			return
+	else:
+		_distant_passive = false
+		delta = _tick_legacy_passive(delta)
+		if delta < 0.0:
+			return
 
 	# Ensure we have the players node
 	if not is_instance_valid(_players_node):
@@ -192,6 +198,88 @@ func _tick_impl(delta: float) -> void:
 			_logic_attack()
 		State.FOLLOW_OWNER:
 			_logic_follow()
+
+## Opt-out preserves the existing far-only 3-tick behavior exactly.
+func _tick_legacy_passive(delta: float) -> float:
+	var passive := state == State.IDLE or state == State.PATROL
+	if _is_mob and passive and not _has_threat():
+		var nearest_sq := _nearest_actor_dist_sq()
+		# INF means the room has no players at all (tests, empty rooms about
+		# to shut down) — stay awake and keep pre-refactor behavior there.
+		if nearest_sq != INF:
+			if nearest_sq > SLEEP_RADIUS * SLEEP_RADIUS:
+				_stop_inputs()
+				return -1.0
+			if nearest_sq > STAGGER_RADIUS * STAGGER_RADIUS:
+				_tick_stagger += 1
+				if _tick_stagger % PASSIVE_TICKS_SKIP != 0:
+					return -1.0
+				delta *= PASSIVE_TICKS_SKIP
+
+	return delta
+
+## Returns true for active/pet/unknown states, leaving their existing 30Hz FSM.
+## Passive perception and decisions share one staggered elapsed-time budget;
+## patrol steering still runs on every network tick between those decisions.
+func _tick_budgeted_passive(delta: float) -> bool:
+	if not _budget_initialized:
+		_decision_clock.configure(String(entity.name), passive_decision_hz)
+		_target_search_timer = _decision_clock.remaining
+		_budget_initialized = true
+	var health := int(entity.get("sync_health"))
+	var damaged := _last_budget_health >= 0 and health < _last_budget_health
+	_last_budget_health = health
+	var passive := state == State.IDLE or state == State.PATROL
+	var threatened := _has_threat()
+	var new_threat := threatened and not _budget_had_threat
+	_budget_had_threat = threatened
+	if not _is_ordinary_mob() or not passive or threatened or damaged or is_instance_valid(target):
+		if _distant_passive or damaged or new_threat:
+			wake_from_dormancy()
+		return true
+	_target_search_timer -= delta
+	var elapsed := _decision_clock.advance(delta)
+	if elapsed > 0.0:
+		var nearest_sq := _nearest_actor_dist_sq()
+		# Keep empty-room legacy behavior distinct from distant actors.
+		_distant_passive = nearest_sq != INF and nearest_sq > (
+			WAKE_RADIUS * WAKE_RADIUS if _distant_passive else SLEEP_RADIUS * SLEEP_RADIUS
+		)
+		if not _distant_passive:
+			if not is_instance_valid(_players_node):
+				_players_node = get_tree().root.find_child("Players", true, false)
+			if _players_node:
+				if state == State.IDLE:
+					_logic_idle(elapsed)
+				else:
+					_logic_patrol(elapsed, false)
+	if _distant_passive:
+		_stop_inputs()
+	elif state == State.PATROL and entity.global_position.distance_to(_patrol_target) >= 1.0:
+		_move_towards(_patrol_target, patrol_speed_factor)
+	elif state == State.IDLE or state == State.PATROL:
+		_stop_inputs()
+	return false
+
+func wake_from_dormancy() -> void:
+	# Initialize before waking so the first tick cannot overwrite the wake.
+	if not _budget_initialized:
+		_decision_clock.configure(String(entity.name), passive_decision_hz)
+		_budget_initialized = true
+	_distant_passive = false
+	_decision_clock.wake()
+	_target_search_timer = 0.0
+
+## Both experiments use this boundary; excluded actors retain legacy AI/LOD.
+func _is_ordinary_mob() -> bool:
+	return entity != null and _is_mob and not _is_pet \
+		and not entity.name.begins_with("BOSS_") and not entity.name.begins_with("ELITE") \
+		and not entity.is_in_group(&"bosses")
+
+func wants_movement_dormancy() -> bool:
+	return decision_budget_enabled and distant_dormancy_enabled and _distant_passive and _is_ordinary_mob() \
+		and not is_instance_valid(target) and not _has_threat() \
+		and (state == State.IDLE or state == State.PATROL)
 
 func _logic_idle(delta: float) -> void:
 	_stop_inputs()
@@ -220,7 +308,7 @@ func _logic_idle(delta: float) -> void:
 		_roll_patrol_wait_duration()
 		_idle_timer = 0.0
 
-func _logic_patrol(delta: float) -> void:
+func _logic_patrol(delta: float, steer: bool = true) -> void:
 	if _target_search_timer <= 0:
 		_find_nearest_target()
 		_target_search_timer = _target_search_interval
@@ -239,7 +327,8 @@ func _logic_patrol(delta: float) -> void:
 			_patrol_wait_timer = 0.0
 			_roll_patrol_wait_duration()
 	else:
-		_move_towards(_patrol_target, patrol_speed_factor)
+		if steer:
+			_move_towards(_patrol_target, patrol_speed_factor)
 		_patrol_wait_timer = 0.0
 
 ## Picks a waypoint uniformly inside patrol_radius. Using sqrt(randf) for
@@ -353,6 +442,9 @@ func _logic_follow() -> void:
 func engage_attacker(attacker: Node) -> void:
 	if not _faction_cached:
 		refresh_faction()
+	if _is_mob:
+		wake_from_dormancy()
+		return
 	if not _is_pet or attacker == null or not attacker.is_in_group(&"mobs"):
 		return
 	if attacker.get("sync_is_dead"):
@@ -399,7 +491,7 @@ func _steer_around_nearby_allies(direction: Vector3) -> Vector3:
 
 	var separation := Vector3.ZERO
 	var blocker_weight := 0.0
-	var allies := get_tree().get_nodes_in_group(ally_group)
+	var allies := entity.bounded_avoidance_allies(ally_group, MOB_AVOIDANCE_RADIUS)
 	if _perf_probe_npc_cost_enabled:
 		_perf_probe.record_npc_counter(&"avoidance", allies.size())
 	for other in allies:

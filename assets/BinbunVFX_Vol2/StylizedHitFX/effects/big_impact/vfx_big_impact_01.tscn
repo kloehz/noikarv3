@@ -581,17 +581,6 @@ script = ExtResource("1_2yumw")
 primary_color = Color(1, 1, 1, 1)
 secondary_color = Color(1, 0.8, 0.4, 1)
 light_color = Color(1, 0.8, 0.4, 1)
-attenuation_model = null
-animate_volume = null
-volume_db = null
-unit_size = null
-max_db = null
-pitch_scale = null
-stream_paused = null
-audio_max_distance = null
-max_polyphony = null
-panning_strength = null
-bus = null
 
 [node name="MeshInstance3D3" type="MeshInstance3D" parent="." unique_id=2141584362]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.089589, 0)
@@ -632,6 +621,7 @@ lifetime = 0.6
 one_shot = true
 explosiveness = 1.0
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_1lthj")
 draw_pass_1 = SubResource("QuadMesh_hta2f")
 

@@ -1,0 +1,54 @@
+# Player-hosted Noikar migration
+
+## Status
+
+Implementation is on `feat/godot-4.8-listen-server` in an isolated clone of
+`kloehz/noikarv3`. The original checkout and its uncommitted work are unchanged.
+The approved plan is `2026-10-22-noikar-godot-4.8-listen-server.md` in the user's
+OpenCode plan directory; this record tracks implementation evidence, not completion.
+
+## Preserved baseline
+
+- Published parent: `68429e3e36ea0c0379e370141297f27595bc44ae`.
+- The starting point additionally includes existing local gameplay, performance,
+  addon, scene, asset-import and test changes. These are inherited work, not changes
+  authored as part of the hosting migration.
+- A private hash-verified backup preserves all 483 modified/untracked files and the
+  original binary diff/status. The original checkout remains a second untouched copy.
+- 452 non-registry/non-bytecode/non-translation source/evidence files were copied.
+  Historical measurement captures under `docs/benchmarks/` remain preserved locally
+  and in the backup, but are not added to the migration's source commits. No private
+  environment configuration was copied to the running project.
+- No new Godot project, gameplay replacement, remote repository, deployment, or
+  modification to the template repository is involved.
+
+## Initial verification findings
+
+These were reproduced before implementation; they are not newly introduced failures:
+
+| Check | Initial result | Required follow-up |
+| --- | --- | --- |
+| `python3 tests/verify_headless_server.py --quick` | FAIL: validator requires 4.7 while the preserved project already declares 4.8 | Update and test the engine contract, not just project metadata. |
+| `python3 tests/verify_gut_suite_integrity.py` | FAIL: `pending()` in `tests/unit/test_game_manager.gd` | Replace skipped environment-dependent assertion with real deterministic coverage; retain integrity enforcement. |
+| `python3 tests/verify_export_isolation.py` | FAIL: shared MatchManager directly references core AI component | Inspect actual resource dependencies and intended scene composition; test isolation behavior rather than disable the checker. |
+
+No full engine/GUT startup was run against this baseline before isolating test
+bootstrap: the inherited headless autoload would try to contact external services.
+Installed engine: `4.8.beta1.official.4d10419ca`; it is a prerelease. Installed Go:
+`go1.26.5 darwin/arm64` (module declares Go 1.26.4).
+
+## Scope and safeguards
+
+Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
+all stages, shared boss, presentation and effective 30 Hz simulation. Adapt one
+peer/session lifecycle and the local host player; retain Netfox initially. LAN and
+optional Steam replace dedicated per-room provisioning only in the new player-host
+path. Account authentication remains a lightweight API responsibility.
+
+Player hosts must not receive reusable account bearer tokens or dedicated world
+credentials. Internet account validation requires HTTPS and the new scoped-admission
+backend rollout; no live service changes are authorized by local implementation.
+
+Host departure ends the session safely; automatic host migration and trusted ranked
+results are outside scope. Final evidence must distinguish fixtures, actual local
+processes, human Steam accounts, native platform runs and unexecuted gates.

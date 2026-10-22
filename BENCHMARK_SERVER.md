@@ -228,3 +228,7 @@ These are measurement targets, not optimization recommendations:
 - **Network/state replication:** `common/perf_probe.gd` reports observable Netfox custom monitors and rollback aggregation every five seconds. `common/components/ServerState.gd` controls NPC snapshot cadence through `NOIKAR_NPC_SNAPSHOT_HZ`.
 - **Headless scene loading:** `scenes/main.tscn` contains presentation nodes, while the existing headless path removes HUD, connection UI, world environment, sun, entity meshes, camera/presentation components, health UI, and tick interpolation. Treat any presentation node remaining at runtime as a finding; this harness does not change the strip behavior.
 - **Population loops:** `common/match_manager.gd` owns fixed-population spawning and benchmark startup observations. Use live entity counts in the logs to distinguish spawn/setup work from steady-state costs.
+
+## Cross-engine comparison profiles
+
+See [FishNet / Netfox comparison setup](NETFOX_COMPARISON.md) for the preserved FishNet tables, opt-in30/60Hz profiles, startup readback, actual native cadence, and explicit workload/physics/buffering non-equivalence. Existing tables above remain unchanged. These profiles are configuration/measurement preparation, not a new capacity claim.

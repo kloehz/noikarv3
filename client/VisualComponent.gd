@@ -35,9 +35,18 @@ const REMOTE_MOVEMENT_ANIMATION_SPEED_THRESHOLD := 0.05
 const REMOTE_MOVEMENT_ANIMATION_HOLD_SECONDS := 0.18
 const REMOTE_MOVEMENT_ANIMATION_MAX_SAMPLE_GAP_SECONDS := 0.20
 
-## Preloaded impact VFX scene used by the replicated hit-event flow.
-const VFX_HIT_02_SCENE := preload("res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn")
-const HIT_FLASH_OVERLAY_SHADER := preload("res://client/vfx/hit_flash_overlay.gdshader")
+## Path constants retain packaging dependencies without eager server loads.
+const VFX_HIT_02_PATH := "res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn"
+const HIT_FLASH_OVERLAY_PATH := "res://client/vfx/hit_flash_overlay.gdshader"
+static var _client_resource_cache: Dictionary = {}
+
+static func _client_resource(path: String) -> Resource:
+	if not Engine.is_editor_hint() and GameManager._is_headless_environment():
+		return null
+	if not _client_resource_cache.has(path):
+		_client_resource_cache[path] = load(path)
+	return _client_resource_cache[path]
+
 
 ## Maps the replicated ServerState.character_id to the HUD label name shown
 ## above the local player's HP bar. Falls back to the raw id if a new
@@ -52,6 +61,10 @@ func _ready() -> void:
 		_setup_from_parent()
 		return
 	
+	if GameManager._is_headless_environment():
+		process_mode = Node.PROCESS_MODE_DISABLED
+		return
+
 	print("[DEBUG] VisualComponent ready on %s" % (entity.name if entity else &"Unknown"))
 	_connect_signals()
 
@@ -300,7 +313,7 @@ func _handle_local_aim_presentation(delta: float) -> void:
 	if _aim_reticle == null:
 		var hud = get_tree().root.find_child("HUD", true, false)
 		if hud:
-			_aim_reticle = preload("res://scenes/ui/AimReticle.tscn").instantiate() as Control
+			_aim_reticle = (_client_resource("res://scenes/ui/AimReticle.tscn") as PackedScene).instantiate() as Control
 			hud.add_child(_aim_reticle)
 			_base_camera_fov = camera.fov
 	if _aim_reticle:
@@ -492,7 +505,7 @@ func _spawn_heal_burst(amount: int) -> void:
 	if scene_root == null:
 		return
 
-	var burst: Node3D = preload("res://scenes/vfx/heal_burst.tscn").instantiate()
+	var burst: Node3D = (_client_resource("res://scenes/vfx/heal_burst.tscn") as PackedScene).instantiate()
 	if burst == null: return
 
 	if burst.has_method("configure"):
@@ -613,7 +626,7 @@ func _setup_hit_flash_overlays() -> void:
 		if mesh == null or mesh.material_overlay:
 			continue
 		var overlay := ShaderMaterial.new()
-		overlay.shader = HIT_FLASH_OVERLAY_SHADER
+		overlay.shader = _client_resource(HIT_FLASH_OVERLAY_PATH) as Shader
 		overlay.set_shader_parameter(&"flash_strength", 0.0)
 		mesh.material_overlay = overlay
 		_hit_flash_materials.append(overlay)
@@ -649,7 +662,7 @@ func _spawn_hit_vfx() -> void:
 	if scene_root == null:
 		return
 
-	var vfx: Node3D = VFX_HIT_02_SCENE.instantiate()
+	var vfx: Node3D = (_client_resource(VFX_HIT_02_PATH) as PackedScene).instantiate()
 	if vfx == null:
 		return
 

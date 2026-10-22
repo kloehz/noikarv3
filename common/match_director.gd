@@ -48,6 +48,17 @@ func _ready() -> void:
 	add_to_group(&"match_director")
 	if rules == null:
 		rules = load("res://common/resources/default_match_rules.tres")
+	var authored_rules := rules
+	rules = BenchmarkProfile.scoped_match_rules(authored_rules, BenchmarkProfile.player_limit)
+	if rules == null:
+		printerr("[PROFILE_CAPACITY] invalid authored/runtime capacity")
+		get_tree().quit(64)
+		return
+	if BenchmarkProfile.player_limit in [10, 20]:
+		printerr("[PROFILE_CAPACITY] " + JSON.stringify({"role": "server" if GameManager._is_headless_environment() else "client",
+			"requested_players": BenchmarkProfile.player_limit, "max_players_per_team": rules.max_players_per_team,
+			"total_capacity": rules.max_players_per_team * 2, "runtime_clone": rules != authored_rules,
+			"authored_max_players_per_team": authored_rules.max_players_per_team}))
 	if match_state == null:
 		match_state = get_parent().get_node_or_null("MatchState") as MatchState
 	if not multiplayer.is_server():

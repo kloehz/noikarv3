@@ -1,16 +1,6 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://cjwikvipyhcpm"]
 
-[ext_resource type="Script" path="res://common/ProjectileEntity.gd" id="1_projectile"]
-[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_projectile"]
-properties/0/path = NodePath(".:position")
-properties/0/spawn = true
-properties/0/replication_mode = 0
-properties/1/path = NodePath(".:direction")
-properties/1/spawn = true
-properties/1/replication_mode = 0
-properties/2/path = NodePath(".:speed")
-properties/2/spawn = true
-properties/2/replication_mode = 0
+[ext_resource type="Script" uid="uid://k3vi30thgfch" path="res://common/ProjectileEntity.gd" id="1_projectile"]
 
 [sub_resource type="SphereShape3D" id="SphereShape3D_proj"]
 radius = 0.2
@@ -26,16 +16,27 @@ material = SubResource("StandardMaterial3D_proj")
 radius = 0.15
 height = 0.3
 
-[node name="ProjectileEntity" type="CharacterBody3D"]
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_projectile"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:direction")
+properties/1/spawn = true
+properties/1/replication_mode = 0
+properties/2/path = NodePath(".:speed")
+properties/2/spawn = true
+properties/2/replication_mode = 0
+
+[node name="ProjectileEntity" type="CharacterBody3D" unique_id=353495082]
 collision_layer = 4
 collision_mask = 115
 script = ExtResource("1_projectile")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1361752018]
 shape = SubResource("SphereShape3D_proj")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=789735432]
 mesh = SubResource("SphereMesh_proj")
 
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
+[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="." unique_id=598660064]
 replication_config = SubResource("SceneReplicationConfig_projectile")

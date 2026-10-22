@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://bfktt17b7r53p"]
 
-[ext_resource type="Script" path="res://client/ui/AbilityHud.gd" id="1_ability_hud"]
+[ext_resource type="Script" uid="uid://bjuqopmmt513" path="res://client/ui/AbilityHud.gd" id="1_ability_hud"]
 
-[node name="AbilityHud" type="Control"]
+[node name="AbilityHud" type="Control" unique_id=1180231562]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -12,7 +12,7 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_ability_hud")
 
-[node name="Panel" type="PanelContainer" parent="."]
+[node name="Panel" type="PanelContainer" parent="." unique_id=1749129225]
 layout_mode = 1
 anchors_preset = 7
 anchor_left = 0.5
@@ -27,21 +27,21 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 
-[node name="HBox" type="HBoxContainer" parent="Panel"]
+[node name="HBox" type="HBoxContainer" parent="Panel" unique_id=1134200972]
 layout_mode = 2
 theme_override_constants/separation = 18
 
-[node name="QLabel" type="Label" parent="Panel/HBox"]
+[node name="QLabel" type="Label" parent="Panel/HBox" unique_id=248933508]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Q: Ready (unwired)"
 
-[node name="ELabel" type="Label" parent="Panel/HBox"]
+[node name="ELabel" type="Label" parent="Panel/HBox" unique_id=217511305]
 unique_name_in_owner = true
 layout_mode = 2
 text = "E: Ready (unwired)"
 
-[node name="RLabel" type="Label" parent="Panel/HBox"]
+[node name="RLabel" type="Label" parent="Panel/HBox" unique_id=293566334]
 unique_name_in_owner = true
 layout_mode = 2
 text = "R: Ready"

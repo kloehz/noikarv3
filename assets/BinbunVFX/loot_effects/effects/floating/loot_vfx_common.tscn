@@ -50,6 +50,7 @@ shader_parameter/hue_variation = 0.01
 shader_parameter/flare_streaks = 24.0
 shader_parameter/flare_ring = 0.5
 shader_parameter/flare_amount = 0.5
+shader_parameter/billboard = true
 shader_parameter/edge_hardness = 0.0
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_2rxpt")
 
@@ -65,6 +66,8 @@ shader_parameter/emission = 2.0
 shader_parameter/hue_variation = 0.01
 shader_parameter/glow_amount = 1.0
 shader_parameter/edge_hardness = 0.0
+shader_parameter/fade_bottom = 0.0
+shader_parameter/bob_amount = 0.05
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_2rxpt")
 
 [sub_resource type="SphereMesh" id="SphereMesh_ci3ke"]

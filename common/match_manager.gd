@@ -249,7 +249,11 @@ var _room_creator_account_id: String = ""
 
 const ALLOWED_CHARACTER_IDS: Array[String] = ["warrior", "ivern_ranger"]
 
+const ActorSpatialIndexScript = preload("res://common/ActorSpatialIndex.gd")
+
 func _enter_tree() -> void:
+	if multiplayer.is_server():
+		set_meta(&"actor_spatial_index", ActorSpatialIndexScript.new())
 	if GameManager._is_headless_environment():
 		_strip_headless_presentation()
 
@@ -684,6 +688,9 @@ func _finalize_spawn_position(entity: Node3D, global_pos: Vector3) -> void:
 		interpolator.teleport()
 
 func _strip_headless_presentation() -> void:
+	var map := get_node_or_null("Map")
+	if map != null:
+		_strip_visual_nodes_recursive(map)
 	for path in ["HUD", "ConnectionMenu", "WorldEnvironment", "Sun"]:
 		var presentation_node := get_node_or_null(path)
 		if presentation_node:
@@ -691,18 +698,38 @@ func _strip_headless_presentation() -> void:
 			remove_child(presentation_node)
 			presentation_node.free()
 
+## Strip only known presentation types. Keep names/transforms of ancestors
+## with gameplay children, so collision/navigation/spawn NodePaths stay valid.
 func _strip_visual_nodes_recursive(node: Node) -> void:
-	if not node: return
-	
-	var to_remove = []
+	if node == null:
+		return
 	for child in node.get_children():
-		if child is MeshInstance3D or child is Sprite3D or child is Label3D or child is WorldEnvironment or child is DirectionalLight3D or child is GPUParticles3D or child is CPUParticles3D or child is CSGPrimitive3D:
-			to_remove.append(child)
-		else:
-			_strip_visual_nodes_recursive(child)
-	
-	for child in to_remove:
-		print("[DEBUG] MatchManager removing visual: %s" % child.name)
+		# CSG owns generated collision, including Boolean child geometry.
+		# Retain the whole collision subtree rather than changing its shape.
+		if child is CSGShape3D and child.use_collision:
+			child.visible = false
+			continue
+		_strip_visual_nodes_recursive(child)
+		var visual := child is VisualInstance3D or child is WorldEnvironment or child is Light3D
+		if not visual:
+			continue
+		if child.get_child_count() == 0:
+			node.remove_child(child)
+			child.free()
+			continue
+		# Reparent through an equivalent same-path container, never flatten.
+		var container := Node3D.new()
+		var local_transform: Transform3D = child.transform if child is Node3D else Transform3D.IDENTITY
+		var original_name := child.name
+		var original_index := child.get_index()
+		node.remove_child(child)
+		container.name = original_name
+		container.transform = local_transform
+		node.add_child(container)
+		node.move_child(container, original_index)
+		for retained in child.get_children():
+			child.remove_child(retained)
+			container.add_child(retained)
 		child.free()
 
 func _on_server_started() -> void:
@@ -743,7 +770,8 @@ func _on_client_disconnected(peer_id: int) -> void:
 			if director: director.cancel_character_selection()
 		else:
 			_recompute_lobby()
-			_broadcast_lobby_snapshots()
+			# Finish ENet disconnect event dispatch before sending to remaining peers.
+			_broadcast_lobby_snapshots.call_deferred()
 	
 	# Wait a frame to ensure queue_free() is processed or use robust check
 	_check_for_empty_server.call_deferred()
@@ -792,14 +820,18 @@ func _on_player_name_submitted(player_name: String) -> void:
 
 func _on_player_auth_token_submitted(token: String) -> void:
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
-		_submit_auth_token_to_server.rpc_id(1, token)
+		_submit_auth_token_to_server.rpc_id(1, token, BenchmarkProfile.selected_profile, BenchmarkProfile.player_limit)
 
 @rpc("any_peer", "reliable")
-func _submit_auth_token_to_server(token: String) -> void:
+func _submit_auth_token_to_server(token: String, profile: String = "", player_limit: int = 0) -> void:
 	if not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if peer_id <= 0 or _authenticating_peers.has(peer_id) or peer_data.has(peer_id):
+		return
+	# Reject experimental/default or rate-arm mismatches before token validation.
+	if not BenchmarkProfile.profile_matches(BenchmarkProfile.selected_profile, profile) or not BenchmarkProfile.capacity_matches(BenchmarkProfile.player_limit, player_limit):
+		await _reject_admission_and_disconnect(peer_id, "Benchmark profile mismatch")
 		return
 	_authenticating_peers[peer_id] = true
 	_authenticate_peer(peer_id, token)
@@ -1028,6 +1060,45 @@ func _has_authenticated_account(account_id: String) -> bool:
 		if str(record["account_id"]) == account_id:
 			return true
 	return false
+
+func profile_owner_population() -> Dictionary:
+	var owners: Array[int] = []
+	var input_authorities: Array[int] = []
+	var positions := {}
+	var accounts := {}
+	var alive := 0
+	var server_states := 0
+	for player in players_container.get_children():
+		if not str(player.name).is_valid_int():
+			continue
+		var peer_id := int(str(player.name))
+		owners.append(peer_id)
+		positions[str(peer_id)] = [player.global_position.x, player.global_position.y, player.global_position.z]
+		var logic := player.get_node_or_null("LogicComponent")
+		if logic != null:
+			input_authorities.append(logic.get_multiplayer_authority())
+		var state := player.get_node_or_null("ServerState")
+		if state != null and state.get_multiplayer_authority() == 1:
+			server_states += 1
+		if not bool(player.get("sync_is_dead")):
+			alive += 1
+	for data in peer_data.values():
+		var account := str(data.get("account_id", ""))
+		if not account.is_empty():
+			accounts[account] = true
+	var alive_mobs := 0
+	for mob in mobs_container.get_children():
+		if not bool(mob.get("sync_is_dead")):
+			alive_mobs += 1
+	owners.sort()
+	input_authorities.sort()
+	var connected := Array(multiplayer.get_peers())
+	connected.sort()
+	return {"owners": owners, "input_authorities": input_authorities, "connected_peers": connected,
+		"authenticated_accounts": accounts.size(), "authenticated_peers": peer_data.size(),
+		"lobby_players": _lobby.size(), "red": _team_member_count(TeamId.RED), "blue": _team_member_count(TeamId.BLUE),
+		"alive_players": alive, "server_state_authorities": server_states, "positions": positions,
+		"live_mobs": mobs_container.get_child_count(), "alive_mobs": alive_mobs}
 
 func _admit_authenticated_identity(peer_id: int, identity: Dictionary) -> bool:
 	var director := _get_match_director()

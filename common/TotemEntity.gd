@@ -42,12 +42,16 @@ var team_id: int = TeamId.NONE
 
 @onready var server_state: Node = $ServerState
 @onready var health_comp: Node = $HealthComponent
-@onready var _vfx: Node3D = $ChargeVFX
+const CHARGE_VFX_PATH := "res://assets/BinbunVFX_Vol2/BattleFX/effects/charge/vfx_blank_charge.tscn"
+
+@onready var _vfx: Node3D = get_node_or_null("ChargeVFX")
 
 var _is_active: bool = true
 
 func _ready() -> void:
-	_setup_charge_vfx()
+	# A headless benchmark client still follows the normal client visual path.
+	if not GameManager._is_headless_environment() and _load_charge_visual():
+		_setup_charge_vfx()
 
 	if not multiplayer.is_server():
 		return
@@ -59,6 +63,26 @@ func _ready() -> void:
 
 	await get_tree().create_timer(cast_duration).timeout
 	_complete_ritual()
+
+## The authored placeholder keeps its name/transform; replicated siblings
+## never change. The dedicated server does not load the VFX scene or scripts.
+func _load_charge_visual() -> bool:
+	if _vfx == null:
+		return false
+	var packed := load(CHARGE_VFX_PATH) as PackedScene
+	if packed == null:
+		push_error("Totem charge visual resource unavailable")
+		return false
+	var visual := packed.instantiate() as Node3D
+	visual.name = _vfx.name
+	visual.transform = _vfx.transform
+	var index := _vfx.get_index()
+	remove_child(_vfx)
+	_vfx.free()
+	add_child(visual)
+	move_child(visual, index)
+	_vfx = visual
+	return true
 
 func _setup_charge_vfx() -> void:
 	_make_charge_materials_unique()

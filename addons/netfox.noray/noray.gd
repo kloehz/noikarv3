@@ -146,7 +146,7 @@ func server_ready() -> Error:
 	return _put_command("server-ready")
 
 ## Register remote address.
-func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: float = 0.1) -> Error:
+func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: float = 0.1, bind_port: int = 0, bind_address: String = "*") -> Error:
 	if not is_connected_to_host():
 		return ERR_CONNECTION_ERROR
 		
@@ -155,8 +155,14 @@ func register_remote(registrar_port: int = 8809, timeout: float = 8, interval: f
 
 	var result = ERR_TIMEOUT
 	var udp = PacketPeerUDP.new()
-	udp.bind(0)
-	udp.set_dest_address(_address, registrar_port)
+	var bind_error := udp.bind(bind_port, bind_address)
+	if bind_error != OK:
+		udp.close()
+		return bind_error
+	var destination_error := udp.set_dest_address(_address, registrar_port)
+	if destination_error != OK:
+		udp.close()
+		return destination_error
 	
 	_logger.debug("Bound UDP to port %s", [udp.get_local_port()])
 	

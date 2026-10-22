@@ -1,18 +1,14 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://bjav8q5delh15"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/pets/support/battle_principal_yuumi.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://dj8oyuyd105g4" path="res://assets/models/pets/support/battle_principal_yuumi.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/pet_sup_t1_yuumi.tres" id="9_spec"]
 
-[node name="PetSupT1Yuumi" type="Node3D"]
+[node name="PetSupT1Yuumi" type="Node3D" unique_id=832820189]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
-anim_idle = "Idle_Base"
-anim_run = "Run"
 anim_attack = "Attack1"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=2025782021 instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

@@ -50,6 +50,7 @@ shader_parameter/hue_variation = 0.0
 shader_parameter/flare_streaks = 40.0
 shader_parameter/flare_ring = 1.0
 shader_parameter/flare_amount = 0.35
+shader_parameter/billboard = true
 shader_parameter/edge_hardness = 0.3
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_wk64p")
 
@@ -65,6 +66,8 @@ shader_parameter/emission = 3.0
 shader_parameter/hue_variation = 0.0
 shader_parameter/glow_amount = 1.0
 shader_parameter/edge_hardness = 0.3
+shader_parameter/fade_bottom = 0.0
+shader_parameter/bob_amount = 0.05
 shader_parameter/noise_texture = SubResource("NoiseTexture2D_wk64p")
 
 [sub_resource type="SphereMesh" id="SphereMesh_dwtk6"]
@@ -239,6 +242,7 @@ mesh = SubResource("CylinderMesh_t5p83")
 material_override = SubResource("ShaderMaterial_2132p")
 amount = 32
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_4jjk0")
 draw_pass_1 = SubResource("QuadMesh_g0pi0")
 

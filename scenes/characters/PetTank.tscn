@@ -1,18 +1,13 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://citcfc04yj3cq"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/enemies/ao_shin/ao_shin.tscn" id="2_model"]
-[ext_resource type="Resource" path="res://common/resources/specs/pet_tank.tres" id="9_spec"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://dt4bwdxtitk68" path="res://assets/models/enemies/ao_shin/ao_shin.tscn" id="2_model"]
+[ext_resource type="Resource" uid="uid://cvfd3vbatci6o" path="res://common/resources/specs/pet_tank.tres" id="9_spec"]
 
-[node name="PetTank" type="Node3D"]
+[node name="PetTank" type="Node3D" unique_id=243652886]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
-anim_idle = "Idle_Base"
-anim_run = "Run"
-anim_attack = "Cast_Damage"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=1646456276 instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

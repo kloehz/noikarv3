@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://cwj4434m5oq88"]
 
 [ext_resource type="Script" uid="uid://x0mipai037n" path="res://common/match_manager.gd" id="1_match"]
-[ext_resource type="PackedScene" path="res://scenes/connection_menu.tscn" id="2_conn"]
+[ext_resource type="PackedScene" uid="uid://bp1yciicv5hfq" path="res://scenes/connection_menu.tscn" id="2_conn"]
 [ext_resource type="Script" uid="uid://dnpnjpubiwloe" path="res://common/match_state.gd" id="3_mstate"]
 [ext_resource type="Script" uid="uid://c24ik743i4qc3" path="res://common/match_director.gd" id="4_mdirector"]
-[ext_resource type="Script" path="res://common/net/CadencedStateSynchronizer.gd" id="5_statesync"]
+[ext_resource type="Script" uid="uid://ge8w8kgqc08" path="res://common/net/CadencedStateSynchronizer.gd" id="5_statesync"]
 [ext_resource type="Resource" path="res://common/resources/default_match_rules.tres" id="6_rules"]
 [ext_resource type="PackedScene" uid="uid://b6vd7b4f6ubs7" path="res://scenes/maps/lorencia_3d.tscn" id="7_lorencia"]
 [ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="8_player_health"]
-[ext_resource type="Script" path="res://client/ui/PetHud.gd" id="9_pet_hud"]
+[ext_resource type="Script" uid="uid://dl6uhoaxlb4rb" path="res://client/ui/PetHud.gd" id="9_pet_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/DamageFlashOverlay.tscn" id="10_damage_flash"]
 [ext_resource type="PackedScene" path="res://scenes/ui/AbilityHud.tscn" id="11_ability_hud"]
 
@@ -100,7 +100,7 @@ spawn_path = NodePath("../Souls")
 [node name="Totems" type="Node3D" parent="." unique_id=984126730]
 
 [node name="TotemSpawner" type="MultiplayerSpawner" parent="." unique_id=756269311]
-_spawnable_scenes = PackedStringArray("res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn")
+_spawnable_scenes = PackedStringArray("res://scenes/TotemEntity.tscn", "uid://c5wgry7yk5cwr")
 spawn_path = NodePath("../Totems")
 
 [node name="Minions" type="Node3D" parent="." unique_id=1459872033]
@@ -118,8 +118,8 @@ script = ExtResource("3_mstate")
 
 [node name="StateSynchronizer" type="Node" parent="MatchState" unique_id=904152637 node_paths=PackedStringArray("root")]
 script = ExtResource("5_statesync")
-root = NodePath("..")
 authority_snapshot_stride = 6
+root = NodePath("..")
 
 [node name="MatchDirector" type="Node" parent="." unique_id=317745902]
 script = ExtResource("4_mdirector")
@@ -134,6 +134,7 @@ spawn_path = NodePath("../Projectiles")
 [node name="HUD" type="CanvasLayer" parent="." unique_id=11221122]
 
 [node name="SoulCounter" type="PanelContainer" parent="HUD" unique_id=212813293]
+anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
@@ -146,39 +147,6 @@ grow_horizontal = 0
 grow_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_soul_bg")
-
-[node name="PlayerHealthLabel" type="Label" parent="HUD" unique_id=1916356354]
-offset_left = 20.0
-offset_top = 12.0
-offset_right = 340.0
-offset_bottom = 40.0
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.95, 0.85, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 22
-text = "Aatrox"
-
-[node name="PlayerHealthBar" parent="HUD" unique_id=2062910579 instance=ExtResource("8_player_health")]
-offset_left = 20.0
-offset_top = 44.0
-offset_right = 340.0
-offset_bottom = 84.0
-mouse_filter = 2
-
-[node name="PetHUD" type="Control" parent="HUD"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-script = ExtResource("9_pet_hud")
-
-[node name="AbilityHud" parent="HUD" instance=ExtResource("11_ability_hud")]
-
-[node name="DamageFlashOverlay" parent="HUD" instance=ExtResource("10_damage_flash")]
 
 [node name="HBox" type="HBoxContainer" parent="HUD/SoulCounter" unique_id=1156214351]
 layout_mode = 2
@@ -200,5 +168,37 @@ theme_override_constants/outline_size = 5
 theme_override_font_sizes/font_size = 32
 text = "Almas: 0"
 vertical_alignment = 1
+
+[node name="PlayerHealthLabel" type="Label" parent="HUD" unique_id=1916356354]
+offset_left = 20.0
+offset_top = 12.0
+offset_right = 340.0
+offset_bottom = 40.0
+theme_override_colors/font_color = Color(0.95, 0.85, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 22
+text = "Aatrox"
+
+[node name="PlayerHealthBar" parent="HUD" unique_id=2062910579 instance=ExtResource("8_player_health")]
+offset_left = 20.0
+offset_top = 44.0
+offset_right = 340.0
+offset_bottom = 84.0
+mouse_filter = 2
+
+[node name="PetHUD" type="Control" parent="HUD" unique_id=45674072]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("9_pet_hud")
+
+[node name="AbilityHud" parent="HUD" unique_id=864512782 instance=ExtResource("11_ability_hud")]
+
+[node name="DamageFlashOverlay" parent="HUD" unique_id=1654870549 instance=ExtResource("10_damage_flash")]
 
 [node name="ConnectionMenu" parent="." unique_id=2043948072 instance=ExtResource("2_conn")]

@@ -44,6 +44,8 @@ var _tracked_boss: Node = null
 
 enum State { LOGIN, ROOM, CONNECTING, TEAM_LOBBY, CHARACTER_SELECT, IN_GAME }
 var current_state := State.LOGIN
+var _profile_phase_last: Dictionary = {}
+var _profile_phase_trace_count := 0
 
 ## Local team echoed from the latest snapshot. Compared against incoming
 ## snapshots to detect a server-side team change and start the visual cooldown.
@@ -83,7 +85,18 @@ func _is_provisioned_server_process() -> bool:
 	var args := OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	return args.has("--server")
 
+func _trace_profile_phase(source: String, phase: int, target_state: int) -> void:
+	if OS.get_environment("NOIKAR_PROFILE_PHASE_TRACE") != "1" or _profile_phase_trace_count >= 128:
+		return
+	var dedupe := OS.get_environment("NOIKAR_PROFILE_PHASE_TRACE_DEDUPE") == "1"
+	if not BenchmarkProfile.trace_transition(_profile_phase_last, source, phase, current_state, target_state, dedupe):
+		return
+	_profile_phase_trace_count += 1
+	print("[PROFILE_PHASE] t_usec=%d source=%s phase=%d ui_before=%d ui_after=%d network_tick=%d" % [
+		Time.get_ticks_usec(), source, phase, current_state, target_state, NetworkTime.tick])
+
 func _switch_state(new_state: State) -> void:
+	_trace_profile_phase("ui_switch", -1, new_state)
 	current_state = new_state
 	bg_rect.visible = new_state != State.IN_GAME
 	login_panel.visible = new_state == State.LOGIN
@@ -130,7 +143,8 @@ func _start_noray_flow(as_host: bool) -> void:
 	var noray_addr := noray_address_edit.text.strip_edges()
 	if noray_addr.is_empty(): noray_addr = "72.60.58.24"
 	if not Noray.is_connected_to_host():
-		if await Noray.connect_to_host(noray_addr) != OK:
+		var connect_error: Error = await Noray.connect_to_host(BenchmarkProfile.remote_host, 24691) if BenchmarkProfile.remote_transport else await Noray.connect_to_host(noray_addr)
+		if connect_error != OK:
 			_fail_connection("Could not connect to Noray")
 			return
 	if as_host:
@@ -153,7 +167,8 @@ func _start_noray_flow(as_host: bool) -> void:
 	Noray.register_host()
 	if Noray.oid.is_empty(): await Noray.on_oid
 	if Noray.pid.is_empty(): await Noray.on_pid
-	if await Noray.register_remote() != OK:
+	var register_error: Error = await Noray.register_remote(24693, 8, 0.1, 0) if BenchmarkProfile.remote_transport else await Noray.register_remote()
+	if register_error != OK:
 		_fail_connection("Could not register the room connection")
 		return
 	# NAT first: the VPS room server registers through the public IP, so noray
@@ -245,10 +260,13 @@ func _on_lobby_snapshot_received(snapshot: Dictionary) -> void:
 	_snapshot = snapshot.duplicate(true)
 	_render_snapshot()
 	var phase := int(_snapshot.get("phase", MatchState.Phase.LOBBY))
+	_trace_profile_phase("lobby_snapshot", phase, current_state)
 	if phase == MatchState.Phase.LOBBY:
 		_switch_state(State.TEAM_LOBBY)
 	elif phase == MatchState.Phase.CHARACTER_SELECT:
 		_switch_state(State.CHARACTER_SELECT)
+	else:
+		_project_active_match_phase(phase)
 
 func _render_snapshot() -> void:
 	var members: Array = _snapshot.get("members", [])
@@ -312,6 +330,10 @@ func _apply_ready_cooldown() -> void:
 		lobby_ready.text = "READY"
 
 func _max_players_per_team() -> int:
+	if BenchmarkProfile.player_limit in [10, 20]:
+		var director := get_tree().get_first_node_in_group(&"match_director")
+		if director != null and director.rules != null:
+			return director.rules.max_players_per_team
 	var manager := get_tree().get_first_node_in_group(&"match_manager")
 	if manager and "rules" in manager and manager.rules and "max_players_per_team" in manager.rules:
 		return int(manager.rules.max_players_per_team)
@@ -415,7 +437,18 @@ func _on_selection_ready_toggled(ready: bool) -> void:
 	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, _selected_character, ready)
 
 func _on_match_phase_changed(phase: int) -> void:
-	if phase == MatchState.Phase.COUNTDOWN: _switch_state(State.IN_GAME)
+	_trace_profile_phase("phase_event", phase, current_state)
+	_project_active_match_phase(phase)
+
+func _project_active_match_phase(phase: int) -> void:
+	# A replicated active phase can arrive without COUNTDOWN during catch-up.
+	# Project only the menu state; authoritative gameplay and readiness gates remain unchanged.
+	if current_state == State.IN_GAME:
+		return
+	match phase:
+		MatchState.Phase.COUNTDOWN, MatchState.Phase.ROUND_SETUP, MatchState.Phase.PVE_RACE, \
+				MatchState.Phase.BOSS_LOCK, MatchState.Phase.BOSS_DEPLOY, MatchState.Phase.BOSS_A1:
+			_switch_state(State.IN_GAME)
 
 func _on_connection_failed() -> void:
 	if _try_relay_fallback():

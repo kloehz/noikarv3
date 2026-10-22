@@ -4,13 +4,13 @@
 [ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="2_health"]
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="3_hurtbox"]
 [ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="4_state_sync"]
-[ext_resource type="Script" path="res://client/VisualComponent.gd" id="5_visual_comp"]
+[ext_resource type="Script" uid="uid://c6ohyd8kpeb4l" path="res://client/VisualComponent.gd" id="5_visual_comp"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="6_server_state"]
-[ext_resource type="Script" path="res://core/LogicComponent.gd" id="7_logic"]
+[ext_resource type="Script" uid="uid://bnouyek6qk4nb" path="res://core/LogicComponent.gd" id="7_logic"]
 [ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="8_rb_sync"]
 [ext_resource type="PackedScene" uid="uid://bcde1ykml4i3h" path="res://scenes/ui/HealthBar2D.tscn" id="9_health_bar_2d"]
 [ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="10_interpolator"]
-[ext_resource type="Script" path="res://core/CombatComponent.gd" id="11_combat"]
+[ext_resource type="Script" uid="uid://biy37jncj0xu6" path="res://core/CombatComponent.gd" id="11_combat"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -76,7 +76,6 @@ full_state_interval = 8
 script = ExtResource("8_rb_sync")
 root = NodePath("..")
 state_properties = Array[String]([":global_position", ":quaternion", "LogicComponent:current_velocity", "CombatComponent:current_attack_state", "CombatComponent:sync_attack_count"])
-enable_prediction = false
 input_properties = Array[String](["LogicComponent:input_axis", "LogicComponent:is_shooting", "LogicComponent:look_yaw"])
 
 [node name="TickInterpolator" type="Node" parent="." unique_id=1719543899 node_paths=PackedStringArray("root")]
@@ -91,7 +90,7 @@ no_depth_test = true
 text = "DUMMY"
 font_size = 34
 
-[node name="HurtboxComponent" type="Area3D" parent="." node_paths=PackedStringArray("health_component")]
+[node name="HurtboxComponent" type="Area3D" parent="." unique_id=1173612253 node_paths=PackedStringArray("health_component")]
 collision_layer = 8
 collision_mask = 0
 script = ExtResource("3_hurtbox")

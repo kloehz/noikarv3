@@ -7140,7 +7140,7 @@ _data = {
 
 [node name="ao_shin" parent="." unique_id=908569449 instance=ExtResource("1_1rwe8")]
 
-[node name="Skeleton3D" parent="ao_shin/Skeleton" parent_id_path=PackedInt32Array(908569449, 1643073371) index="0" unique_id=694811911]
+[node name="Skeleton3D" parent="ao_shin/Skeleton" parent_id_path=PackedInt32Array(908569449, 1897148355) index="0" unique_id=1413881255]
 bones/0/position = Vector3(-0.90983003, 224.646, -80.991295)
 bones/0/rotation = Quaternion(-0.21072719, 0.47628877, -0.6749727, -0.52264225)
 bones/1/position = Vector3(0, 1.378, 0)
@@ -7298,7 +7298,7 @@ bones/66/rotation = Quaternion(-2.1579848e-05, 1, -2.1579848e-05, -2.1579848e-05
 bones/67/position = Vector3(29.41168, 233.04333, -72.27093)
 bones/67/rotation = Quaternion(-0.21072719, 0.47628877, -0.6749727, -0.52264225)
 
-[node name="AnimationPlayer" parent="ao_shin" index="1" unique_id=1872183159]
+[node name="AnimationPlayer" parent="ao_shin" index="1" unique_id=89546656]
 libraries/ = SubResource("AnimationLibrary_fambc")
 
 [editable path="ao_shin"]

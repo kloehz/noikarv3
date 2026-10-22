@@ -1,18 +1,14 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://xswjwfbtexgk"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/pets/dps/tpa_ezreal.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://b40u8t3nhlwyw" path="res://assets/models/pets/dps/tpa_ezreal.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/pet_dps_t4_ezreal.tres" id="9_spec"]
 
-[node name="PetDpsT4Ezreal" type="Node3D"]
+[node name="PetDpsT4Ezreal" type="Node3D" unique_id=2036219228]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
-anim_idle = "Idle_Base"
-anim_run = "Run"
 anim_attack = "Attack1a"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=42546113 instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

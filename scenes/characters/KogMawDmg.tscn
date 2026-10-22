@@ -4,24 +4,22 @@
 [ext_resource type="PackedScene" uid="uid://dgluayoy35il2" path="res://assets/models/enemies/kogmaw/deep_sea_kog'maw.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/kogmaw_dmg.tres" id="9_spec"]
 
-[node name="KogMawDmg" type="Node3D"]
+[node name="KogMawDmg" type="Node3D" unique_id=334616893]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
 anim_idle = "Idle1"
-anim_run = "Run"
 anim_attack = "Attack1"
-anim_death = "Death"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=729085128 instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)
 
-[node name="Sockets" type="Node3D" parent="Model"]
+[node name="Sockets" type="Node3D" parent="Model" unique_id=1507749801]
 
-[node name="WeaponMain" type="Marker3D" parent="Model/Sockets"]
+[node name="WeaponMain" type="Marker3D" parent="Model/Sockets" unique_id=536083362]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50, 0)
 
-[node name="Chest" type="Marker3D" parent="Model/Sockets"]
+[node name="Chest" type="Marker3D" parent="Model/Sockets" unique_id=61561859]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
 
-[node name="Feet" type="Marker3D" parent="Model/Sockets"]
+[node name="Feet" type="Marker3D" parent="Model/Sockets" unique_id=63524447]

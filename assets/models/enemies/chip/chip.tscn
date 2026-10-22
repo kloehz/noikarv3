@@ -4725,7 +4725,7 @@ _data = {
 
 [node name="chip" parent="." unique_id=518964012 instance=ExtResource("1_mqjth")]
 
-[node name="Skeleton3D" parent="chip/Skeleton" parent_id_path=PackedInt32Array(518964012, 1809513218) index="0" unique_id=1669357689]
+[node name="Skeleton3D" parent="chip/Skeleton" parent_id_path=PackedInt32Array(518964012, 1551807327) index="0" unique_id=1430779876]
 bones/0/position = Vector3(0.43738937, 40.046555, -34.34877)
 bones/0/rotation = Quaternion(0.22074026, -0.47948262, -0.2651084, 0.8069001)
 bones/1/position = Vector3(22.398735, 3.962903, 2.9139633)
@@ -4860,7 +4860,7 @@ bones/62/rotation = Quaternion(0.07701847, 0.84913003, 0.49299157, -0.1732214)
 bones/63/position = Vector3(0.43738937, 42.4683, -57.512264)
 bones/63/rotation = Quaternion(0.0368368, -0.7061382, -0.036793634, 0.70615727)
 
-[node name="AnimationPlayer" parent="chip" index="1" unique_id=437731745]
+[node name="AnimationPlayer" parent="chip" index="1" unique_id=1903894561]
 libraries/ = SubResource("AnimationLibrary_cl7k2")
 
 [editable path="chip"]

@@ -4,25 +4,23 @@
 [ext_resource type="PackedScene" uid="uid://bxr230qn63lwv" path="res://assets/models/enemies/hecarim/hecarim.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/hecarim_tank.tres" id="9_spec"]
 
-[node name="HecarimTank" type="Node3D"]
+[node name="HecarimTank" type="Node3D" unique_id=1009677552]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
 anim_idle = "Hecarim_idle1.anm"
-anim_run = "Run"
 anim_attack = "Attack1"
-anim_death = "Death"
 play_idle_on_ready = true
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=1792145054 instance=ExtResource("2_model")]
 transform = Transform3D(0.01, 0, 0, 0, 0.01, 0, 0, 0, 0.01, 0, 0, 0)
 
-[node name="Sockets" type="Node3D" parent="Model"]
+[node name="Sockets" type="Node3D" parent="Model" unique_id=640940620]
 
-[node name="WeaponMain" type="Marker3D" parent="Model/Sockets"]
+[node name="WeaponMain" type="Marker3D" parent="Model/Sockets" unique_id=604292142]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 50, 0)
 
-[node name="Chest" type="Marker3D" parent="Model/Sockets"]
+[node name="Chest" type="Marker3D" parent="Model/Sockets" unique_id=51665418]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 120, 0)
 
-[node name="Feet" type="Marker3D" parent="Model/Sockets"]
+[node name="Feet" type="Marker3D" parent="Model/Sockets" unique_id=1675715673]

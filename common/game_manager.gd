@@ -11,6 +11,13 @@ const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
 var validated_room_creator_account_id := ""
 
 func _ready() -> void:
+	if not BenchmarkProfile.valid:
+		get_tree().quit(64)
+		return
+	if not BenchmarkProfile.selected_profile.is_empty():
+		# All autoload constructors must finish before checking cached Netfox values.
+		_start_profiled_runtime.call_deferred()
+		return
 	var server_frame_cap := _server_frame_cap_for_environment()
 	if server_frame_cap > 0:
 		Engine.max_fps = server_frame_cap
@@ -19,10 +26,25 @@ func _ready() -> void:
 	else:
 		_start_as_client()
 
+func _start_profiled_runtime() -> void:
+	var is_server := _is_headless_environment()
+	if not BenchmarkProfile.before_network_start(is_server):
+		return
+	if is_server:
+		_start_as_server()
+	else:
+		_start_as_client()
+
 ## Detect if running as a dedicated-server export or headless process.
 ## The dedicated_server feature is an export-only tag; editor runs start as
 ## clients unless they use a headless display server.
+static func server_role_for_display(headless: bool, dedicated: bool, benchmark_client: bool) -> bool:
+	return dedicated or (headless and not benchmark_client)
+
 func _is_headless_environment() -> bool:
+	# A validated benchmark headless CLIENT retains normal client scene/controllers.
+	if BenchmarkProfile.valid and BenchmarkProfile.headless_client:
+		return server_role_for_display(DisplayServer.get_name() == "headless", OS.has_feature("dedicated_server"), true)
 	if OS.has_feature("editor"):
 		return DisplayServer.get_name() == "headless"
 	return OS.has_feature("dedicated_server") or DisplayServer.get_name() == "headless"
@@ -72,7 +94,7 @@ func _start_as_server() -> void:
 	var noray_host := OS.get_environment("NOIKAR_NORAY_HOST")
 	if noray_host.is_empty():
 		noray_host = "127.0.0.1"
-	var err = await Noray.connect_to_host(noray_host)
+	var err = await Noray.connect_to_host(noray_host, 24691) if BenchmarkProfile.remote_transport else await Noray.connect_to_host(noray_host)
 	if err != OK:
 		print("[GameManager] Failed to connect to Noray: ", err)
 		return
@@ -80,9 +102,9 @@ func _start_as_server() -> void:
 	# The provisioning service forwards the backend-attested, single-use ticket
 	# received with Noray's request-host command. It is validated before ENet
 	# admission begins, so the raw account ID never crosses Noray.
-	var provision_token = ""
-	var room_creator_ticket = ""
-	var provision_instance_id = ""
+	var provision_token = OS.get_environment("NOIKAR_PROVISION_TOKEN") if BenchmarkProfile.remote_transport else ""
+	var room_creator_ticket = OS.get_environment("NOIKAR_ROOM_CREATOR_TICKET") if BenchmarkProfile.remote_transport else ""
+	var provision_instance_id = OS.get_environment("NOIKAR_PROVISION_INSTANCE_ID") if BenchmarkProfile.remote_transport else ""
 	var world_server_credential := OS.get_environment("NOIKAR_WORLD_SERVER_CREDENTIAL")
 	for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
 		if arg.begins_with("--provision-token="):
@@ -94,6 +116,9 @@ func _start_as_server() -> void:
 		elif arg.begins_with("--world-server-credential="):
 			world_server_credential = arg.replace("--world-server-credential=", "")
 	
+	if BenchmarkProfile.remote_transport and provision_token.is_empty():
+		push_error("[GameManager] Benchmark remote room requires normal creator provisioning")
+		return
 	if not provision_token.is_empty():
 		if room_creator_ticket.is_empty() or provision_instance_id.is_empty() or world_server_credential.is_empty():
 			push_error("[GameManager] Refusing provisioned room without ticket, instance binding, or world credential")
@@ -104,7 +129,10 @@ func _start_as_server() -> void:
 			return
 		validated_room_creator_account_id = str(ticket_identity["account_id"])
 		EventBus.room_creator_ticket_validated.emit(validated_room_creator_account_id)
-		print("[GameManager] Registering Spawned Server with token: ", provision_token)
+		if BenchmarkProfile.remote_transport:
+			print("[GameManager] Registering creator-bound benchmark server")
+		else:
+			print("[GameManager] Registering Spawned Server with token: ", provision_token)
 		Noray.register_server(provision_token)
 	else:
 		print("[GameManager] Registering Host manually...")
@@ -118,24 +146,29 @@ func _start_as_server() -> void:
 	print("[GameManager] Registering Remote Port (with retries)...")
 	var retries = 3
 	while retries > 0:
-		err = await Noray.register_remote()
+		err = await Noray.register_remote(24693, 8, 0.1, 24690) if BenchmarkProfile.remote_transport else await Noray.register_remote()
 		if err == OK:
 			break
 		retries -= 1
 		print("[GameManager] Failed to register port, retrying... (%d left)" % retries)
 		await get_tree().create_timer(1.0).timeout
 		
+	if BenchmarkProfile.remote_transport and err != OK:
+		push_error("[GameManager] Benchmark remote UDP registration failed")
+		return
 	# Final server initialization
 	var port = Noray.local_port
 	var peer = ENetMultiplayerPeer.new()
 
 	print("[GameManager] Creating ENet server on port: %d" % port)
-	err = peer.create_server(port)
+	err = peer.create_server(port, BenchmarkProfile.player_limit) if BenchmarkProfile.player_limit in [10, 20] else peer.create_server(port)
 
 	if err != OK:
 		print("[GameManager] Failed to host ENet server: ", err)
 		return
 
+	if BenchmarkProfile.remote_transport:
+		printerr("[PROFILE_TRANSPORT] " + JSON.stringify({"server_bind_port": port, "enet_error": int(err), "creator_ticket_validated": not validated_room_creator_account_id.is_empty()}))
 	# CRITICAL: In some Godot 4.x versions, setting the peer immediately 
 	# can cause a crash if the scene tree is still busy.
 	multiplayer.call_deferred("set_multiplayer_peer", peer)

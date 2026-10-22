@@ -1,18 +1,14 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://7ap7dlkc4gc6"]
 
-[ext_resource type="Script" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" path="res://assets/models/pets/dps/skt_t1_jax.glb" id="2_model"]
+[ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
+[ext_resource type="PackedScene" uid="uid://bswdc5uqrxrc" path="res://assets/models/pets/dps/skt_t1_jax.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/pet_dps_t3_jax.tres" id="9_spec"]
 
-[node name="PetDpsT3Jax" type="Node3D"]
+[node name="PetDpsT3Jax" type="Node3D" unique_id=606579462]
 script = ExtResource("1_actor")
-spec = ExtResource("9_spec")
-anim_idle = "Idle_Base"
-anim_run = "Run"
 anim_attack = "Attack1Fast"
-anim_death = "Death"
-anim_hit = "Damage_Hurt"
 visual_forward_yaw = 3.1415927
+spec = ExtResource("9_spec")
 
-[node name="Model" parent="." instance=ExtResource("2_model")]
+[node name="Model" parent="." unique_id=1733081397 instance=ExtResource("2_model")]
 transform = Transform3D(0.012, 0, 0, 0, 0.012, 0, 0, 0, 0.012, 0, 0, 0)

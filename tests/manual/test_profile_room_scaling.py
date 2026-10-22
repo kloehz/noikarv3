@@ -1309,21 +1309,9 @@ class ProfileRoomScalingTests(unittest.TestCase):
         self.assertEqual(args.player_count, 4)
         self.assertEqual(args.rooms, 1)
         self.assertEqual(args.mob_count, 0)
-        self.assertEqual(
-            prs.parse_args(
-                [
-                    "--player-count",
-                    "8",
-                    "--mob-count",
-                    "0",
-                    "--warmup-seconds",
-                    "1",
-                    "--sample-seconds",
-                    "2",
-                ]
-            ).player_count,
-            8,
-        )
+        with self.assertRaises(SystemExit):
+            prs.parse_args(["--player-count", "8", "--mob-count", "0",
+                            "--warmup-seconds", "1", "--sample-seconds", "2"])
         with self.assertRaises(SystemExit):
             prs.parse_args(
                 [

@@ -1,7 +1,7 @@
 extends SceneTree
 ## Provisions a production room through the real client flow, starts a solo
 ## match, and exercises replicated player, mob, and projectile movement.
-## Run without --headless so GameManager starts as a client.
+## Benchmark loads use the validated explicit headless-client role; networking and gameplay stay intact.
 
 const FLOW_TIMEOUT_SEC := 45.0
 const GAMEPLAY_TIMEOUT_SEC := 60.0
@@ -18,6 +18,11 @@ const RELEASE_TIMEOUT_SEC := 120.0
 var _main: Node
 var _menu: CanvasLayer
 var _observed_projectile_spawns: int = 0
+var _profile_native_ticks := 0
+var _readiness_trace: Node
+
+func _on_profile_native_tick(_delta: float, _tick: int) -> void:
+	_profile_native_ticks += 1
 
 func _initialize() -> void:
 	node_added.connect(_on_node_added)
@@ -25,6 +30,26 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await process_frame
+	if OS.get_environment("NOIKAR_BENCHMARK_PLAYER_LIMIT") in ["10", "20"]:
+		root.get_node("NetworkTime").on_tick.connect(_on_profile_native_tick)
+	if OS.get_environment("NOIKAR_PROFILE_CLIENT_OBSERVE") == "1":
+		var observer := preload("res://common/benchmark_observer.gd").new()
+		root.add_child(observer)
+		observer.start_client(_profile_player_index(), func() -> int: return int(_menu.current_state) if _menu != null else -1)
+	var benchmark_profile := root.get_node("BenchmarkProfile")
+	var preparation_sec: float = benchmark_profile.preparation_seconds(OS.get_environment("NOIKAR_PROFILE_PREPARATION_SEC"), int(benchmark_profile.player_limit) in [10, 20])
+	if preparation_sec < 0:
+		_fail("invalid benchmark preparation timeout")
+		return
+	var expected := _expected_player_count()
+	var index := _profile_player_index()
+	if expected < 1 or index < 0 or index >= expected:
+		_fail("invalid exact player count/index")
+		return
+	if OS.get_environment("NOIKAR_PROFILE_READINESS_TRACE") == "1" and benchmark_profile.valid and expected in [10, 20]:
+		_readiness_trace = preload("res://common/benchmark_readiness_trace.gd").new()
+		root.add_child(_readiness_trace)
+		_readiness_trace.call("start", "client", index, expected, _readiness_snapshot, "1")
 	var main_scene := load("res://scenes/main.tscn") as PackedScene
 	if main_scene == null:
 		_fail("could not load main.tscn")
@@ -43,11 +68,13 @@ func _run() -> void:
 	_menu.password_edit.text = profile_password if not profile_password.is_empty() else "debugpassword123"
 	var noray_host := OS.get_environment("NOIKAR_NORAY_HOST").strip_edges()
 	_menu.noray_address_edit.text = noray_host if not noray_host.is_empty() else "127.0.0.1"
+	_trace_stage(1)
 	_menu._on_enter_lobby_pressed()
 	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.ROOM, 15.0):
 		_fail("login did not reach ROOM")
 		return
 
+	_trace_stage(2)
 	var join_oid := OS.get_environment("NOIKAR_PROFILE_JOIN_OID").strip_edges()
 	if join_oid.is_empty():
 		_menu._on_host_pressed()
@@ -63,6 +90,7 @@ func _run() -> void:
 		print("[LIVE-PROBE] holding authenticated lobby for %.1fs" % lobby_hold_sec)
 		await create_timer(lobby_hold_sec).timeout
 
+	_trace_stage(3)
 	var player_index := _profile_player_index()
 	var desired_team := _team_for_profile_player(player_index)
 	_menu._on_team_choice_pressed(desired_team)
@@ -72,6 +100,7 @@ func _run() -> void:
 	if not await _ensure_lobby_ready(8.0):
 		_fail("server did not accept lobby ready")
 		return
+	_trace_stage(4)
 	var expected_players := _expected_player_count()
 	if join_oid.is_empty() and expected_players > 1:
 		if not await _host_start_selection_when_joined(expected_players):
@@ -87,11 +116,22 @@ func _run() -> void:
 		_fail("character selection did not start")
 		return
 	_menu._on_character_pressed("ivern_ranger")
+	if expected_players in [10, 20]:
+		if not await _wait_until(func() -> bool: return str(_menu._snapshot.get("self_character_id", "")) == "ivern_ranger", 5.0):
+			_fail("server did not confirm character selection")
+			return
+		print("[LIVE-PROBE] SELECTION_PREPARED index=%d owner=%d team=%d" % [player_index, _local_peer_id(), desired_team])
+		_trace_stage(5)
+		if not await _await_profile_gate("NOIKAR_PROFILE_SELECTION_FILE"):
+			_fail("selection barrier failed")
+			return
+	_trace_stage(6)
 	_menu._on_selection_ready_toggled(true)
-	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.IN_GAME, 5.0):
-		_fail("match did not enter countdown")
+	if not await _wait_until(func() -> bool: return _menu.current_state == _menu.State.IN_GAME, preparation_sec):
+		_fail("client did not observe IN_GAME within %.1fs preparation budget" % preparation_sec)
 		return
 
+	_trace_stage(7)
 	var player_ref: Array[Node3D] = [null]
 	if not await _wait_until(func() -> bool:
 		var peer_id := _local_peer_id()
@@ -102,6 +142,7 @@ func _run() -> void:
 		GAMEPLAY_TIMEOUT_SEC):
 		_fail("owned player did not spawn")
 		return
+	_trace_stage(8)
 	var player := player_ref[0]
 	var mobs := _main.get_node("Mobs")
 	var expected_mob_count := _expected_mob_count()
@@ -125,6 +166,14 @@ func _run() -> void:
 		])
 		return
 
+	if expected_players in [10, 20]:
+		_trace_stage(9)
+		print("[LIVE-PROBE] OWNER_READY index=%d owner=%d team=%d" % [player_index, _local_peer_id(), desired_team])
+		_trace_stage(10)
+		if not await _await_profile_gate("NOIKAR_PROFILE_START_FILE"):
+			_fail("workload barrier failed")
+			return
+	_trace_stage(11)
 	var mob_start_positions: Dictionary = {}
 	for child in mobs.get_children():
 		mob_start_positions[child] = child.global_position
@@ -218,9 +267,11 @@ func _run() -> void:
 
 func _expected_player_count() -> int:
 	var raw := OS.get_environment("NOIKAR_PROFILE_PLAYER_COUNT")
-	if raw in ["1", "2", "4", "8"]:
+	if raw.is_empty():
+		return 1
+	if raw in ["1", "2", "4"] or (raw in ["10", "20"] and int(raw) == root.get_node("BenchmarkProfile").player_limit):
 		return int(raw)
-	return 1
+	return -1
 
 func _local_peer_id() -> int:
 	if _menu == null:
@@ -266,9 +317,9 @@ func _players_child_names() -> Array[String]:
 
 func _profile_player_index() -> int:
 	var raw := OS.get_environment("NOIKAR_PROFILE_PLAYER_INDEX")
-	if raw.is_valid_int():
-		return max(0, int(raw))
-	return 0
+	if raw.is_empty():
+		return 0
+	return int(raw) if raw.is_valid_int() and str(int(raw)) == raw else -1
 
 func _team_for_profile_player(index: int) -> int:
 	var max_per_team := 3
@@ -368,6 +419,7 @@ func _run_orbit_profile(player: Node3D, mobs: Node, mob_start_positions: Diction
 	}
 
 func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: Dictionary, logic: Node, warmup_sec: float, sample_sec: float, expected_mob_count: int) -> Dictionary:
+	var native_ticks_start := _profile_native_ticks
 	var max_projectiles := _observed_projectile_spawns
 	var max_mob_displacement := 0.0
 	var total_sec := warmup_sec + sample_sec + FIXED_ROUTE_POLL_MARGIN_SEC
@@ -402,6 +454,10 @@ func _run_fixed_route_profile(player: Node3D, mobs: Node, mob_start_positions: D
 				if is_instance_valid(mob):
 					var mob_start: Vector3 = mob_start_positions[mob]
 					max_mob_displacement = max(max_mob_displacement, mob_start.distance_to(mob.global_position))
+	if _expected_player_count() in [10, 20]:
+		var elapsed := float(Time.get_ticks_msec() - start_msec) / 1000.0
+		var ticks := _profile_native_ticks - native_ticks_start
+		print("[PROFILE_CLIENT_CLOCK] ticks=%d elapsed_sec=%.6f achieved_hz=%.3f" % [ticks, elapsed, float(ticks) / elapsed])
 	_emit_fixed_workload_end()
 	_close_peer()
 	if not is_instance_valid(player):
@@ -590,6 +646,17 @@ func _closest_mob(player: Node3D, mobs: Node) -> Node3D:
 			closest_distance = distance
 	return closest
 
+func _await_profile_gate(env_name: String) -> bool:
+	var gate := OS.get_environment(env_name)
+	if gate.is_empty():
+		return false
+	var deadline := Time.get_ticks_msec() + int(FLOW_TIMEOUT_SEC * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		if FileAccess.file_exists(gate):
+			return true
+		await process_frame
+	return false
+
 func _await_supervisor_release() -> bool:
 	var release_file := OS.get_environment("NOIKAR_PROFILE_RELEASE_FILE").strip_edges()
 	if release_file.is_empty():
@@ -612,7 +679,31 @@ func _close_peer() -> void:
 	Input.action_release("move_right")
 	Input.action_release("shoot")
 
+
+func _trace_stage(value: int) -> void:
+	if is_instance_valid(_readiness_trace):
+		_readiness_trace.call("stage", value)
+
+func _readiness_snapshot() -> Dictionary:
+	var avatar: Node = _main.get_node_or_null("Players/%s" % _local_peer_id()) if is_instance_valid(_main) else null
+	var state: Node = avatar.get_node_or_null("ServerState") if avatar != null else null
+	var sync: Node = state.get_node_or_null("StateSynchronizer") if state != null else null
+	var initialized: Variant = null
+	if sync != null:
+		for property in sync.get_property_list():
+			if str(property.name) == "_is_initialized":
+				initialized = sync.get("_is_initialized")
+	var mobs: Node = _main.get_node_or_null("Mobs") if is_instance_valid(_main) else null
+	return {"phase": int(_menu.current_state) if is_instance_valid(_menu) else null,
+		"in_game": _menu.current_state == _menu.State.IN_GAME if is_instance_valid(_menu) else false,
+		"avatar_present": avatar != null, "owned_state_present": state != null,
+		"owned_sync_present": sync != null, "owned_sync_initialized": initialized,
+		"mobs": mobs.get_child_count() if mobs != null else null, "expected_mobs": _expected_mob_count(),
+		"selection_gate_open": FileAccess.file_exists(OS.get_environment("NOIKAR_PROFILE_SELECTION_FILE")),
+		"workload_gate_open": FileAccess.file_exists(OS.get_environment("NOIKAR_PROFILE_START_FILE"))}
+
 func _fail(reason: String) -> void:
+	_trace_stage(12)
 	_close_peer()
 	print("[LIVE-PROBE] FAIL: " + reason)
 	quit(1)

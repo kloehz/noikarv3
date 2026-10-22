@@ -1,9 +1,9 @@
-[gd_resource type="Resource" script_class="CharacterSpec" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="CharacterSpec" format=3 uid="uid://dblpexa4gyn3m"]
 
-[ext_resource type="Script" path="res://common/resources/character_spec.gd" id="1_spec"]
+[ext_resource type="Script" uid="uid://d4c1rwlobooam" path="res://common/resources/character_spec.gd" id="1_spec"]
 [ext_resource type="Script" uid="uid://dc5gph2xvvn1b" path="res://common/resources/attack_definition.gd" id="2_attack"]
 [ext_resource type="Script" uid="uid://dubhplo6iij4o" path="res://common/resources/attack_shape_data.gd" id="3_shape"]
-[ext_resource type="PackedScene" path="res://scenes/ProjectileEntity.tscn" id="4_projectile"]
+[ext_resource type="PackedScene" uid="uid://cjwikvipyhcpm" path="res://scenes/ProjectileEntity.tscn" id="4_projectile"]
 
 [sub_resource type="Resource" id="AttackShapeData_main"]
 script = ExtResource("3_shape")

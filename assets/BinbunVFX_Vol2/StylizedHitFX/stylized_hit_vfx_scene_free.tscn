@@ -184,6 +184,16 @@ spot_range = 10.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -3)
 
 [node name="VFXBigImpact_01" parent="BigImpact" unique_id=213346474 instance=ExtResource("2_b2uwn")]
+attenuation_model = 0
+volume_db = 0.0
+unit_size = 10.0
+max_db = 3.0
+pitch_scale = 1.0
+stream_paused = false
+audio_max_distance = 3.0
+max_polyphony = 1
+panning_strength = 1.0
+bus = &"Master"
 autoplay = true
 
 [node name="VFXBigImpact_02" parent="BigImpact" unique_id=1950283781 instance=ExtResource("3_l6p6r")]

@@ -246,6 +246,7 @@ mesh = SubResource("CylinderMesh_4c6s4")
 material_override = SubResource("ShaderMaterial_mnrc8")
 amount = 24
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_e2xcs")
 draw_pass_1 = SubResource("QuadMesh_6b27r")
 

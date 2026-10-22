@@ -2,6 +2,8 @@
 class_name CombatComponent
 extends Node
 
+const MELEE_QUERY := preload("res://common/melee_query.gd")
+
 ## Server-authoritative combat component with data-driven attacks.
 ## Configured at runtime by BaseEntity after loading the CharacterActor.
 ## Supports MELEE_HITSCAN (dynamic ShapeCast3D) and PROJECTILE (server-spawned).
@@ -82,6 +84,7 @@ func _ready() -> void:
 	var static_cast = get_node_or_null("../ShapeCast3D")
 	if static_cast and not _melee_shapecast:
 		_melee_shapecast = static_cast
+		_melee_shapecast.enabled = false
 		_melee_shapecast.add_exception(get_parent())
 
 ## Configure attack slots from AttackDefinition resources.
@@ -136,31 +139,7 @@ func _setup_melee_shapecast(shape_data: AttackShapeData) -> void:
 
 ## Apply AttackShapeData parameters to a ShapeCast3D node.
 func _configure_shapecast_from_data(cast: ShapeCast3D, data: AttackShapeData) -> void:
-	# Create shape based on type
-	var shape: Shape3D
-	match data.shape_type:
-		AttackShapeData.ShapeType.SPHERE:
-			var s = SphereShape3D.new()
-			s.radius = data.radius
-			shape = s
-		AttackShapeData.ShapeType.BOX:
-			var s = BoxShape3D.new()
-			s.size = Vector3(data.radius * 2, data.height, data.length)
-			shape = s
-		AttackShapeData.ShapeType.CAPSULE:
-			var s = CapsuleShape3D.new()
-			s.radius = data.radius
-			s.height = data.length
-			shape = s
-	
-	cast.shape = shape
-	cast.transform.origin = data.offset
-	cast.target_position = Vector3.ZERO  # Instant cast, no sweep
-	cast.max_results = 8
-	cast.collision_mask = 8       # Layer 8 = Hurtboxes ONLY
-	cast.collide_with_areas = true
-	cast.collide_with_bodies = false  # Never hit CharacterBody3D directly
-	cast.add_exception(get_parent())
+	MELEE_QUERY.configure(cast, data, get_parent())
 
 # ============================================================
 # ROLLBACK TICK — called by Netfox

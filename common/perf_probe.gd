@@ -32,6 +32,11 @@ const NETFOX_MONITORS := {
 	"sent_state_ratio": &"netfox/Sent state properties ratio",
 }
 
+var _cadence_start_usec := 0
+var _last_native_tick_usec := 0
+var _native_tick_count := 0
+var _native_intervals: Array[float] = []
+var _native_intervals_dropped := 0
 var _timer := 0.0
 var _rollback_ticks_in_loop := 0
 var _rollback_events := 0
@@ -57,6 +62,40 @@ func _ready() -> void:
 	# PerfProbe is autoloaded before Netfox. Defer signal hookup until the full
 	# autoload list exists, but keep reporting interval aggregation local.
 	call_deferred("_connect_rollback_signals")
+	if OS.get_environment("NOIKAR_PROFILE_READINESS_TRACE") == "1":
+		_start_readiness_trace.call_deferred()
+	if not BenchmarkProfile.selected_profile.is_empty():
+		_connect_native_cadence.call_deferred()
+	if not OS.get_environment("NOIKAR_PROFILE_WINDOW_COUNT").is_empty():
+		_start_window_observer.call_deferred()
+
+
+func _start_readiness_trace() -> void:
+	if not BenchmarkProfile.valid or BenchmarkProfile.player_limit not in [10, 20]:
+		return
+	var trace := preload("res://common/benchmark_readiness_trace.gd").new()
+	add_child(trace)
+	trace.start("server", -1, BenchmarkProfile.player_limit, _readiness_snapshot, "1")
+
+func _readiness_snapshot() -> Dictionary:
+	var director := get_tree().get_first_node_in_group(&"match_director")
+	var state: Node = director.get("match_state") if director != null else null
+	return {"phase": int(state.get("phase")) if state != null else null,
+		"players": get_tree().get_nodes_in_group(&"players").size(),
+		"mobs": get_tree().get_nodes_in_group(&"mobs").size(), "expected_mobs": 20,
+		"connected_peers": multiplayer.get_peers().size(),
+		"workload_gate_open": FileAccess.file_exists(OS.get_environment("NOIKAR_PROFILE_START_FILE"))}
+
+func _start_window_observer() -> void:
+	var plan := BenchmarkProfile.server_window_plan(OS.get_environment("NOIKAR_PROFILE_WINDOW_COUNT"),
+		OS.get_environment("NOIKAR_PROFILE_WARMUP_SEC"), BenchmarkProfile.player_limit, BenchmarkProfile.remote_transport)
+	if not BenchmarkProfile.valid or plan.is_empty():
+		push_error("Invalid benchmark window observer options")
+		get_tree().quit(64)
+		return
+	var observer := preload("res://common/benchmark_observer.gd").new()
+	add_child(observer)
+	observer.start_server_windows(plan.window_count, plan.warmup_seconds)
 
 func _process(delta: float) -> void:
 	_timer += delta
@@ -66,6 +105,42 @@ func _process(delta: float) -> void:
 	# stderr bypasses Godot's stdout block buffering on pipes, so journald shows
 	# these immediately. Reporting is interval-based; no per-tick logging.
 	printerr(_format_perf_line(_collect_metrics()))
+
+func _connect_native_cadence() -> void:
+	_cadence_start_usec = Time.get_ticks_usec()
+	NetworkTime.on_tick.connect(_on_native_tick)
+
+func _on_native_tick(_delta: float, _tick: int) -> void:
+	var now := Time.get_ticks_usec()
+	_native_tick_count += 1
+	if _last_native_tick_usec > 0:
+		if _native_intervals.size() < 4096:
+			_native_intervals.append((now - _last_native_tick_usec) / 1000.0)
+		else:
+			_native_intervals_dropped += 1
+	_last_native_tick_usec = now
+
+static func cadence_percentile(values: Array[float], quantile: float) -> float:
+	if values.is_empty():
+		return -1.0
+	var ordered := values.duplicate()
+	ordered.sort()
+	return ordered[clampi(ceili(quantile * ordered.size()) - 1, 0, ordered.size() - 1)]
+
+func _consume_native_cadence() -> Dictionary:
+	var now := Time.get_ticks_usec()
+	var seconds := (now - _cadence_start_usec) / 1000000.0
+	var result := {"ticks": _native_tick_count, "window_seconds": seconds,
+		"achieved_hz": _native_tick_count / seconds if seconds > 0 else 0.0,
+		"interval_p95_ms": cadence_percentile(_native_intervals, 0.95),
+		"interval_p99_ms": cadence_percentile(_native_intervals, 0.99),
+		"interval_samples": _native_intervals.size(), "dropped_samples": _native_intervals_dropped}
+	_native_tick_count = 0
+	_native_intervals.clear()
+	_native_intervals_dropped = 0
+	_cadence_start_usec = now
+	_last_native_tick_usec = 0
+	return result
 
 func _should_enable_probe(env_value: String, is_headless: bool) -> bool:
 	return env_value == "1" and is_headless
@@ -177,12 +252,14 @@ func _collect_metrics() -> Dictionary:
 	var scenario := benchmark_scenario_from_args(OS.get_cmdline_user_args())
 	var benchmark_config := benchmark_config_for_scenario(scenario)
 	var entity_counts := _count_entities_by_group()
+	# Teardown can clear the peer while the process sampler is still active.
+	var peer_count := multiplayer.get_peers().size() if multiplayer.multiplayer_peer != null else 0
 	var metrics := {
 		"scenario": scenario,
 		"uptime_sec": float(Time.get_ticks_msec()) / 1000.0,
 		"configured_players": int(benchmark_config.get("players", 0)),
 		"configured_mobs": int(benchmark_config.get("mobs", 0)),
-		"live_players": entity_counts.get("players", multiplayer.get_peers().size()),
+		"live_players": entity_counts.get("players", peer_count),
 		"live_mobs": entity_counts.get("mobs", 0),
 		"fps": Performance.get_monitor(Performance.TIME_FPS),
 		"frames": Engine.get_frames_drawn(),
@@ -190,7 +267,7 @@ func _collect_metrics() -> Dictionary:
 		"physics_ms": Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
 		"physics_ticks_per_second": Engine.physics_ticks_per_second,
 		"max_fps": Engine.max_fps,
-		"players": multiplayer.get_peers().size(),
+		"players": peer_count,
 		"entities": _sum_entity_counts(entity_counts),
 		"entity_counts": entity_counts,
 		"rollback_events": rollback.events,
@@ -201,8 +278,16 @@ func _collect_metrics() -> Dictionary:
 		"synchronized_entities_observable": _count_synchronized_entities(),
 		"netfox": _collect_netfox_monitors(),
 	}
-	if not scenario.is_empty():
+	if not BenchmarkProfile.selected_profile.is_empty():
+		metrics["native_cadence"] = _consume_native_cadence()
+	if not scenario.is_empty() or OS.get_environment("NOIKAR_PROFILE_FIXED_POPULATION") == "1":
 		metrics["npc_authoritative_stride_counts"] = _count_authoritative_npc_stride_counts()
+	if BenchmarkProfile.player_limit in [10, 20]:
+		var manager := get_tree().get_first_node_in_group(&"match_manager")
+		if manager != null:
+			metrics["owner_population"] = manager.profile_owner_population()
+			var start_file := OS.get_environment("NOIKAR_PROFILE_START_FILE")
+			metrics.owner_population["workload_started"] = not start_file.is_empty() and FileAccess.file_exists(start_file)
 	if npc_cost_recording_enabled:
 		metrics["npc_costs"] = _consume_npc_cost_summary()
 	return metrics
@@ -321,12 +406,17 @@ func _format_perf_line(metrics: Dictionary) -> String:
 		if netfox.has(metric_name):
 			parts.append("%s=%s" % [metric_name, _format_number(netfox[metric_name])])
 
+	if metrics.has("owner_population"):
+		parts.append("owner_population=" + JSON.stringify(metrics.owner_population))
 	if metrics.has("npc_authoritative_stride_counts"):
 		parts.append("npc_authoritative_stride_counts=%s" % _format_int_count_dict(metrics.npc_authoritative_stride_counts))
 
 	if metrics.has("npc_costs"):
 		_append_npc_cost_parts(parts, metrics.npc_costs)
 
+	if metrics.has("native_cadence"):
+		for key in metrics.native_cadence:
+			parts.append("native_%s=%s" % [key, _format_number(metrics.native_cadence[key])])
 	parts.append("bandwidth_rx_kbps=na")
 	parts.append("bandwidth_tx_kbps=na")
 	parts.append("cpu=external")

@@ -396,6 +396,7 @@ lifetime = 0.3
 one_shot = true
 explosiveness = 0.9
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_kn1xq")
 draw_pass_1 = SubResource("QuadMesh_o2nyg")
 
@@ -417,6 +418,7 @@ lifetime = 0.7
 one_shot = true
 explosiveness = 0.5
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_aaoak")
 draw_pass_1 = SubResource("QuadMesh_lg0dv")
 

@@ -11,10 +11,15 @@ signal expired
 @export var respawn_probability: float = 0.4
 @export var original_mob_scene_path: String = "res://scenes/TrainingDummy.tscn"
 
+const SOUL_VFX_PATH := "res://assets/BinbunVFX/loot_effects/effects/floating/loot_vfx_rare.tscn"
+
 var _timer: float = 0.0
 var _is_collected: bool = false
 
 func _ready() -> void:
+	# Keep the authored placeholder and replicated gameplay siblings intact.
+	if not GameManager._is_headless_environment():
+		_load_soul_visual()
 	# Players now occupy faction layers instead of the former shared layer 1.
 	# Set this at runtime as well as in the scene so spawned souls always detect
 	# both teams after a scene cache or hot reload.
@@ -27,6 +32,24 @@ func _ready() -> void:
 	area_entered.connect(_on_area_entered)
 	body_entered.connect(_on_body_entered)
 	print("[Soul] Spawned at ", global_position)
+
+## Like TotemEntity, load presentation only on graphical peers.
+func _load_soul_visual() -> void:
+	var placeholder := get_node_or_null("LootVFXRare") as Node3D
+	if placeholder == null:
+		return
+	var packed := load(SOUL_VFX_PATH) as PackedScene
+	if packed == null:
+		push_error("Soul visual resource unavailable")
+		return
+	var visual := packed.instantiate() as Node3D
+	visual.name = placeholder.name
+	visual.transform = placeholder.transform
+	var index := placeholder.get_index()
+	remove_child(placeholder)
+	placeholder.free()
+	add_child(visual)
+	move_child(visual, index)
 
 func _process(delta: float) -> void:
 	if _is_collected: return

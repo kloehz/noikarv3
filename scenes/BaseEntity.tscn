@@ -1,17 +1,17 @@
 [gd_scene format=3 uid="uid://bvbjvutgbeanf"]
 
 [ext_resource type="Script" uid="uid://bdfmixdkvrx7a" path="res://common/BaseEntity.gd" id="1_base_entity"]
-[ext_resource type="Script" path="res://core/LogicComponent.gd" id="2_logic_comp"]
-[ext_resource type="Script" path="res://client/VisualComponent.gd" id="3_visual_comp"]
+[ext_resource type="Script" uid="uid://bnouyek6qk4nb" path="res://core/LogicComponent.gd" id="2_logic_comp"]
+[ext_resource type="Script" uid="uid://c6ohyd8kpeb4l" path="res://client/VisualComponent.gd" id="3_visual_comp"]
 [ext_resource type="Script" uid="uid://damwwepmt2on5" path="res://common/components/HealthComponent.gd" id="4_health_comp"]
 [ext_resource type="Script" uid="uid://dhsunkxq0v3wy" path="res://common/components/HitboxComponent.gd" id="5_hitbox_comp"]
 [ext_resource type="Script" uid="uid://d350u8evihs1u" path="res://addons/netfox/rollback/rollback-synchronizer.gd" id="6_rb_sync"]
 [ext_resource type="Script" uid="uid://3lbngqcexe0l" path="res://addons/netfox/state-synchronizer.gd" id="7_state_sync"]
 [ext_resource type="Script" uid="uid://dour8fehaaugp" path="res://addons/netfox/tick-interpolator.gd" id="8_interpolator"]
-[ext_resource type="Script" path="res://core/CombatComponent.gd" id="9_combat"]
+[ext_resource type="Script" uid="uid://biy37jncj0xu6" path="res://core/CombatComponent.gd" id="9_combat"]
 [ext_resource type="Script" uid="uid://bujrht6eunqm6" path="res://common/components/HurtboxComponent.gd" id="10_hurtbox"]
 [ext_resource type="Script" uid="uid://bnd875y3pqn35" path="res://common/components/ServerState.gd" id="11_server_state"]
-[ext_resource type="Script" path="res://common/components/AbilityComponent.gd" id="12_ability"]
+[ext_resource type="Script" uid="uid://ryvvnrj4f7hg" path="res://common/components/AbilityComponent.gd" id="12_ability"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_1"]
 size = Vector3(1, 2, 1)
@@ -49,6 +49,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8033051, 0)
 transform = Transform3D(1, 0, 0, 0, 0.94, 0.34, 0, -0.34, 0.94, 0, 1.4, 5.2)
 
 [node name="ShapeCast3D" type="ShapeCast3D" parent="." unique_id=414159265]
+enabled = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -2)
 shape = SubResource("SphereShape3D_1")
 target_position = Vector3(0, 0, 0)

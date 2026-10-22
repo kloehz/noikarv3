@@ -52,8 +52,36 @@ var sync_health: int:
 
 # Static cache to avoid repeated load calls across all instances
 static var _actor_scene_cache: Dictionary = {}
+var _avoidance_index
+
+func _notification(what: int) -> void:
+	if (what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED or what == NOTIFICATION_TRANSFORM_CHANGED) and _avoidance_index != null and is_inside_tree():
+		_avoidance_index.update_actor(self)
+
+func _exit_tree() -> void:
+	if _avoidance_index != null:
+		_avoidance_index.unregister_actor(self)
+		_avoidance_index = null
+
+func _register_avoidance_index() -> void:
+	if not multiplayer.is_server() or (not is_in_group(&"mobs") and not is_in_group(&"pets")):
+		return
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager != null and manager.has_meta(&"actor_spatial_index"):
+		_avoidance_index = manager.get_meta(&"actor_spatial_index")
+		_avoidance_index.register_actor(self, &"mobs" if is_in_group(&"mobs") else &"pets")
+		set_notify_local_transform(true)
+		set_notify_transform(true)
+
+func bounded_avoidance_allies(group: StringName, radius: float) -> Array:
+	if _avoidance_index == null:
+		return get_tree().get_nodes_in_group(group)
+	return _avoidance_index.query(global_position, radius, group)
+
 
 func _enter_tree() -> void:
+	# Parent enters before synchronizer children initialize/scatter settings.
+	_configure_replication_tuning()
 	if GameManager._is_headless_environment():
 		_strip_server_presentation()
 
@@ -71,6 +99,7 @@ func _ready() -> void:
 	if GameManager._is_headless_environment():
 		_strip_server_presentation()
 		
+	var observation_started := Time.get_ticks_usec() if OS.get_environment("NOIKAR_PROFILE_CLIENT_OBSERVE") == "1" else 0
 	# Assign groups for faster AI faction detection
 	if name.is_valid_int():
 		add_to_group(&"players")
@@ -79,6 +108,8 @@ func _ready() -> void:
 	elif name.begins_with("PET"):
 		add_to_group(&"pets")
 		
+	_register_avoidance_index()
+
 	var peer_id = 1 # Default to server
 	var is_human = name.is_valid_int()
 	
@@ -124,6 +155,14 @@ func _ready() -> void:
 	_setup_health_component()
 	if multiplayer.is_server() and not NetworkTime.after_tick.is_connected(_on_authoritative_tick):
 		NetworkTime.after_tick.connect(_on_authoritative_tick)
+	_record_benchmark_activation(2, observation_started)
+
+func _record_benchmark_activation(kind: int, started: int) -> void:
+	if started <= 0:
+		return
+	var observer := get_tree().get_first_node_in_group(&"benchmark_observer")
+	if observer != null:
+		observer.record_activation(kind, Time.get_ticks_usec() - started)
 
 func _strip_server_presentation() -> void:
 	for path in [
@@ -197,6 +236,7 @@ func _apply_faction_collision(team: int) -> void:
 
 func _load_character_actor() -> void:
 	if character_actor_path.is_empty(): return
+	var observation_started := Time.get_ticks_usec() if OS.get_environment("NOIKAR_PROFILE_CLIENT_OBSERVE") == "1" else 0
 
 	# The spec carries every piece of data the simulation needs, so it loads
 	# on server and clients alike. On headless the actor scene (and its .glb
@@ -235,6 +275,7 @@ func _load_character_actor() -> void:
 	# --- DATA-DRIVEN COMBAT CONFIGURATION ---
 	_configure_combat_from_spec()
 	_configure_ai_from_spec()
+	_record_benchmark_activation(1, observation_started)
 
 ## Scales a character model and every collision shape owned by this entity.
 ## Collider offsets must scale too, otherwise tall models sink their hit volume
@@ -317,6 +358,17 @@ func _setup_visuals() -> void:
 		else:
 			camera.current = false
 			camera.hide()
+
+const ReplicationTuningScript = preload("res://common/net/ReplicationTuning.gd")
+
+func _configure_replication_tuning() -> void:
+	var state_sync := get_node_or_null("ServerState/StateSynchronizer") as StateSynchronizer
+	if state_sync != null:
+		var profile := OS.get_environment("NOIKAR_REPLICATION_PROFILE")
+		if not ReplicationTuningScript.new().apply_profile(state_sync, profile, NetworkTime.tickrate, NetworkRollback.enable_diff_states):
+			push_error("Invalid opt-in replication profile; refusing mismatched tuning")
+			get_tree().quit(64)
+			return
 
 func _setup_netfox() -> void:
 	var interpolator = get_node_or_null("TickInterpolator")

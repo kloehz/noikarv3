@@ -374,6 +374,7 @@ lifetime = 0.3
 one_shot = true
 explosiveness = 0.9
 transform_align = 1
+transform_align_channel_filter = 1
 process_material = SubResource("ParticleProcessMaterial_gmgti")
 draw_pass_1 = SubResource("QuadMesh_4cx5s")
 
