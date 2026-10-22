@@ -100,6 +100,24 @@ Invalid ports return an error and no live peer. This is a transport-capacity che
 not account admission or a six-player full-match claim. Rollback removes the factory
 and its focused tests only.
 
+## Session lifecycle and compatibility
+
+One GameManager-owned child session attaches the player-host peer. Its generation
+invalidates delayed connection/auth/load work before cleanup; closing erases the
+scoped room credential, routes teardown through Netfox's existing clock-stop events,
+awaits world cleanup, and only then permits another attachment. An obsolete Netfox
+initial-sync continuation is now cancelled rather than reviving a closed clock.
+
+Transport authentication exchanges protocol, engine build/full commit hash and a
+deterministic hash of the existing Netfox addon scripts/configuration before
+`peer_connected`. This compatibility check does not establish account identity.
+The account-admission implementation is a separate gate. No account credentials are
+accepted in the host identity dictionary. Incompatible-peer disconnect is deferred
+outside the auth callback to avoid a reproduced 4.8 beta crash. Ten real lifecycle
+tests cover duplicate attach/close, stale completion, cleanup ordering and clock
+cancellation. Rollback is the session service, its tests and the local Netfox
+cancellation guard; simulation algorithms and tick rate are unchanged.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

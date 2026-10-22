@@ -374,6 +374,7 @@ var _clock_stretch_max: float = ProjectSettings.get_setting(&"netfox/time/max_ti
 var _suppress_offline_peer_warning: bool = ProjectSettings.get_setting(&"netfox/time/suppress_offline_peer_warning", false)
 
 var _state: int = _STATE_INACTIVE
+var _start_generation := 0
 
 # Timing
 var _tick: int = 0
@@ -424,6 +425,9 @@ func start() -> int:
 			"under netfox/Time/Suppress Offline Peer Warning.")
 
 	# Reset state
+	_start_generation += 1
+	var start_generation := _start_generation
+	var starting_peer := multiplayer.multiplayer_peer
 	_tick = 0
 	_initial_sync_done = false
 	
@@ -436,6 +440,10 @@ func start() -> int:
 	
 	if not multiplayer.is_server():
 		await NetworkTimeSynchronizer.on_initial_sync
+		# An old client's suspended start can resume on a later room's first
+		# synchronization. stop() invalidates it before any clock/RPC mutation.
+		if start_generation != _start_generation or starting_peer != multiplayer.multiplayer_peer:
+			return ERR_UNAVAILABLE
 
 		_tick = seconds_to_ticks(NetworkTimeSynchronizer.get_time())
 		_initial_sync_done = true
@@ -465,6 +473,7 @@ func start() -> int:
 ## This will stop the time sync in the background, and no more ticks will be 
 ## emitted until the next start.
 func stop() -> void:
+	_start_generation += 1
 	NetworkTimeSynchronizer.stop()
 	_tickrate_handshake.stop()
 	_state = _STATE_INACTIVE
