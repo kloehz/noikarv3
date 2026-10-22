@@ -39,6 +39,9 @@ func test_udp_occupied_bind_fails_without_faking_official_local_port() -> void:
 	assert_eq(blocker.bind(0, "127.0.0.1"), OK)
 	var noray := ConnectedNoray.new()
 	add_child_autofree(noray)
+	# Only connection status is faked for the real UDP bind test. Do not let
+	# the background TCP poll treat the unopened fixture socket as connected.
+	noray.set_process(false)
 	noray.on_command.emit("set-pid", "test-fixture-only")
 	await get_tree().process_frame
 	assert_eq(noray.pid, "test-fixture-only")

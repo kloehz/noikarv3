@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://oo3ob2rb2lct"]
 
 [ext_resource type="Script" uid="uid://c05p07or4yoe5" path="res://common/CharacterActor.gd" id="1_actor"]
-[ext_resource type="PackedScene" uid="uid://dgluayoy35il2" path="res://assets/models/enemies/kogmaw/deep_sea_kog'maw.glb" id="2_model"]
+[ext_resource type="PackedScene" uid="uid://dgluayoy35il2" path="res://assets/models/enemies/kogmaw/deep_sea_kogmaw.glb" id="2_model"]
 [ext_resource type="Resource" path="res://common/resources/specs/kogmaw_dmg.tres" id="9_spec"]
 
 [node name="KogMawDmg" type="Node3D" unique_id=334616893]

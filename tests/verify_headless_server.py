@@ -36,10 +36,10 @@ def check_environment(project_path: Path) -> list:
     project_godot = project_path / "project.godot"
     if project_godot.exists():
         content = project_godot.read_text()
-        required_features = 'config/features=PackedStringArray("4.7", "Mobile")'
+        required_features = 'config/features=PackedStringArray("4.8", "Mobile")'
         if required_features not in content:
             issues.append(
-                "project.godot: expected editor-compatible 4.7/Mobile features"
+                "project.godot: expected editor-compatible 4.8/Mobile features"
             )
         if "dedicated_server" in content:
             issues.append(

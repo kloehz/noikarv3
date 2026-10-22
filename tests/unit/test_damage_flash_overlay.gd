@@ -1,7 +1,11 @@
-extends GutTest
+extends "res://tests/isolated_gut_test.gd"
 
 const DAMAGE_FLASH_SCENE := preload("res://scenes/ui/DamageFlashOverlay.tscn")
 const VISUAL_COMPONENT_SCRIPT := preload("res://client/VisualComponent.gd")
+
+func before_each() -> void:
+	super.before_each()
+	enable_client_presentation()
 
 func test_overlay_uses_one_full_rect_shader_vignette_and_ignores_mouse_input() -> void:
 	var overlay := DAMAGE_FLASH_SCENE.instantiate() as Control

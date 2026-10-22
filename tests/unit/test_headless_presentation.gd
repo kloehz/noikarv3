@@ -1,6 +1,12 @@
-extends GutTest
+extends "res://tests/isolated_gut_test.gd"
 
 ## Focused tests for stripping presentation-only nodes from headless servers.
+
+func test_detached_match_manager_ignores_late_team_signal() -> void:
+	var manager = load("res://common/match_manager.gd").new()
+	manager._on_team_assigned()
+	assert_false(manager.is_inside_tree())
+	manager.free()
 
 func test_match_manager_strips_top_level_presentation_nodes() -> void:
 	var match_manager: Node = load("res://common/match_manager.gd").new()

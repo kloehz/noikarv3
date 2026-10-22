@@ -1,6 +1,10 @@
-extends GutTest
+extends "res://tests/isolated_gut_test.gd"
 
 const VISUAL_COMPONENT_SCRIPT := preload("res://client/VisualComponent.gd")
+
+func before_each() -> void:
+	super.before_each()
+	enable_client_presentation()
 
 func _make_actor() -> CharacterActor:
 	var actor := CharacterActor.new()

@@ -37,6 +37,34 @@ bootstrap: the inherited headless autoload would try to contact external service
 Installed engine: `4.8.beta1.official.4d10419ca`; it is a prerelease. Installed Go:
 `go1.26.5 darwin/arm64` (module declares Go 1.26.4).
 
+## Godot 4.8 compatibility checkpoint
+
+The engine compatibility work is verified separately from player hosting:
+
+- Fresh editor import: exit 0, zero engine/script errors. Existing duplicate-UID
+  warnings in the unused model-test folder remain visible.
+- Full GUT run through `./play.sh tests`: **412/412 tests, 2,441 assertions**, exit 0,
+  zero engine/script errors. It still reports six expected warnings from deliberate
+  failure/security fixtures and 24 inherited unparented fixture nodes; this is not
+  a claim of a warning/orphan-free long-running game.
+- GUT children use `NOIKAR_TEST_MODE=1` to suppress external bootstrap. Standalone
+  probes may use `--noikar-test-mode`; the production/release policy rejects it.
+  Neither path grants account admission or opens a real multiplayer connection.
+- Existing test setup now owns its offline peer, optional probe, local presentation
+  role and spawned fixtures. No game balance was changed to satisfy stale tests:
+  the authored healer damage remains 24, below ranged DPS damage 44.
+- The OBJ vendor sample's missing material declaration was removed without changing
+  its geometry. Two internal KogMaw GLB/PNG filenames were normalized to avoid a
+  reproduced apostrophe/import-checksum serialization error in 4.8; binary hashes
+  and resource UIDs were preserved, with one actor reference updated.
+- A detached-world team callback now safely ignores a late signal; the regression
+  was observed failing before the guard was introduced.
+
+Rollback boundary: bootstrap guard/launcher/tooling, fixture ownership repairs,
+late-signal guard, and compatibility-only asset paths. The preservation baseline
+retains the original source and paths; no peer-host gameplay implementation is
+claimed at this checkpoint.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

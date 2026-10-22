@@ -198,6 +198,7 @@ func test_netfox_nodes_check() -> void:
 ## sequence, not when an entity receives its initial synchronized health.
 func test_server_state_emits_only_explicit_heal_events() -> void:
 	var state := ServerState.new()
+	autofree(state)
 	var received: Array[int] = []
 	state.heal_received.connect(func(amount: int): received.append(amount))
 
@@ -216,6 +217,7 @@ func test_server_state_emits_only_explicit_heal_events() -> void:
 ## real, server-authoritative damage — never on resync or initial state.
 func test_server_state_emits_only_explicit_damage_events() -> void:
 	var state := ServerState.new()
+	autofree(state)
 	var received: Array = []
 	state.damage_received.connect(func(amount: int, source: Node):
 		received.append({"amount": amount, "source": source})

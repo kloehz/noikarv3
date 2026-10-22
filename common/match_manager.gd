@@ -214,7 +214,7 @@ func _on_phase_changed(phase: int) -> void:
 ## LOBBY re-assignment wiring: push recomputed roster teams onto already
 ## spawned players (design: full recompute updates spawned players).
 func _on_team_assigned() -> void:
-	if not multiplayer.is_server(): return
+	if not is_inside_tree() or multiplayer == null or not multiplayer.is_server(): return
 	var director := _get_match_director()
 	if director == null or not director.has_method("get_team"): return
 	for child in players_container.get_children():

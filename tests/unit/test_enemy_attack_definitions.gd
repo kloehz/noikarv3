@@ -39,8 +39,9 @@ func test_ivern_heal_ranged_projectile_attack() -> void:
 	var attack := _primary_attack_for("res://scenes/characters/IvernHeal.tscn")
 	assert_eq(attack.attack_type, AttackDefinition.AttackType.PROJECTILE)
 	assert_not_null(attack.projectile_scene)
-	assert_lt(attack.base_damage, 18.0,
-		"healer should deal below-average damage so the role stays utility-focused")
+	var dps_attack := _primary_attack_for("res://scenes/characters/KogMawDmg.tscn")
+	assert_lt(attack.base_damage, dps_attack.base_damage,
+		"healer self-defense must remain weaker than the dedicated ranged DPS role")
 
 func test_kogmaw_dmg_ranged_projectile_attack() -> void:
 	# Pure DPS — highest ranged damage of the team.

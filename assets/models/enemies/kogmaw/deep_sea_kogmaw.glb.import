@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dgluayoy35il2"
-path="res://.godot/imported/deep_sea_kog'maw.glb-03fa1e93bfd811eafb46d25f0dcd52df.scn"
+path="res://.godot/imported/deep_sea_kogmaw.glb-1f972f13bf28254ffaadbce7df387fbe.scn"
 
 [deps]
 
-source_file="res://assets/models/enemies/kogmaw/deep_sea_kog'maw.glb"
-dest_files=["res://.godot/imported/deep_sea_kog'maw.glb-03fa1e93bfd811eafb46d25f0dcd52df.scn"]
+source_file="res://assets/models/enemies/kogmaw/deep_sea_kogmaw.glb"
+dest_files=["res://.godot/imported/deep_sea_kogmaw.glb-1f972f13bf28254ffaadbce7df387fbe.scn"]
 
 [params]
 

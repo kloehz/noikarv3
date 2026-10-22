@@ -56,6 +56,7 @@ func _spawn_tank_pet(owner_id: int, pos: Vector3, power_level: int = 0, spawn_gr
 	pet.global_position = pos
 	await get_tree().process_frame
 	pet.setup_pet(owner_id, "TANK", power_level)
+	_manager._setup_pet_logic(pet, owner_id, 1)
 	await get_tree().process_frame
 	return pet
 
@@ -69,6 +70,7 @@ func _spawn_pet_at(owner_id: int, pos: Vector3, pet_type: String) -> BaseEntity:
 	pet.global_position = pos
 	await get_tree().process_frame
 	pet.setup_pet(owner_id, pet_type, 1)
+	_manager._setup_pet_logic(pet, owner_id, {"ATTACK": 0, "TANK": 1, "HEAL": 2}[pet_type])
 	await get_tree().process_frame
 	return pet
 

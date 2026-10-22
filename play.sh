@@ -218,6 +218,7 @@ server+client)
 	;;
 tests)
 	echo "Running all GUT tests..."
+	export NOIKAR_TEST_MODE=1
 	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
 		-s addons/gut/gut_cmdln.gd \
 		-gdir=res://tests/unit,res://tests/integration \
@@ -228,6 +229,7 @@ test)
 	shift
 	pattern="${1:-.}"
 	echo "Running GUT tests matching: $pattern"
+	export NOIKAR_TEST_MODE=1
 	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" \
 		-s addons/gut/gut_cmdln.gd \
 		-gdir=res://tests/unit,res://tests/integration \

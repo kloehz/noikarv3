@@ -4,10 +4,10 @@ schema: spec-driven
 strict_tdd: false
 
 context: |
-  Tech stack: Godot 4.7, GDScript, Jolt Physics, Netfox v2.x/Noray, plus Go 1.26.4/PostgreSQL authentication.
+  Tech stack: Godot 4.8.beta1.official.4d10419ca, GDScript, Jolt Physics, existing Netfox/Noray, plus Go 1.26.4/PostgreSQL authentication.
   Architecture: server-authoritative PvPvE; player-owned LogicComponent/RollbackSynchronizer and server-owned StateSynchronizer data.
   Layout: common/ shared state, core/ server-only logic, client/ client-only UI, scenes/ Inspector-first composition, addons/ Netfox and GUT.
-  Networking: authoritative changes replicate through ServerState/StateSynchronizer; rollback logic stays in _rollback_tick at 60 Hz.
+  Networking: authoritative changes replicate through ServerState/StateSynchronizer; preserve the authored 30 Hz physics/Netfox clocks during the hosting migration.
   UI: CanvasLayer/Control scene composition; preserve keyboard/gamepad focus when adding interactive flows.
   Style: static-typed GDScript, tabs, composition over inheritance, EventBus for decoupled events.
   Persistence: OpenSpec source specs and changes are repository records; .atl/ is the local skill index.
@@ -15,9 +15,9 @@ context: |
 testing:
   runner: gut
   runner_installed: true
-  runner_note: "GUT 9.7.1 is vendored in addons/gut; use the project-configured Godot 4.7 executable at /Applications/Godot.app/Contents/MacOS/Godot with gut_cmdln headlessly."
-  unit_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit"
-  integration_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit"
+  runner_note: "GUT 9.7.1 is vendored. Pin Godot 4.8.beta1.official.4d10419ca. NOIKAR_TEST_MODE=1 disables external bootstrap in debug test children only."
+  unit_command: "NOIKAR_TEST_MODE=1 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit"
+  integration_command: "NOIKAR_TEST_MODE=1 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit"
   smoke_export_isolation: "python3 tests/verify_export_isolation.py"
   smoke_headless_server: "python3 tests/verify_headless_server.py --quick"
   backend_unit_command: "cd backend && go test ./..."
@@ -56,7 +56,7 @@ rules:
     tdd: false
     test_command: "python3 tests/verify_export_isolation.py"
   verify:
-    test_command: "/Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit && /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit && python3 tests/verify_gut_suite_integrity.py && python3 tests/verify_export_isolation.py && python3 tests/verify_headless_server.py --quick"
+    test_command: "NOIKAR_TEST_MODE=1 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/unit -ginclude_subdirs -gexit && NOIKAR_TEST_MODE=1 /Applications/Godot.app/Contents/MacOS/Godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/integration -ginclude_subdirs -gexit && python3 tests/verify_gut_suite_integrity.py && python3 tests/verify_export_isolation.py && python3 tests/verify_headless_server.py --quick"
     build_command: ""
     coverage_threshold: 0
   archive:

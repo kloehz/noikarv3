@@ -1,4 +1,8 @@
-extends GutTest
+extends "res://tests/isolated_gut_test.gd"
+
+func before_each() -> void:
+	super.before_each()
+	enable_client_presentation()
 
 ## Pet HUD contracts: roles have a stable visual identity and the gameplay
 ## scene mounts the HUD under its existing CanvasLayer.
@@ -18,15 +22,17 @@ func test_main_scene_mounts_pet_hud_in_the_existing_hud_layer() -> void:
 
 func test_pet_filter_uses_pet_api_instead_of_generated_name() -> void:
 	var hud_script := load("res://client/ui/PetHud.gd")
-	var hud := hud_script.new()
+	var hud: Control = hud_script.new()
+	autofree(hud)
 	var pet := _PetHudTestPet.new()
+	autofree(pet)
 	pet.owner_id = 7
 	assert_true(hud._belongs_to_local_player(pet, 7))
 	assert_false(hud._belongs_to_local_player(pet, 8))
 
 func test_portrait_card_builds_before_its_camera_enters_the_viewport_tree() -> void:
 	var card_script := load("res://client/ui/PetPortraitCard.gd")
-	var card := card_script.new()
+	var card: Control = card_script.new()
 	add_child_autofree(card)
 	await get_tree().process_frame
 	assert_eq(card.custom_minimum_size, Vector2(38, 38))

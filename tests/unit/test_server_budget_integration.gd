@@ -212,6 +212,10 @@ func test_rollback_signal_cleanup_is_safe_before_sync_and_idempotent() -> void:
 
 func test_perf_probe_collects_zero_players_after_peer_teardown() -> void:
 	multiplayer.multiplayer_peer = null
-	var metrics: Dictionary = get_node("/root/PerfProbe")._collect_metrics()
+	# The optional production autoload removes itself when profiling is off.
+	# Exercise an owned instance instead of depending on external launch flags.
+	var probe = load("res://common/perf_probe.gd").new()
+	add_child(probe)
+	var metrics: Dictionary = probe._collect_metrics()
 	assert_eq(metrics.players, 0)
 	assert_eq(metrics.live_players, 0)

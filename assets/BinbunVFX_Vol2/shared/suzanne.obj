@@ -1,6 +1,6 @@
 # Blender 5.0.1
 # www.blender.org
-mtllib suzanne.mtl
+# Geometry-only vendor sample; no external material library is supplied.
 o Suzanne
 v 0.000000 0.434028 0.735243
 v 0.000000 0.353456 0.803030

@@ -1,6 +1,9 @@
 # Noikar v3
 
-Noikar v3 is a Godot 4.7 project that uses a private Noray submodule.
+Noikar v3 targets Godot **4.8.beta1.official.4d10419ca** on this migration branch.
+It is a prerelease, not a stable Godot 4.8 claim. The legacy dedicated mode uses
+a private Noray submodule; the player-host migration is tracked in
+[the migration record](docs/LISTEN_SERVER_MIGRATION.md).
 Fresh clones need access to both GitHub repositories; the Noray repository is private.
 
 ## Access first
@@ -37,7 +40,7 @@ The checkout does not import private configuration from this PC.
 
 ## Running the project
 
-Open `project.godot` with Godot 4.7, or use the launcher:
+Open `project.godot` with the pinned Godot 4.8 build, or use the launcher:
 
 ```bash
 ./play.sh          # client

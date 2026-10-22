@@ -4,6 +4,7 @@ var _previous_peer: MultiplayerPeer
 
 func before_each() -> void:
 	_previous_peer = multiplayer.multiplayer_peer
+	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 
 func after_each() -> void:
 	multiplayer.multiplayer_peer = _previous_peer

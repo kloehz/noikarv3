@@ -1,7 +1,11 @@
-extends GutTest
+extends "res://tests/isolated_gut_test.gd"
 
 const VISUAL_COMPONENT_SCRIPT := preload("res://client/VisualComponent.gd")
 const IVERN_SPEC := preload("res://common/resources/specs/ivern_ranger.tres")
+
+func before_each() -> void:
+	super.before_each()
+	enable_client_presentation()
 
 func _make_aiming_visual() -> Array:
 	var scene_root := Node3D.new()

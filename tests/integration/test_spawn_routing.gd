@@ -138,15 +138,26 @@ func test_main_scene_typed_containers_and_spawners() -> void:
 		for p in scene_state.get_node_property_count(idx):
 			if str(scene_state.get_node_property_name(idx, p)) == "_spawnable_scenes":
 				spawnable_by_spawner[spawner_path] = scene_state.get_node_property_value(idx, p)
-	assert_eq(spawnable_by_spawner["./MobSpawner"], PackedStringArray(["uid://dg7xnmokokkvl"]),
-		"MobSpawner spawns EnemyEntity only")
-	assert_eq(spawnable_by_spawner["./TotemSpawner"],
+	# Mobs use the custom spawn function configured by MatchManager, carrying
+	# the full team/type/position payload before each peer enters the tree.
+	assert_false(spawnable_by_spawner.has("./MobSpawner"),
+		"Custom MobSpawner does not also register automatic scene spawning")
+	assert_eq(_resolved_scene_paths(spawnable_by_spawner["./TotemSpawner"]),
 		PackedStringArray(["res://scenes/TotemEntity.tscn", "res://scenes/PetEntity.tscn"]),
 		"TotemSpawner spawns TotemEntity + PetEntity")
-	assert_eq(spawnable_by_spawner["./SoulSpawner"], PackedStringArray(["res://scenes/SoulEntity.tscn"]),
+	assert_eq(_resolved_scene_paths(spawnable_by_spawner["./SoulSpawner"]), PackedStringArray(["res://scenes/SoulEntity.tscn"]),
 		"SoulSpawner spawns SoulEntity only")
-	assert_eq(spawnable_by_spawner["./PlayerSpawner"], PackedStringArray(["uid://bvbjvutgbeanf"]),
+	assert_eq(_resolved_scene_paths(spawnable_by_spawner["./PlayerSpawner"]), PackedStringArray(["res://scenes/BaseEntity.tscn"]),
 		"PlayerSpawner spawns BaseEntity only")
+
+func _resolved_scene_paths(paths: PackedStringArray) -> PackedStringArray:
+	var result := PackedStringArray()
+	for path in paths:
+		var scene := load(path) as PackedScene
+		assert_not_null(scene, "Spawnable UID/path must resolve to a real scene")
+		if scene != null:
+			result.append(scene.resource_path)
+	return result
 
 ## Test: selection gating keeps every gameplay container empty before launch.
 func test_initial_spawn_flow_is_gated_until_launch() -> void:

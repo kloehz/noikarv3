@@ -9,8 +9,26 @@ const SERVER_MIN_FPS = 30
 const SERVER_MAX_FPS = 60
 const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
 var validated_room_creator_account_id := ""
+enum BootstrapMode { NORMAL, TEST, REJECTED }
+
+static func bootstrap_mode_for(args: Array, debug_build: bool) -> int:
+	if not args.has("--noikar-test-mode"):
+		return BootstrapMode.NORMAL
+	return BootstrapMode.TEST if debug_build else BootstrapMode.REJECTED
 
 func _ready() -> void:
+	var bootstrap_args: Array = Array(OS.get_cmdline_user_args())
+	# GUT rejects unknown application CLI options; its runner uses the same
+	# debug-only isolation policy through a child-process environment variable.
+	if OS.get_environment("NOIKAR_TEST_MODE") == "1":
+		bootstrap_args.append("--noikar-test-mode")
+	var bootstrap_mode := bootstrap_mode_for(bootstrap_args, OS.is_debug_build())
+	if bootstrap_mode == BootstrapMode.REJECTED:
+		printerr("Test bootstrap is unavailable in production exports.")
+		get_tree().quit(64)
+		return
+	if bootstrap_mode == BootstrapMode.TEST:
+		return
 	if not BenchmarkProfile.valid:
 		get_tree().quit(64)
 		return

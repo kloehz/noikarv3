@@ -33,10 +33,8 @@ func test_detects_dedicated_server_feature() -> void:
 
 ## Test: Headless servers apply the intended 60 FPS cap for 30 Hz ticks
 func test_headless_environment_uses_server_fps_cap() -> void:
-	if DisplayServer.get_name() != "headless":
-		pending("Requires a headless test runtime")
-		return
-	assert_eq(_game_manager._server_frame_cap_for_environment(), 60)
+	var expected_cap := 60 if _original_display_name == "headless" or _original_dedicated_server else 0
+	assert_eq(_game_manager._server_frame_cap_for_environment(), expected_cap)
 
 ## Test: Server FPS override stays disabled for rendered clients
 func test_server_fps_override_does_not_apply_to_clients() -> void:
