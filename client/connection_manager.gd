@@ -83,7 +83,10 @@ func _ready() -> void:
 
 func _is_provisioned_server_process() -> bool:
 	var args := OS.get_cmdline_args() + OS.get_cmdline_user_args()
-	return args.has("--server")
+	return args.has("--server") or args.has("--dedicated") or GameManager.is_dedicated_runtime()
+
+func _uses_legacy_provisioning() -> bool:
+	return OS.get_cmdline_user_args().has("--legacy-dedicated") or BenchmarkProfile.remote_transport
 
 func _trace_profile_phase(source: String, phase: int, target_state: int) -> void:
 	if OS.get_environment("NOIKAR_PROFILE_PHASE_TRACE") != "1" or _profile_phase_trace_count >= 128:
@@ -138,6 +141,10 @@ func _on_join_pressed() -> void:
 	if not _current_oid.is_empty(): _start_noray_flow(false)
 
 func _start_noray_flow(as_host: bool) -> void:
+	if not _uses_legacy_provisioning():
+		room_status.text = "Player-host admission is not configured yet."
+		_switch_state(State.ROOM)
+		return
 	_switch_state(State.CONNECTING)
 	status_label.text = "Connecting to Noray..."
 	var noray_addr := noray_address_edit.text.strip_edges()
@@ -246,6 +253,10 @@ func _watch_game_connection(attempt: int, peer: ENetMultiplayerPeer) -> void:
 
 func _on_connected_to_server() -> void:
 	_game_connection_attempt += 1
+	if GameManager.session != null and GameManager.session.role == "CLIENT":
+		status_label.text = "Waiting for room admission..."
+		return
+	if not _uses_legacy_provisioning(): return
 	status_label.text = "Validating account..."
 	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
 

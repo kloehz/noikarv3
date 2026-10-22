@@ -33,11 +33,12 @@ class EngineContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="noikar-bootstrap-", dir=TEMP_ROOT) as tmp:
             path = Path(tmp)
             shutil.copy2(ROOT / "common/game_manager.gd", path / "game_manager.gd")
+            shutil.copytree(ROOT / "common/net", path / "common/net", ignore=shutil.ignore_patterns("*.uid"))
             (path / "project.godot").write_text(
                 'config_version=5\n[application]\nconfig/name="Bootstrap fixture"\nrun/main_scene="res://probe.tscn"\n'
                 '[autoload]\n' + "".join(
                     f'{name}="*res://boundary.gd"\n'
-                    for name in ["BenchmarkProfile", "Noray", "AuthService", "PacketHandshake", "EventBus"]
+                    for name in ["BenchmarkProfile", "Noray", "AuthService", "PacketHandshake", "EventBus", "NetworkEvents"]
                 )
             )
             (path / "boundary.gd").write_text('''extends Node
@@ -47,6 +48,10 @@ signal on_oid
 signal on_pid
 signal server_started
 signal client_ready
+signal client_connected(id)
+signal on_client_stop
+signal on_server_stop
+var _is_server := false
 var valid := true
 var selected_profile := ""
 var headless_client := false
@@ -144,6 +149,10 @@ func run() -> void:
 
     def test_normal_bootstrap_is_not_disabled_by_default(self):
         data = self.run_bootstrap_probe()
+        self.assertEqual((data["server_starts"], data["client_starts"]), (0, 1))
+
+    def test_dedicated_bootstrap_requires_explicit_role(self):
+        data = self.run_bootstrap_probe("--server")
         self.assertEqual((data["server_starts"], data["client_starts"]), (1, 0))
 
     def test_launcher_isolates_both_full_and_focused_gut_children(self):
@@ -161,6 +170,15 @@ func run() -> void:
     def test_gut_can_request_isolation_without_an_unknown_cli_option(self):
         data = self.run_bootstrap_probe(test_env="1")
         self.assertEqual((data["server_starts"], data["client_starts"]), (0, 0))
+
+    def test_server_launcher_explicitly_selects_dedicated_role(self):
+        with tempfile.TemporaryDirectory(dir=TEMP_ROOT) as tmp:
+            binary = Path(tmp) / "godot-arguments"
+            binary.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            binary.chmod(0o700)
+            result = subprocess.run(["bash", str(ROOT / "play.sh"), "server"], env={**os.environ, "GODOT_BIN": str(binary)}, capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("--server", result.stdout.splitlines())
 
     def test_vendor_obj_does_not_reference_absent_material_libraries(self):
         missing = []

@@ -9,7 +9,40 @@ const SERVER_MIN_FPS = 30
 const SERVER_MAX_FPS = 60
 const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
 var validated_room_creator_account_id := ""
+var session: Node
+var _runtime_role := "MENU"
 enum BootstrapMode { NORMAL, TEST, REJECTED }
+
+static func runtime_role_for(args: Array, dedicated_export: bool, benchmark_client: bool) -> String:
+	if dedicated_export or args.has("--server") or args.has("--dedicated"):
+		return "DEDICATED"
+	if args.has("--client") or benchmark_client:
+		return "CLIENT"
+	return "MENU"
+
+func _ensure_session() -> void:
+	if session != null: return
+	session = load("res://common/net/session_service.gd").new()
+	session.name = "Session"
+	session._world_cleanup = _reset_session_world
+	add_child(session)
+
+func _reset_session_world() -> void:
+	var tree := get_tree()
+	var world := tree.current_scene
+	if world == null or world.scene_file_path != "res://scenes/main.tscn": return
+	validated_room_creator_account_id = ""
+	var error := tree.reload_current_scene()
+	if error != OK:
+		push_error("Could not reset the session world")
+		return
+	await tree.scene_changed
+
+func is_dedicated_runtime() -> bool:
+	return _runtime_role == "DEDICATED" or (session != null and session.role == "DEDICATED")
+
+func should_present_world() -> bool:
+	return not is_dedicated_runtime()
 
 static func bootstrap_mode_for(args: Array, debug_build: bool) -> int:
 	if not args.has("--noikar-test-mode"):
@@ -27,8 +60,10 @@ func _ready() -> void:
 		printerr("Test bootstrap is unavailable in production exports.")
 		get_tree().quit(64)
 		return
+	_ensure_session()
 	if bootstrap_mode == BootstrapMode.TEST:
 		return
+	_runtime_role = runtime_role_for(Array(OS.get_cmdline_args()) + Array(OS.get_cmdline_user_args()), OS.has_feature("dedicated_server"), BenchmarkProfile.headless_client)
 	if not BenchmarkProfile.valid:
 		get_tree().quit(64)
 		return
@@ -39,13 +74,13 @@ func _ready() -> void:
 	var server_frame_cap := _server_frame_cap_for_environment()
 	if server_frame_cap > 0:
 		Engine.max_fps = server_frame_cap
-	if _is_headless_environment():
+	if is_dedicated_runtime():
 		_start_as_server()
 	else:
 		_start_as_client()
 
 func _start_profiled_runtime() -> void:
-	var is_server := _is_headless_environment()
+	var is_server := is_dedicated_runtime()
 	if not BenchmarkProfile.before_network_start(is_server):
 		return
 	if is_server:
@@ -60,6 +95,11 @@ static func server_role_for_display(headless: bool, dedicated: bool, benchmark_c
 	return dedicated or (headless and not benchmark_client)
 
 func _is_headless_environment() -> bool:
+	# The legacy helper is a presentation query, never listen-host authority.
+	if session != null and session.role in ["LISTEN_HOST", "CLIENT"]:
+		return false
+	if _runtime_role == "CLIENT": return false
+	if is_dedicated_runtime(): return true
 	# A validated benchmark headless CLIENT retains normal client scene/controllers.
 	if BenchmarkProfile.valid and BenchmarkProfile.headless_client:
 		return server_role_for_display(DisplayServer.get_name() == "headless", OS.has_feature("dedicated_server"), true)

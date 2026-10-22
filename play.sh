@@ -165,7 +165,7 @@ client | "")
 	;;
 server)
 	echo "Starting noikarv3 (HEADLESS SERVER)..."
-	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR"
+	exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --server
 	;;
 up)
 	shift
@@ -174,7 +174,7 @@ up)
 	server)
 		preflight manual-server
 		echo "Starting noikarv3 (HEADLESS SERVER)..."
-		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR"
+		exec "$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --server
 		;;
 	client)
 		preflight
@@ -184,7 +184,7 @@ up)
 	server+client)
 		preflight manual-server
 		echo "Starting headless server in background..."
-		("$GODOT_BIN" --headless --path "$PROJECT_DIR") &
+		("$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --server) &
 		SERVER_PID=$!
 		trap "kill $SERVER_PID 2>/dev/null" EXIT INT TERM
 		echo "Server PID $SERVER_PID — give it ~3s to register with Noray."
@@ -208,7 +208,7 @@ local)
 	;;
 server+client)
 	echo "Starting headless server in background..."
-	("$GODOT_BIN" --headless --path "$PROJECT_DIR") &
+	("$GODOT_BIN" --headless --path "$PROJECT_DIR" -- --server) &
 	SERVER_PID=$!
 	trap "kill $SERVER_PID 2>/dev/null" EXIT INT TERM
 	echo "Server PID $SERVER_PID — give it ~3s to register with Noray."

@@ -118,6 +118,21 @@ tests cover duplicate attach/close, stale completion, cleanup ordering and clock
 cancellation. Rollback is the session service, its tests and the local Netfox
 cancellation guard; simulation algorithms and tick rate are unchanged.
 
+## Explicit runtime roles
+
+Graphical startup is MENU, not a listening server; `--client` remains CLIENT even
+with a headless display. `--server`/`--dedicated` or the dedicated export selects
+the legacy dedicated bootstrap. `play.sh server` now forwards that explicit role.
+LISTEN_HOST retains local presentation independently of authority. The persistent
+GameManager owns the session and provides the existing main-scene reset operation.
+
+During this intermediate checkpoint, the old provisioning UI requires explicit
+`--legacy-dedicated` (or the existing remote benchmark profile); normal Host fails
+closed until scoped admission is wired. The new client connection path never emits
+the reusable account-bearer event. This is deliberately not a finished tester build.
+Four role tests, two menu/bearer-boundary tests and nine engine/bootstrap Python
+checks pass. The role/launcher/menu bridge is a separate rollback unit.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
