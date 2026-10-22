@@ -65,6 +65,17 @@ late-signal guard, and compatibility-only asset paths. The preservation baseline
 retains the original source and paths; no peer-host gameplay implementation is
 claimed at this checkpoint.
 
+## Static export boundary
+
+The export checker now reads preset display names/filters rather than interpreting
+`preset.0` as a product name. Both runtime exports retain required shared/simulation/
+presentation scripts, while backend, Noray service sources, tests, GUT and environment
+configuration are explicitly filtered. A global `.gdignore` in these runtime folders
+is rejected instead of suggested as an export-security fix. Four controlled-preset
+regressions passed RED→GREEN. This is configuration validation, not proof of actual
+PCK contents; the final build gate still inspects compiled artifacts. Rollback is
+limited to the checker, its tests, and preset filters.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
