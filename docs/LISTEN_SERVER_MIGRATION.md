@@ -156,6 +156,25 @@ accounts. Cleanup terminates only those owned children and that cluster. `-short
 explicitly excludes these process tests; a passing short run is not database proof.
 This harness is an independently reversible test-only unit.
 
+## Scoped listen-room API
+
+The local backend now implements authenticated room creation/ticket issuance and
+room-credential-protected admission/close under `/api/v1/listen-rooms`. Opaque
+32-random-byte proofs expire after 60 seconds; rooms expire after two hours. Only
+hashes of ticket and room credentials persist. Admission returns account ID/name,
+never bearer/password/provisioner/world material. MatchManager, not a backend
+membership table, retains capacity, duplicate-account and rejoin rules.
+
+Redemption locks the live room row then atomically consumes the matching unused,
+unexpired ticket in a transaction. Close locks that same room row. Real PostgreSQL
+tests deny wrong-room, wrong-credential, expiry, replay and closed rooms; 12 concurrent
+HTTP redemptions produce exactly one success. A fresh proof can subsequently be issued
+for a game-permitted rejoin. No world process is provisioned. The database migration
+is additive; rollback disables the new routes, without altering legacy tables.
+
+No live backend rollout is authorized or performed. Existing Internet HTTP account
+configuration remains an acceptance blocker until HTTPS is separately configured.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

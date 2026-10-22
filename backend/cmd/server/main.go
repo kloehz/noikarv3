@@ -132,6 +132,9 @@ func main() {
 	if _, err := db.Exec(ctx, authMigration); err != nil {
 		log.Fatalf("run auth migration: %v", err)
 	}
+	if _, err := db.Exec(ctx, listenMigration); err != nil {
+		log.Fatalf("run listen-room migration: %v", err)
+	}
 
 	s := &server{db: db, jwtSecret: cfg.jwtSecret, provisionerCredential: cfg.provisionerCredential}
 	mux := http.NewServeMux()
@@ -142,6 +145,7 @@ func main() {
 	mux.HandleFunc("POST /api/v1/rooms/creator-ticket", s.issueRoomCreatorTicket)
 	mux.HandleFunc("POST /api/v1/rooms/creator-ticket/bind", s.bindRoomCreatorTicket)
 	mux.HandleFunc("POST /api/v1/rooms/creator-ticket/validate", s.validateRoomCreatorTicket)
+	s.registerListenRoutes(mux)
 
 	httpServer := &http.Server{
 		Addr:              cfg.address,
