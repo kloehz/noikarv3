@@ -76,6 +76,21 @@ regressions passed RED→GREEN. This is configuration validation, not proof of a
 PCK contents; the final build gate still inspects compiled artifacts. Rollback is
 limited to the checker, its tests, and preset filters.
 
+## Rendered compatibility evidence
+
+`tests/manual/engine_visual_probe.gd` rendered the actual inherited main scene,
+player model, camera and HUD on native macOS. It manually drove existing movement
+and attack handlers for 45 physics frames: camera active, 14.83 m displacement,
+attack observed and screenshot saved, with exit 0 and no engine/script errors.
+This uses an offline peer and a fixture identity: **no backend authentication,
+networked host-client match, or Steam operation is certified by this probe**.
+
+See `docs/evidence/godot-4.8-compatibility.png` and
+`docs/evidence/godot-4.8-compatibility.json`. Run it with child-only
+`NOIKAR_TEST_MODE=1` and the pinned graphical Godot executable; a headless display
+is deliberately rejected. Reports and temporary test outputs are excluded from
+runtime resource imports. Rollback removes only the diagnostic probe/evidence.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

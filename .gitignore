@@ -18,3 +18,9 @@
 
 # macOS Finder metadata.
 .DS_Store
+
+# Local migration execution and verification artifacts.
+.superpowers/
+tests/artifacts/
+__pycache__/
+*.pyc

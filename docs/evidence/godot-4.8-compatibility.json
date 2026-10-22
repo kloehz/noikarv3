@@ -1,0 +1,38 @@
+{
+  "engine": "4.8.beta1.official.4d10419ca",
+  "checked_at_utc": "2026-10-22T14:48:23.441820+00:00",
+  "preservation_commit": "9ce24d1",
+  "engine_compatibility_commit": "d98fc55",
+  "static_export_boundary_commit": "206235c",
+  "rendered_probe": {
+    "attack": true,
+    "authenticated_against_backend": false,
+    "camera": true,
+    "display": "macOS",
+    "distance": 14.8337707519531,
+    "networked": false,
+    "ok": true,
+    "screenshot": true
+  },
+  "gut": {
+    "scripts": 53,
+    "tests": 412,
+    "passed": 412,
+    "assertions": 2441,
+    "engine_errors": 0,
+    "expected_fixture_warnings": 6,
+    "reported_fixture_orphans": 24
+  },
+  "python_engine_checks": 7,
+  "python_export_checks": 4,
+  "editor_import_errors": 0,
+  "human_playthrough_certified": false,
+  "player_host_networking_certified": false,
+  "steam_connectivity_certified": false,
+  "files_sha256": {
+    "docs/evidence/godot-4.8-compatibility.png": "40bd8ce9d1eb8b5f7856f7d0a8d860f78da7493d71c255a81ec026a49d66ec71",
+    "tests/manual/engine_visual_probe.gd": "c5637786805ab084115403a9cdabd65f6f7c2246c91d10196c9af9a8a6653aa0",
+    "common/game_manager.gd": "b0a61f95d06bf246f5089d739ebdd57152b4a77b9cb7e107a043af6b66d0d64c",
+    "project.godot": "ddbb83195335bd405997a0d5a3ed502b76904cb3713c9be645b503e4f1c493f3"
+  }
+}
