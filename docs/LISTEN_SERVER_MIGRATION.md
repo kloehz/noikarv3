@@ -91,6 +91,15 @@ See `docs/evidence/godot-4.8-compatibility.png` and
 is deliberately rejected. Reports and temporary test outputs are excluded from
 runtime resource imports. Rollback removes only the diagnostic probe/evidence.
 
+## LAN transport factory
+
+`common/net/enet_transport.gd` creates ENet endpoints without attaching a second
+multiplayer owner or changing Netfox channels. A real loopback test connects five
+guests and verifies a sixth guest cannot enter: six humans includes the host.
+Invalid ports return an error and no live peer. This is a transport-capacity check,
+not account admission or a six-player full-match claim. Rollback removes the factory
+and its focused tests only.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
