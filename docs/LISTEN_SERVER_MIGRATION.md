@@ -192,6 +192,22 @@ denial and retained login, plus a real redirect trap. Without `GODOT_BIN`, those
 Godot integrations explicitly skip and are not certified by a backend-only pass.
 Rollback is the AuthService boundary and its tests/probe, not legacy account data.
 
+## Scoped proof transport
+
+Player-host clients submit a distinct admission-ticket event/RPC, not the legacy
+account-bearer event. The host redeems that opaque proof over its room-only API
+credential and hands the sanitized result to the existing MatchManager admission
+handler. Generation, room ID, connected peer and per-redemption serial checks reject
+obsolete completions, including a reused peer ID; no second gameplay roster exists.
+Closing invalidates pending requests and clears the credential before scheduling
+closure of the captured old backend room. Legacy bearer admission is dedicated-only.
+
+Real connected-peer tests pass the same identity through stale/current generations,
+wrong/right room IDs and replaced request serials; only the current response enters
+the real MatchManager roster. Host-player GUI/local admission is the next planned
+checkpoint, not certified by this transport/API evidence. This bridge is a separate
+rollback unit from the backend API and HTTPS client policy.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,

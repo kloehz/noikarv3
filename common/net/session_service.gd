@@ -22,6 +22,8 @@ var _room_credential := ""
 var _peer: MultiplayerPeer
 var _bindings: Array[Dictionary] = []
 var _world_cleanup: Callable
+var _pending_admissions: Dictionary = {}
+var _admission_serial := 0
 static var _addon_fingerprint := ""
 
 func configure_room(id: String, credential: String = "") -> void:
@@ -87,6 +89,7 @@ func _attach(peer: MultiplayerPeer, name_of_transport: String, next_role: String
 	api.auth_callback = _on_auth_data.bind(generation)
 	_bind(api.peer_authenticating, _on_authenticating.bind(generation))
 	_bind(api.peer_connected, _on_peer_connected.bind(generation))
+	_bind(api.peer_disconnected, _on_peer_disconnected.bind(generation))
 	_bind(api.peer_authentication_failed, _on_authentication_failed.bind(generation))
 	_bind(api.connected_to_server, _on_transport_connected.bind(generation))
 	_bind(api.connection_failed, _on_transport_failed.bind(generation))
@@ -127,6 +130,9 @@ func _watch_connection(ticket: int) -> void:
 
 func _on_peer_connected(id: int, ticket: int) -> void:
 	if is_current(ticket) and is_host(): EventBus.client_connected.emit(id)
+
+func _on_peer_disconnected(id: int, ticket: int) -> void:
+	if is_current(ticket): _pending_admissions.erase(id)
 
 func _on_authenticating(id: int, ticket: int) -> void:
 	if not is_current(ticket): return
@@ -177,11 +183,65 @@ func is_compatible(metadata: Dictionary) -> bool:
 		if metadata.get(key) != expected[key]: return false
 	return true
 
+func _complete_admission(id: int, identity: Dictionary, ticket: int, expected_room: String) -> bool:
+	if not is_current(ticket) or not is_host() or expected_room != room_id or id <= ORIGINAL_HOST or not multiplayer.get_peers().has(id):
+		return false
+	if not identity.get("accepted", false): return false
+	var validated := {"account_id": identity.get("account_id"), "username": identity.get("username")}
+	if not _valid_identity(validated): return false
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	return manager != null and manager._admit_authenticated_identity(id, validated)
+
+func _admission_request_is_current(id: int, ticket: int, expected_room: String, serial: int) -> bool:
+	return is_current(ticket) and expected_room == room_id and _pending_admissions.get(id) == serial and multiplayer.get_peers().has(id)
+
+func submit_admission_ticket(ticket: String) -> void:
+	if role != "CLIENT" or not is_current(generation) or len(ticket) < 32 or len(ticket) > 128: return
+	_submit_admission_ticket.rpc_id(ORIGINAL_HOST, ticket)
+
+@rpc("any_peer", "reliable")
+func _submit_admission_ticket(ticket: String) -> void:
+	if not is_host() or phase != "lobby" or _room_credential.is_empty() or len(ticket) < 32 or len(ticket) > 128: return
+	var id := multiplayer.get_remote_sender_id()
+	if id <= ORIGINAL_HOST or _pending_admissions.has(id) or not multiplayer.get_peers().has(id): return
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null or manager.get_lobby_peer_ids().has(id): return
+	var request_generation := generation
+	var request_room := room_id
+	_admission_serial += 1
+	var request_serial := _admission_serial
+	_pending_admissions[id] = request_serial
+	var identity: Dictionary = await AuthService.redeem_listen_ticket(request_room, ticket, _room_credential)
+	if not _admission_request_is_current(id, request_generation, request_room, request_serial): return
+	_pending_admissions.erase(id)
+	if not _complete_admission(id, identity, request_generation, request_room):
+		_reject_admission.call_deferred(id, request_generation)
+		return
+	var validated := {"account_id": str(identity.account_id), "username": str(identity.username)}
+	peer_admitted.emit(id, validated)
+	_admission_accepted.rpc_id(id, validated.username)
+	manager._broadcast_lobby_snapshots()
+
+func _reject_admission(id: int, ticket: int) -> void:
+	if is_current(ticket) and multiplayer.get_peers().has(id):
+		(multiplayer as SceneMultiplayer).disconnect_peer(id)
+
+@rpc("authority", "reliable")
+func _admission_accepted(username: String) -> void:
+	if role == "CLIENT" and is_current(generation): EventBus.game_server_authenticated.emit(username)
+
 func close(reason: String = "") -> void:
 	if phase in ["menu", "closing"]: return
 	# Invalidate every captured HTTP/load/transport callback before cleanup yields.
 	generation += 1
+	var closing_room := room_id
+	var closing_credential := _room_credential
 	_room_credential = ""
+	_pending_admissions.clear()
+	if not closing_credential.is_empty():
+		# This callback only closes the captured backend room; it never mutates
+		# session state or clears a newer room/account when its request completes.
+		AuthService.close_listen_room.call_deferred(closing_room, closing_credential)
 	set_phase("closing")
 	for binding in _bindings:
 		if binding.event.is_connected(binding.callback): binding.event.disconnect(binding.callback)

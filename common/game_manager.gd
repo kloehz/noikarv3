@@ -26,6 +26,7 @@ func _ensure_session() -> void:
 	session.name = "Session"
 	session._world_cleanup = _reset_session_world
 	add_child(session)
+	EventBus.player_admission_ticket_submitted.connect(session.submit_admission_ticket)
 
 func _reset_session_world() -> void:
 	var tree := get_tree()

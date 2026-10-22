@@ -819,12 +819,13 @@ func _on_player_name_submitted(player_name: String) -> void:
 		_submit_name_to_server.rpc_id(1, player_name)
 
 func _on_player_auth_token_submitted(token: String) -> void:
+	if not OS.get_cmdline_user_args().has("--legacy-dedicated") and not BenchmarkProfile.remote_transport: return
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != 1:
 		_submit_auth_token_to_server.rpc_id(1, token, BenchmarkProfile.selected_profile, BenchmarkProfile.player_limit)
 
 @rpc("any_peer", "reliable")
 func _submit_auth_token_to_server(token: String, profile: String = "", player_limit: int = 0) -> void:
-	if not multiplayer.is_server():
+	if not GameManager.is_dedicated_runtime() or not multiplayer.is_server():
 		return
 	var peer_id := multiplayer.get_remote_sender_id()
 	if peer_id <= 0 or _authenticating_peers.has(peer_id) or peer_data.has(peer_id):

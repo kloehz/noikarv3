@@ -38,6 +38,7 @@ var _used_relay := false
 var _current_oid := ""
 var _snapshot: Dictionary = {}
 var _selected_character := "warrior"
+var _pending_admission_ticket := ""
 ## Boss whose ServerState.boss_damage_changed drives the HUD bar. Re-resolved
 ## every poll in case the boss spawns/despawns during the match.
 var _tracked_boss: Node = null
@@ -255,6 +256,9 @@ func _on_connected_to_server() -> void:
 	_game_connection_attempt += 1
 	if GameManager.session != null and GameManager.session.role == "CLIENT":
 		status_label.text = "Waiting for room admission..."
+		var ticket := _pending_admission_ticket
+		_pending_admission_ticket = ""
+		if not ticket.is_empty(): EventBus.player_admission_ticket_submitted.emit(ticket)
 		return
 	if not _uses_legacy_provisioning(): return
 	status_label.text = "Validating account..."

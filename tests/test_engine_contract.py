@@ -49,6 +49,7 @@ signal on_pid
 signal server_started
 signal client_ready
 signal client_connected(id)
+signal player_admission_ticket_submitted(ticket)
 signal on_client_stop
 signal on_server_stop
 var _is_server := false
@@ -78,6 +79,10 @@ func server_ready() -> void:
     pass
 func over_enet_peer(_peer, _address, _port) -> void:
     pass
+func close_listen_room(_room, _credential) -> void:
+    pass
+func redeem_listen_ticket(_room, _ticket, _credential) -> Dictionary:
+    return {"accepted": false}
 ''')
             (path / "probe.tscn").write_text(
                 '[gd_scene load_steps=2 format=3]\n'

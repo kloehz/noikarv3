@@ -19,6 +19,17 @@ func test_player_host_connection_never_submits_account_bearer() -> void:
 	_menu._on_connected_to_server()
 	assert_signal_not_emitted(EventBus, "player_auth_token_submitted")
 
+func test_player_host_sends_only_the_pending_room_scoped_ticket() -> void:
+	assert_true(EventBus.has_signal("player_admission_ticket_submitted"), "Scoped proof needs its own unambiguous event")
+	if not EventBus.has_signal("player_admission_ticket_submitted"): return
+	GameManager.session.role = "CLIENT"
+	_menu._pending_admission_ticket = "opaque-room-proof"
+	watch_signals(EventBus)
+	_menu._on_connected_to_server()
+	assert_signal_emitted_with_parameters(EventBus, "player_admission_ticket_submitted", ["opaque-room-proof"])
+	assert_signal_not_emitted(EventBus, "player_auth_token_submitted")
+	assert_eq(_menu._pending_admission_ticket, "", "Single-use proof must not be retained after submission")
+
 func test_legacy_provisioning_is_not_the_default_host_action() -> void:
 	assert_true(_menu.has_method("_uses_legacy_provisioning"), "Default hosting must not provision a dedicated process")
 	if not _menu.has_method("_uses_legacy_provisioning"): return
