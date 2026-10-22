@@ -133,6 +133,20 @@ the reusable account-bearer event. This is deliberately not a finished tester bu
 Four role tests, two menu/bearer-boundary tests and nine engine/bootstrap Python
 checks pass. The role/launcher/menu bridge is a separate rollback unit.
 
+## Session checkpoint evidence
+
+Three integration tests use separate SceneMultiplayer APIs over real ENet sockets:
+matching builds connect without an account-admitted event; different full engine
+hashes never emit `peer_connected`; host authentication failure returns the client
+to menu. This is not independent-process full-match or Steam evidence.
+
+`tests/manual/menu_session_probe.gd` also ran on native macOS without the test-mode
+guard: MENU/menu, inactive clock, zero HTTPRequest children, no Noray connection,
+zero player entities and the original menu present, with no engine errors. The full
+regression run is **433/433 GUT tests, 2,552 assertions**, still with the six expected
+fixture warnings and 24 reported fixture orphans described above. Temporary logs
+remain local. These diagnostic tests can be rolled back without changing gameplay.
+
 ## Scope and safeguards
 
 Preserve two teams, three players per team, the existing combat/AI/pets/souls/totems,
