@@ -77,6 +77,27 @@ leave, retained login and inactive clock. See `docs/evidence/f5-vps-playtest.jso
 and `.png`. It does not certify a full match, damage outcomes, six players, Steam,
 or host/server performance.
 
+### Enemy and pet motion
+
+The migration client now renders remote NPCs from authoritative source-time
+history at every snapshot rate, including the default 30 Hz. Start a new F5 run
+to load the correction; no production deployment or physics-rate change is needed.
+Health and combat metadata are not held in the visual buffer.
+
+The buffer begins with four source ticks of reserve (about 133 ms at 30 Hz),
+and adjusts playback within 0.9–1.1x to absorb batching without compressing a
+missing interval into one tick. It does not extrapolate: sufficiently long packet
+stalls can still pause presentation. CharacterBody3D collision queries remain
+authoritative; removing them would change wall and hostile-body blocking.
+
+For a repeatable native VPS trace, run
+`NOIKAR_NPC_MOTION_PROBE=1 /Applications/Godot.app/Contents/MacOS/Godot --path . -s tests/manual/npc_motion_probe.gd`.
+This creates its own test account/room and closes it afterward; it does not stop
+an existing room. Raw frame/source samples go to the ignored
+`tests/artifacts/npc-motion-vps.json`. Measured results and acceptance limits are
+in `docs/evidence/npc-motion-correction.json`. The separate real pet check uses a
+LAN fixture spawn; it does not certify earning souls or the complete totem flow.
+
 Additional actual-runtime checks: forcibly terminating the local game releases the
 SSH listener, and an unclaimed remote world expires and permits a new room after
 the 30-second admission lease. See `f5-vps-abrupt-stop.json` and

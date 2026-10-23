@@ -1,0 +1,122 @@
+{
+  "status": "implemented_runtime_verified_review_findings_fixed",
+  "scope": "Remote enemy and pet presentation; authoritative gameplay unchanged",
+  "transport": "ENet",
+  "steam_verified": false,
+  "production_changed": false,
+  "server_redeployment_required": false,
+  "implementation": {
+    "snapshot_rates_supported_hz": [30, 15, 10],
+    "default_snapshot_hz_unchanged": 30,
+    "physics_hz_unchanged": 30,
+    "max_buffer_samples": 16,
+    "max_additional_eviction_anchors": 1,
+    "initial_source_reserve_ticks": 4,
+    "playback_rate_range": [0.9, 1.1],
+    "extrapolation": false,
+    "source_clock": "received authoritative ticks, advanced by render delta",
+    "remote_transform_writer": "NpcTickInterpolator only",
+    "health_and_combat_metadata": "applied immediately at received state cadence"
+  },
+  "actual_vps_comparison": {
+    "baseline": {
+      "source_speed_mps_p50_and_p95": 10.0,
+      "render_speed_mps_p95_range": [38.049, 39.795],
+      "rtt_ms_p50": 111.737
+    },
+    "corrected_run_1": {
+      "frames": 1200,
+      "duration_seconds": 16,
+      "frame_ms_p99": 13.907,
+      "rtt_ms_p50": 111.769,
+      "rtt_jitter_ms_p95": 67.043,
+      "sustained_moving_enemy_render_speed_mps_p95_range": [11.12, 11.127]
+    },
+    "corrected_run_2": {
+      "frames": 1200,
+      "duration_seconds": 16,
+      "frame_ms_p99": 13.869,
+      "rtt_ms_p50": 125.017,
+      "rtt_jitter_ms_p95": 79.984,
+      "nearby_enemy_render_speed_mps_p95_range": [11.107, 11.183],
+      "nearby_enemy_render_speed_mps_max_range": [11.403, 11.687],
+      "source_change_gap_ms_p95_range": [146.999, 159.974],
+      "remaining_buffer_underruns_per_entity": [40, 62, 63, 65],
+      "note": "Finite buffering cannot conceal arbitrary packet stalls. Source-time recovery is speed-bounded instead of jumping in one tick."
+    },
+    "final_after_review_fixes": {
+      "frames": 1200,
+      "duration_seconds": 16,
+      "frame_ms_p99": 13.891,
+      "rtt_ms_p50": 112.687,
+      "rtt_jitter_ms_p95": 67.469,
+      "nearby_enemy_render_speed_mps_p95_range": [11.065, 11.163],
+      "maximum_wall_time_speed_outlier_mps": 18.459,
+      "note": "Wall-time callbacks include compositor/frame timing variation. The independent pet quality gate uses the delta that actually advanced presentation. Buffer underruns still occur during network stalls."
+    }
+  },
+  "actual_independent_process_pet_check": {
+    "transport": "ENet LAN",
+    "graphical_player_host_and_guest": true,
+    "authority": 1,
+    "fixture_spawn": true,
+    "full_soul_and_totem_flow_verified": false,
+    "sample_frames": 294,
+    "buffered_frames": 294,
+    "pet_moved": true,
+    "travel_m": 29.0199,
+    "render_delta_normalized_speed_ratio_max": 1.100203,
+    "quality_gate": "PASS: every frame buffered, motion present, no frame above 1.12x nominal source speed when normalized by render delta",
+    "note": "The earlier displacement-only check was strengthened. It initially exposed a real 13-tick packet-gap jump; that defect was reproduced RED and fixed before this final passing run."
+  },
+  "physics_audit": {
+    "scene_rigid_bodies_found": 0,
+    "scene_navigation_agents_found": 0,
+    "body_model": "CharacterBody3D capsule collision queries, not dynamic rigid-body simulation",
+    "physics_removed": false,
+    "physics_tests_passed": 13,
+    "benchmark_repeats": 7,
+    "calls_per_repeat": 10000,
+    "existing_fastpath_idle_us_median": 2.1242,
+    "general_method_idle_us_median": 2.3657,
+    "existing_fastpath_moving_us_median": 5.7735,
+    "general_method_moving_us_median": 5.3352,
+    "whole_room_cpu_reduction_claimed": false
+  },
+  "verification": {
+    "gut_tests": "492/492",
+    "gut_assertions": 2843,
+    "python_tests": "26/26",
+    "backend_race_tests": "PASS",
+    "rendered_host_guest_with_pet": "PASS",
+    "diff_whitespace": "PASS",
+    "inherited_gut_warnings": 6,
+    "inherited_gut_orphans": 24,
+    "last_isolated_world_engine_errors": 0,
+    "idle_owned_world_remaining": false,
+    "production_release_unchanged": "c30bf6e10a45ac92e2cfd6851670e8a658c4290d"
+  },
+  "fresh_scoped_review": {
+    "critical_findings": 0,
+    "important_findings_reproduced_and_fixed": 3,
+    "pet_acceptance_gap_upgraded_and_fixed": true,
+    "fixes": [
+      "Preserve a fractional presentation anchor when source-buffer eviction would strand playback",
+      "Fence retained synchronizer history across authority/settings resets",
+      "Retain the accepted complete epoch baseline as a lower history boundary",
+      "Do not turn spatially continuous packet silence into a teleport during active playback",
+      "Require actual motion quality in the optional rendered pet fixture"
+    ],
+    "all_fixes_verified_red_then_green": true,
+    "second_review_performed": false,
+    "deferred_minors": [],
+    "outside_review_scope": "Unrelated Steam/F5 migration certification; complete soul/totem flow; native Windows/Intel execution"
+  },
+  "commands": {
+    "vps": "NOIKAR_NPC_MOTION_PROBE=1 /Applications/Godot.app/Contents/MacOS/Godot --path . -s tests/manual/npc_motion_probe.gd",
+    "pet_from_backend_directory": "NOIKAR_FIXTURE_NPC_MOTION=1 NOIKAR_RENDERED_TESTS=1 GODOT_BIN=/Applications/Godot.app/Contents/MacOS/Godot go test ./cmd/server -run TestRenderedListenHostAndIndependentGuest -count=1 -v",
+    "gut": "bash play.sh tests",
+    "python": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "backend": "go test -race ./cmd/server"
+  }
+}

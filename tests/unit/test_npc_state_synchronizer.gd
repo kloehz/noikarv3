@@ -47,6 +47,33 @@ func test_extends_vendor_state_synchronizer_and_defaults_to_every_tick() -> void
 	sync._after_tick(1.0 / 30.0, 1)
 	assert_true(sync._state_history.has(1), "Default stride 1 preserves every-tick vendor submission")
 
+func test_full_rate_client_applies_metadata_without_overwriting_render_transform() -> void:
+	var sync := _make_sync("MOB_RENDER_METADATA", 1)
+	var state := sync.get_parent() as ServerState
+	sync.root.global_position = Vector3(9, 0, 0)
+	state.sync_health = 22
+	sync._state_history.set_snapshot(5, _PropertySnapshot.extract(sync._property_config.get_properties()))
+	sync.root.set_multiplayer_authority(2, true)
+	sync.root.global_position = Vector3(3, 0, 0)
+	state.sync_health = 5
+	sync._after_tick(1.0 / 30.0, 5)
+	assert_eq(state.sync_health, 22, "Gameplay metadata is not delayed by presentation")
+	assert_eq(sync.root.global_position, Vector3(3, 0, 0), "Only the NPC renderer writes remote transforms")
+
+func test_accepted_epoch_baseline_does_not_retroactively_admit_incomplete_older_samples() -> void:
+	var sync := _make_sync("MOB_EPOCH_RENDER", 1)
+	sync.root.set_multiplayer_authority(2, true)
+	sync.reset_client_history_epoch()
+	var partial := _PropertySnapshot.new()
+	partial.set_value(":global_position", Vector3(1, 0, 0))
+	partial.set_value(":quaternion", Quaternion.IDENTITY)
+	sync._state_history.set_snapshot(4, partial)
+	sync.root.position = Vector3(4, 0, 0)
+	sync._state_history.set_snapshot(7, _PropertySnapshot.extract(sync._property_config.get_properties()))
+	sync._after_tick(1.0 / 30.0, 7)
+	var samples: Array = sync.get_received_transform_samples(-1, 7)
+	assert_eq(samples.map(func(sample): return sample.tick), [7], "Earlier incomplete states remain behind the accepted epoch baseline")
+
 func test_stride_two_only_submits_on_deterministic_phase() -> void:
 	var sync := _make_sync("MOB_PHASE", 2)
 	var phase: int = sync.call("get_authority_snapshot_phase")

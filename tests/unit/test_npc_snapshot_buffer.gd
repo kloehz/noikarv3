@@ -138,3 +138,50 @@ func test_rejects_nonfinite_position_rotation_zero_quaternion_and_negative_tick(
 	assert_false(buffer.push_snapshot(0, Vector3.ZERO, Quaternion(INF, 0, 0, 1)))
 	assert_false(buffer.push_snapshot(0, Vector3.ZERO, Quaternion(0, 0, 0, 0)))
 	assert_eq(buffer.count, 0)
+
+func test_playback_holds_on_starvation_and_recovers_without_speed_spike() -> void:
+	var buffer := BUFFER_SCRIPT.new()
+	buffer.push_snapshot(100, Vector3.ZERO, Quaternion.IDENTITY)
+	buffer.push_snapshot(104, Vector3(0.4, 0, 0), Quaternion.IDENTITY)
+	if not buffer.has_method("advance"):
+		fail_test("Source-relative bounded playback is required")
+		return
+	for frame in range(120): buffer.advance(0.25, 4.0)
+	_assert_vec3_close(buffer.advance(0.25, 4.0).position, Vector3(0.4, 0, 0))
+	buffer.push_snapshot(110, Vector3(1.0, 0, 0), Quaternion.IDENTITY)
+	var recovered: Dictionary = buffer.advance(0.25, 4.0)
+	assert_between(recovered.position.x, 0.4, 0.4301, "Recovery must not compress all missing source ticks into one frame")
+	buffer.reset()
+	buffer.push_snapshot(1, Vector3(9, 0, 0), Quaternion.IDENTITY)
+	_assert_vec3_close(buffer.advance(0.25, 4.0).position, Vector3(9, 0, 0))
+
+func test_capacity_overflow_preserves_pending_playback_anchor() -> void:
+	var buffer := BUFFER_SCRIPT.new()
+	for tick in range(89, 105):
+		buffer.push_snapshot(tick, Vector3(float(tick) / 3.0, 0, 0), Quaternion.IDENTITY)
+	var before: Dictionary = buffer.advance(0.0, 4.0)
+	for tick in range(105, 117):
+		buffer.push_snapshot(tick, Vector3(float(tick) / 3.0, 0, 0), Quaternion.IDENTITY)
+	var after: Dictionary = buffer.advance(0.25, 4.0)
+	assert_lte(after.position.distance_to(before.position), 10.0 / 120.0 * 1.1 + 0.0001,
+		"Capacity eviction must not bypass the presentation speed limit")
+	assert_lte(buffer.count, 16, "Retaining the playback anchor must not make history unbounded")
+
+func test_active_playback_long_gap_preserves_pose_instead_of_turning_loss_into_teleport() -> void:
+	var buffer := BUFFER_SCRIPT.new()
+	for tick in range(100, 104):
+		buffer.push_snapshot(tick, Vector3(float(tick - 100) / 3.0, 0, 0), Quaternion.IDENTITY)
+	for frame in range(120): buffer.advance(0.25, 4.0)
+	var before: Dictionary = buffer.advance(0.25, 4.0)
+	buffer.push_snapshot(116, Vector3(16.0 / 3.0, 0, 0), Quaternion.IDENTITY)
+	var after: Dictionary = buffer.advance(0.25, 4.0)
+	assert_lte(after.position.distance_to(before.position), 10.0 / 120.0 * 1.1 + 0.0001,
+		"A 13-tick packet gap during ordinary movement is not a teleport")
+
+func test_long_idle_gap_reseeds_clock_without_leaving_large_playback_debt() -> void:
+	var buffer := BUFFER_SCRIPT.new()
+	buffer.push_snapshot(0, Vector3.ZERO, Quaternion.IDENTITY)
+	for frame in range(120): buffer.advance(0.25, 4.0)
+	buffer.push_snapshot(1000, Vector3.ZERO, Quaternion.IDENTITY)
+	buffer.advance(0.25, 4.0)
+	assert_gt(float(buffer.get("_playback_tick")), 990.0, "A stationary outage can reset source time without a visible jump")

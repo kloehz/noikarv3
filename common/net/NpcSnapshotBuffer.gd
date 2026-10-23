@@ -26,6 +26,25 @@ var _barrier_tick := -1
 var _presented_tick := -1
 var _last_render_tick := -INF
 var _last_pose: Dictionary = {}
+var _playback_tick := -INF
+var _evicted_anchor: Dictionary = {}
+
+## Presentation follows received source time, not the prediction clock. A small
+## reserve absorbs packet batching; rate correction is bounded to avoid bursts.
+func advance(delta_ticks: float, delay_ticks: float) -> Dictionary:
+	if _samples.is_empty():
+		return {}
+	if not is_finite(_playback_tick):
+		_playback_tick = float(_latest_tick) - maxf(1.0, delay_ticks)
+	if is_finite(delta_ticks) and delta_ticks > 0.0:
+		var reserve := float(_latest_tick) - _playback_tick
+		var speed := 1.0
+		if reserve > delay_ticks + 1.0:
+			speed = 1.1
+		elif reserve < delay_ticks - 1.0:
+			speed = 0.9
+		_playback_tick = minf(float(_latest_tick), _playback_tick + delta_ticks * speed)
+	return sample(_playback_tick)
 
 func _init(capacity: int = DEFAULT_CAPACITY, p_max_tick_gap: int = DEFAULT_MAX_TICK_GAP, p_teleport_distance: float = DEFAULT_TELEPORT_DISTANCE) -> void:
 	_capacity = clampi(capacity, MIN_CAPACITY, MAX_CAPACITY)
@@ -80,12 +99,28 @@ func reset() -> void:
 	_presented_tick = -1
 	_last_render_tick = -INF
 	_last_pose = {}
+	_playback_tick = -INF
+	_evicted_anchor = {}
 
 func _seed(tick: int, position: Vector3, rotation: Quaternion) -> void:
+	# Packet silence alone is not a spatial teleport. During active playback,
+	# bridge a continuous new pose from the last presentation instead of snapping
+	# across the missing interval. A stationary gap can safely reseed the clock.
+	var preserve_playback := is_finite(_playback_tick) and not _last_pose.is_empty() \
+		and (_last_pose.position as Vector3).distance_to(position) > EPSILON \
+		and not _samples.is_empty() \
+		and (_samples.back().position as Vector3).distance_to(position) <= teleport_distance
+	if preserve_playback:
+		_evicted_anchor = {"tick": _last_render_tick, "position": _last_pose.position, "rotation": _last_pose.rotation}
 	_samples = [{"tick": tick, "position": position, "rotation": rotation}]
 	_latest_tick = tick
 	_barrier_tick = tick - 1
+	if preserve_playback:
+		return
 	_last_pose = {}
+	_playback_tick = -INF
+	_last_render_tick = -INF
+	_evicted_anchor = {}
 
 func _should_reset_for_forward_sample(tick: int, position: Vector3) -> bool:
 	if _samples.is_empty():
@@ -97,6 +132,8 @@ func _should_reset_for_forward_sample(tick: int, position: Vector3) -> bool:
 func _sample_forward(render_tick: float) -> Dictionary:
 	var first: Dictionary = _samples[0]
 	if render_tick <= float(first.tick):
+		if not _evicted_anchor.is_empty() and render_tick >= float(_evicted_anchor.tick):
+			return _interpolate(_evicted_anchor, first, render_tick)
 		return {"position": first.position, "rotation": first.rotation}
 
 	var last: Dictionary = _samples[_samples.size() - 1]
@@ -112,8 +149,8 @@ func _sample_forward(render_tick: float) -> Dictionary:
 	return {"position": last.position, "rotation": last.rotation}
 
 func _interpolate(left: Dictionary, right: Dictionary, render_tick: float) -> Dictionary:
-	var left_tick: int = left.tick
-	var right_tick: int = right.tick
+	var left_tick: float = left.tick
+	var right_tick: float = right.tick
 	if right_tick <= left_tick:
 		return {"position": left.position, "rotation": left.rotation}
 	var weight := clampf((render_tick - float(left_tick)) / float(right_tick - left_tick), 0.0, 1.0)
@@ -136,6 +173,11 @@ func _append_ordered(sample_data: Dictionary) -> void:
 func _trim_to_capacity() -> void:
 	while _samples.size() > _capacity:
 		_samples.pop_front()
+	# A burst may evict the source sample bracketing pending playback. Retain
+	# the last presented fractional pose as one constant-size interpolation
+	# anchor, rather than snapping forward to the earliest remaining sample.
+	if not _last_pose.is_empty() and float(_samples[0].tick) > _last_render_tick:
+		_evicted_anchor = {"tick": _last_render_tick, "position": _last_pose.position, "rotation": _last_pose.rotation}
 
 func _find_sample_index(tick: int) -> int:
 	for index in range(_samples.size()):

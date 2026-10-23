@@ -15,6 +15,7 @@ var _last_sent_non_motion_values: Array = []
 var _last_event_tick: int = -1
 var _last_client_history_tick: int = -1
 var _client_history_epoch_requires_complete: bool = false
+var _client_history_epoch_baseline_tick := -1
 var _motion_property_paths: Array[String] = []
 var _non_motion_property_entries: Array[PropertyEntry] = []
 var _non_motion_property_paths: Array[String] = []
@@ -61,6 +62,8 @@ func get_latest_received_transform_tick(tick: int) -> int:
 	if _state_history.is_empty():
 		return -1
 	var closest_tick: int = _state_history.get_closest_tick(tick)
+	if closest_tick < _client_history_epoch_baseline_tick:
+		return -1
 	var snapshot := _state_history.get_snapshot(closest_tick)
 	if snapshot == null or snapshot.is_empty():
 		return -1
@@ -71,24 +74,41 @@ func get_latest_received_transform_tick(tick: int) -> int:
 			return closest_tick
 	return -1
 
+func get_latest_received_tick() -> int:
+	return -1 if _state_history.is_empty() else int(_state_history.get_latest_tick())
+
 func get_received_transform_snapshot(tick: int) -> _PropertySnapshot:
 	var closest_tick := get_latest_received_transform_tick(tick)
 	if closest_tick < 0:
 		return _PropertySnapshot.new()
 	return _state_history.get_snapshot(closest_tick)
 
+## Preserve intermediate samples in a packet burst (including direction changes).
+## Only the last 16 source ticks are useful to the bounded presentation buffer.
+func get_received_transform_samples(after_tick: int, tick: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var latest := get_latest_received_transform_tick(tick)
+	var first_tick := maxi(maxi(after_tick + 1, latest - 15), _client_history_epoch_baseline_tick)
+	for source_tick in range(first_tick, latest + 1):
+		var snapshot := _state_history.get_snapshot(source_tick)
+		if snapshot == null or snapshot.is_empty():
+			continue
+		if _client_history_epoch_requires_complete and not _is_complete_snapshot(snapshot):
+			continue
+		result.append({"tick": source_tick, "snapshot": snapshot})
+	return result
+
 func _after_tick(dt: float, tick: int) -> void:
 	_sync_stride_from_server_state()
-	var eligible_metadata_tick := -1
 	if not is_multiplayer_authority():
-		eligible_metadata_tick = _apply_received_stride_metadata(tick)
+		_apply_received_stride_metadata(tick)
+		# Presentation owns remote transforms at every cadence, including 30 Hz.
+		# Applying motion here would fight the render buffer on each network tick.
+		_apply_sparse_client_tick(tick)
+		return
 	var stride := get_effective_snapshot_stride()
 	if stride <= 1:
-		if not is_multiplayer_authority() and _client_history_epoch_requires_complete and eligible_metadata_tick < 0:
-			return
 		super._after_tick(dt, tick)
-		if not is_multiplayer_authority() and eligible_metadata_tick >= 0:
-			_accept_client_history_tick(eligible_metadata_tick)
 		_record_post_submit_state_if_authority(tick, false)
 		return
 
@@ -98,8 +118,6 @@ func _after_tick(dt: float, tick: int) -> void:
 			super._after_tick(dt, tick)
 			_record_post_submit_state_if_authority(tick, has_event)
 		return
-
-	_apply_sparse_client_tick(tick)
 
 func _apply_sparse_client_tick(tick: int) -> void:
 	var closest_tick := _get_eligible_client_history_tick(tick)
@@ -187,6 +205,7 @@ func reset_client_history_epoch() -> void:
 	_state_history.clear()
 	_last_client_history_tick = -1
 	_client_history_epoch_requires_complete = true
+	_client_history_epoch_baseline_tick = -1
 
 func _apply_received_stride_metadata(tick: int) -> int:
 	var closest_tick := _get_eligible_client_history_tick(tick)
@@ -219,6 +238,8 @@ func _get_eligible_client_history_tick(tick: int) -> int:
 
 func _accept_client_history_tick(tick: int) -> void:
 	_last_client_history_tick = tick
+	if _client_history_epoch_requires_complete:
+		_client_history_epoch_baseline_tick = tick
 	_client_history_epoch_requires_complete = false
 
 func _is_complete_snapshot(snapshot: _PropertySnapshot) -> bool:

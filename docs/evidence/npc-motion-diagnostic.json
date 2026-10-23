@@ -1,0 +1,47 @@
+{
+  "status": "reproduced_not_fixed",
+  "transport": "ENet",
+  "steam_involved": false,
+  "production_tuning_changed": false,
+  "native_vps_sample": {
+    "frames": 1200,
+    "duration_seconds": 16,
+    "tickrate": 30,
+    "physics_hz": 30,
+    "npc_snapshot_stride": 1,
+    "timestamp_buffer_active": false,
+    "diff_states": true,
+    "frame_ms_p50": 13.337,
+    "frame_ms_p99": 13.847,
+    "rtt_ms_p50": 111.737,
+    "rtt_ms_p95": 138.645,
+    "rtt_jitter_ms_p95": 73.506,
+    "nearby_enemy_distance_limit_m": 30,
+    "source_motion_speed_mps_p50_and_p95": 10.0,
+    "render_motion_speed_mps_p95_range": [38.049, 39.795],
+    "identical_interpolation_endpoint_frame_percent_range": [44.4, 47.8],
+    "source_position_change_ms_p95_range": [146.584, 159.85],
+    "pet_gameplay_sampled": false
+  },
+  "concurrent_server_observation": {
+    "cpu_percent_of_one_core_p50": 22.617,
+    "cpu_percent_of_one_core_p95": 37.656,
+    "host_cpu_steal_percent_p95": 14.815,
+    "outgoing_game_packets": 8548,
+    "outgoing_packet_gap_ms_p99": 17.791,
+    "outgoing_packet_gaps_over_100ms": 5,
+    "network_or_host_jitter_excluded": false
+  },
+  "controlled_reproduction": {
+    "source_speed_mps": 3.0,
+    "snapshot_hz": 30,
+    "render_fps": 120,
+    "arrival_pattern": "two snapshots delivered together every two ticks",
+    "full_rate_fallback_zero_render_step_fraction": 0.5,
+    "full_rate_fallback_max_frame_step_m": 0.05000019,
+    "existing_source_time_buffer_control_max_frame_step_m": 0.0250001,
+    "full_rate_smoothness_assertion": "FAIL",
+    "source_time_buffer_control_assertion": "PASS"
+  },
+  "finding": "At stride 1 the custom NPC interpolator falls back to tick-local endpoints instead of source-timestamp history. Repeated source poses hold, then new arrivals catch up within one local tick. Both enemy and pet scenes use this path; only enemies were sampled in actual VPS gameplay."
+}
