@@ -252,7 +252,7 @@ const ALLOWED_CHARACTER_IDS: Array[String] = ["warrior", "ivern_ranger"]
 const ActorSpatialIndexScript = preload("res://common/ActorSpatialIndex.gd")
 
 func _enter_tree() -> void:
-	if multiplayer.is_server():
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		set_meta(&"actor_spatial_index", ActorSpatialIndexScript.new())
 	if GameManager._is_headless_environment():
 		_strip_headless_presentation()
@@ -733,6 +733,8 @@ func _strip_visual_nodes_recursive(node: Node) -> void:
 		child.free()
 
 func _on_server_started() -> void:
+	if not has_meta(&"actor_spatial_index"):
+		set_meta(&"actor_spatial_index", ActorSpatialIndexScript.new())
 	var raw_benchmark_population_count := _raw_headless_benchmark_population_count()
 	if raw_benchmark_population_count >= 0:
 		print("[MatchManager] Raw headless benchmark server initialized; deferring fixed population spawn")
@@ -777,7 +779,10 @@ func _on_client_disconnected(peer_id: int) -> void:
 	_check_for_empty_server.call_deferred()
 
 func _check_for_empty_server() -> void:
-	if not multiplayer.is_server(): return
+	if not is_inside_tree() or not multiplayer.has_multiplayer_peer() or not multiplayer.is_server(): return
+	if _is_local_listen_host():
+		if not _lobby.has(1): GameManager.session.close("Host left room")
+		return
 	
 	# Count human players (nodes with numeric names in Players container)
 	var human_count = 0
@@ -798,6 +803,7 @@ func _check_for_empty_server() -> void:
 		_shutdown_timer = null
 
 func _auto_shutdown() -> void:
+	if not GameManager.is_dedicated_runtime(): return
 	# Double check count before actually quitting
 	var human_count = 0
 	if is_instance_valid(players_container):
@@ -985,6 +991,21 @@ func submit_character_selection(peer_id: int, character_id: String, ready: bool)
 func receive_lobby_snapshot(snapshot: Dictionary) -> void:
 	EventBus.lobby_snapshot_received.emit(snapshot)
 
+func apply_local_lobby_snapshot(snapshot: Dictionary) -> void:
+	if _is_local_listen_host(): EventBus.lobby_snapshot_received.emit(snapshot)
+
+func _is_local_listen_host() -> bool:
+	return GameManager.session != null and GameManager.session.role == "LISTEN_HOST" and multiplayer.is_server() and multiplayer.get_unique_id() == 1
+
+func admit_local_host(identity: Dictionary) -> bool:
+	if not _is_local_listen_host() or identity.size() != 2 or not identity.get("account_id") is String or not identity.get("username") is String or identity.account_id.is_empty() or identity.username.is_empty():
+		return false
+	if not _admit_authenticated_identity(1, identity): return false
+	_room_creator_account_id = identity.account_id
+	_recompute_lobby()
+	_broadcast_lobby_snapshots()
+	return true
+
 func _can_mutate_lobby(peer_id: int, expected_phase: int) -> bool:
 	if not multiplayer.is_server() or peer_id <= 0 or not _lobby.has(peer_id):
 		return false
@@ -1034,11 +1055,15 @@ func _snapshot_for(peer_id: int, rejection: String = "") -> Dictionary:
 func _broadcast_lobby_snapshots() -> void:
 	if not multiplayer.is_server(): return
 	for peer_id in _sorted_lobby_peer_ids():
-		if multiplayer.get_peers().has(peer_id):
+		if peer_id == 1 and _is_local_listen_host():
+			apply_local_lobby_snapshot(_snapshot_for(peer_id))
+		elif multiplayer.get_peers().has(peer_id):
 			receive_lobby_snapshot.rpc_id(peer_id, _snapshot_for(peer_id))
 
 func _reject_lobby_request(peer_id: int, reason: String) -> void:
-	if _lobby.has(peer_id) and multiplayer.get_peers().has(peer_id):
+	if peer_id == 1 and _is_local_listen_host() and _lobby.has(peer_id):
+		apply_local_lobby_snapshot(_snapshot_for(peer_id, reason))
+	elif _lobby.has(peer_id) and multiplayer.get_peers().has(peer_id):
 		receive_lobby_snapshot.rpc_id(peer_id, _snapshot_for(peer_id, reason))
 
 func _on_character_selection_cancelled() -> void:

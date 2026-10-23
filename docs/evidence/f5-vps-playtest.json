@@ -1,0 +1,27 @@
+{
+	"account_transport": "SSH",
+	"clock_inactive_after_close": true,
+	"login": true,
+	"login_preserved": true,
+	"ok": true,
+	"sessions": [
+		{
+			"attack": true,
+			"camera": true,
+			"human_peer": 1523755655,
+			"human_players": 1,
+			"mobs_present": true,
+			"movement": true
+		},
+		{
+			"attack": true,
+			"camera": true,
+			"human_peer": 1788694663,
+			"human_players": 1,
+			"mobs_present": true,
+			"movement": true
+		}
+	],
+	"steam_verified": false,
+	"transport": "ENet"
+}

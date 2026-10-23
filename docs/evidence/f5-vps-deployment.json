@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "runtime": "4.8.beta1.official.4d10419ca",
+  "api_build": "noikar-f5-20261022-1",
+  "production_release_unchanged": true,
+  "root": "/opt/noikar-f5-playtest",
+  "account_transport": "SSH loopback only",
+  "game_port": 24580,
+  "allowed_client_ip": "redacted; restricted to the preparation client's public IP",
+  "payload_sha256": {
+    "noikar-f5-server.x86_64": "28485fbd0e4cda4c503c5f3227d9b296fd5b1b4398f9fb00e9a6d72544b55e82",
+    "noikar-f5-server.pck": "03f98abdfea6ccb0b7689dc0e206d46f51af38b35d04747fa0cb8b4dc9c78faf",
+    "noikar-f5-api": "922ce924803d3ea8af18120976910b4221e82ac707fedda2217d03a6dfacf56f"
+  },
+  "local_profile": ".godot/noikar_vps_playtest.cfg"
+}

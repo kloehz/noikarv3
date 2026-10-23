@@ -80,7 +80,7 @@ var _signals_armed: bool = true
 
 func _ready() -> void:
 	set_multiplayer_authority(1)
-	if not is_multiplayer_authority():
+	if not multiplayer.has_multiplayer_peer() or not is_multiplayer_authority():
 		# Client: suppress signals until catch-up has landed in the first
 		# tick loop, then arm exactly once.
 		_signals_armed = false

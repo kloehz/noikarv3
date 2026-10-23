@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // This fixture owns its PostgreSQL cluster, API process, ports and credentials.
@@ -87,7 +88,11 @@ func listenFixture(t *testing.T) (string, *pgxpool.Pool, string, string) {
 	}
 	issue := func(name string) string {
 		var id string
-		if err := db.QueryRow(context.Background(), "INSERT INTO accounts(username,password_hash) VALUES($1,'fixture-no-password') RETURNING id", name).Scan(&id); err != nil {
+		hash, err := bcrypt.GenerateFromPassword([]byte("fixture-only-password"), bcrypt.DefaultCost)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.QueryRow(context.Background(), "INSERT INTO accounts(username,password_hash) VALUES($1,$2) RETURNING id", name, string(hash)).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
 		token, err := (&server{jwtSecret: []byte(jwtSecret)}).signToken(id, name)

@@ -31,6 +31,19 @@ func test_six_player_capacity_contract() -> void:
 	assert_eq(_service.MAX_PLAYERS_PER_TEAM, 3)
 	assert_eq(_service.PROTOCOL_VERSION, 1)
 
+func test_dedicated_attachment_has_authority_without_inventing_a_peer_one_player() -> void:
+	assert_true(_service.has_method("attach_dedicated"), "Isolated VPS room needs scoped dedicated attachment")
+	if not _service.has_method("attach_dedicated"): return
+	var peer := ENetMultiplayerPeer.new()
+	assert_eq(peer.create_server(0, 6), OK)
+	_service.configure_room("fixture-room", "room-scoped-credential")
+	assert_eq(_service.attach_dedicated(peer), OK)
+	assert_eq(_service.role, "DEDICATED")
+	assert_true(_service.is_host())
+	assert_eq(_service.phase, "lobby")
+	assert_eq(multiplayer.get_unique_id(), 1)
+	assert_true(multiplayer.get_peers().is_empty(), "Dedicated authority is not a human roster member")
+
 func test_menu_has_no_active_simulation() -> void:
 	if not _require_service(): return
 	assert_eq(_service.role, "MENU")
@@ -98,6 +111,25 @@ func test_compatibility_checks_full_build_and_dependency_content() -> void:
 		other[key] = "different"
 		assert_false(_service.is_compatible(other), key)
 
+func test_packaged_addon_fingerprint_uses_valid_manifest_without_weakening_source_checks() -> void:
+	assert_true(_service.has_method("resolve_addon_fingerprint"), "Packed scripts need the fingerprint of their exported sources")
+	if not _service.has_method("resolve_addon_fingerprint"): return
+	var manifest := Resource.new()
+	manifest.set_meta("source_fingerprint", "a".repeat(64))
+	var empty: Array[String] = []
+	assert_eq(_service.resolve_addon_fingerprint(empty, manifest), "a".repeat(64))
+	var source: Array[String] = ["res://addons/netfox/source.gd:fixture"]
+	assert_ne(_service.resolve_addon_fingerprint(source, manifest), "a".repeat(64), "Source edits cannot hide behind a stale packaged manifest")
+	manifest.set_meta("source_fingerprint", "invalid")
+	assert_eq(_service.resolve_addon_fingerprint(empty, manifest), "")
+	assert_eq(_service.resolve_addon_fingerprint(empty, null), "")
+
+func test_packaged_manifest_matches_the_actual_editor_addon_sources() -> void:
+	assert_true(ResourceLoader.exists("res://common/net/netfox_build_manifest.tres"))
+	if not ResourceLoader.exists("res://common/net/netfox_build_manifest.tres"): return
+	var manifest := load("res://common/net/netfox_build_manifest.tres")
+	assert_eq(str(manifest.get_meta("source_fingerprint")), str(_service.compatibility_metadata().addons))
+
 func test_identity_cannot_smuggle_account_credentials() -> void:
 	if not _require_service(): return
 	_service.configure_room("fixture-room", "scoped-room-secret")
@@ -144,3 +176,17 @@ func test_close_finishes_world_cleanup_before_allowing_another_attachment() -> v
 	for frame in 8: await get_tree().process_frame
 	assert_eq(completed.size(), 1)
 	assert_eq(_service.phase, "menu")
+
+func test_cancel_before_api_completion_invalidates_attempt_without_a_peer() -> void:
+	if not _require_service(): return
+	assert_true(_service.has_method("begin_attempt"), "Account API work must reserve a cancellable session generation")
+	if not _service.has_method("begin_attempt"): return
+	var attempt: int = _service.begin_attempt()
+	assert_true(_service.is_attempt_current(attempt))
+	assert_eq(_service.phase, "connecting")
+	assert_null(multiplayer.multiplayer_peer)
+	_service.close("Cancelled before API completion")
+	assert_false(_service.is_attempt_current(attempt))
+	for frame in 4: await get_tree().process_frame
+	assert_eq(_service.phase, "menu")
+	assert_null(multiplayer.multiplayer_peer)

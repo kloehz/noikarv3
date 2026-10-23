@@ -2,6 +2,7 @@
 """Exercise the static security/resource boundary with controlled preset files."""
 
 from pathlib import Path
+import fnmatch
 import tempfile
 import unittest
 
@@ -12,6 +13,12 @@ EXPORTS = module("verify_export_isolation")
 
 
 class ExportContractTests(unittest.TestCase):
+    def test_dedicated_export_does_not_require_a_client_steam_sdk(self):
+        presets = EXPORTS.parse_export_presets(ROOT / "export_presets.cfg")
+        dedicated = next(p for p in presets.values() if p.get("dedicated_server"))
+        for resource in ["addons/godotsteam/godotsteam.gdextension", "addons/godotsteam/linux64/libsteam_api.so"]:
+            self.assertTrue(any(fnmatch.fnmatchcase(resource, pattern) for pattern in dedicated["exclude_folders"]), resource)
+
     def test_shared_match_composition_is_not_a_secret_leak(self):
         self.assertEqual(EXPORTS.check_folder_isolation(ROOT), [])
 

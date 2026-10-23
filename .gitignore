@@ -24,3 +24,8 @@
 tests/artifacts/
 __pycache__/
 *.pyc
+
+# Optional pinned SDK binaries are reproduced with tools/install_steam.py.
+/addons/godotsteam/
+/steam_appid.txt
+/steam_api*.log

@@ -34,11 +34,15 @@ class EngineContractTests(unittest.TestCase):
             path = Path(tmp)
             shutil.copy2(ROOT / "common/game_manager.gd", path / "game_manager.gd")
             shutil.copytree(ROOT / "common/net", path / "common/net", ignore=shutil.ignore_patterns("*.uid"))
+            # Session phase projection consumes the real match enum. Include its
+            # source rather than duplicating enum values in a test double.
+            for name in ["match_state.gd", "team_id.gd"]:
+                shutil.copy2(ROOT / "common" / name, path / "common" / name)
             (path / "project.godot").write_text(
                 'config_version=5\n[application]\nconfig/name="Bootstrap fixture"\nrun/main_scene="res://probe.tscn"\n'
                 '[autoload]\n' + "".join(
                     f'{name}="*res://boundary.gd"\n'
-                    for name in ["BenchmarkProfile", "Noray", "AuthService", "PacketHandshake", "EventBus", "NetworkEvents"]
+                    for name in ["BenchmarkProfile", "Noray", "AuthService", "PacketHandshake", "EventBus", "NetworkEvents", "NetworkTime"]
                 )
             )
             (path / "boundary.gd").write_text('''extends Node
@@ -52,6 +56,8 @@ signal client_connected(id)
 signal player_admission_ticket_submitted(ticket)
 signal on_client_stop
 signal on_server_stop
+signal phase_changed(phase)
+signal after_tick_loop
 var _is_server := false
 var valid := true
 var selected_profile := ""

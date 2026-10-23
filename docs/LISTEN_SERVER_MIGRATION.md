@@ -7,6 +7,21 @@ Implementation is on `feat/godot-4.8-listen-server` in an isolated clone of
 The approved plan is `2026-10-22-noikar-godot-4.8-listen-server.md` in the user's
 OpenCode plan directory; this record tracks implementation evidence, not completion.
 
+Steam was advanced at the user's request, retaining Noikar's existing panels and
+StyleBoxes rather than importing the template UI. Local create/join controls and
+an editable explicit-invitation picker exist. **Task 7 remains incomplete:** the
+pinned Steam peer promotes Netfox's ordered-unreliable traffic to reliable delivery.
+See `dependencies/GODOTSTEAM.md` for exact evidence, the known-red contract and the
+required runtime measurement before considering a transport correction. No real friend invitations were sent and no
+Steam full-match, six-account, export or deployment acceptance is claimed.
+
+The user subsequently authorized a **separate isolated VPS solo playtest**. This
+checkout now supports F5 → existing login → create VPS test room → solo gameplay
+using scoped ENet admission and an SSH account tunnel. See `docs/F5_VPS_PLAYTEST.md`.
+Two native sessions and abrupt-stop/unclaimed-room cleanup passed. The production
+Godot 4.7 release and services remain unchanged; this is not Steam, six-player or
+full-match/performance certification.
+
 ## Preserved baseline
 
 - Published parent: `68429e3e36ea0c0379e370141297f27595bc44ae`.
@@ -207,6 +222,50 @@ wrong/right room IDs and replaced request serials; only the current response ent
 the real MatchManager roster. Host-player GUI/local admission is the next planned
 checkpoint, not certified by this transport/API evidence. This bridge is a separate
 rollback unit from the backend API and HTTPS client policy.
+
+## Host-player integration: work in progress
+
+The uncommitted next checkpoint adds local peer-1 admission/snapshots, direct host
+menu intents through existing validated handlers, authenticated LAN create/join,
+editable LAN address/port, copy/leave controls and cancellation-safe API attempts.
+The original movement/combat algorithms remain unchanged. Native separate processes
+passed real disposable-account login, both teams, selection, two spawns, movement,
+attack and return to menu after host departure, preserving login and stopping clocks.
+
+**Historical blocker before the authorized temporary VFX replacement:** With damage, death and the original
+soul/impact VFX included, native runs report unreleased particle shaders/RIDs at
+shutdown. Loading/freeing the unchanged loot particle scene alone reproduces a leak,
+without Noikar gameplay or networking. Cold first-use graphics compilation also
+produced a snapshot-history overrun in that run. No effects or population were reduced,
+and errors were not filtered out. This checkpoint is not complete or a tester build.
+
+Latest headless regression evidence: 449/449 GUT tests, 2,672 assertions, zero
+engine/script errors, with the same six expected warnings and 24 fixture orphans.
+Those earlier results do not certify the then-failing native VFX gate, six-process full PvPvE,
+Steam, a soak, exports, or an authorized Internet backend deployment.
+
+## Authorized temporary VFX replacement
+
+The user explicitly authorized removing the problematic cosmetic effects rather
+than blocking the hosting migration on their shader leak. The original vendor
+assets remain untouched. Only soul and impact presentation references now use
+editable, particle-free fallback scenes: a cyan soul orb and a short yellow impact
+flash using built-in StandardMaterial3D. Other shaders, including existing hit
+overlays, remain unchanged. Soul collection, expiry, damage and death/drop logic
+are unchanged; these replacements are cosmetic and intentionally temporary.
+
+Verified after replacement: both focused presentation/collection tests pass;
+the full GUT suite passes **451/451 tests, 2,682 assertions**, with zero engine/script
+errors (six expected fixture warnings and 24 fixture orphans remain). The native
+two-process graphical host/guest gate now also passes with real disposable-account
+login, teams, character selection, two player spawns, movement, attack, authoritative
+damage, a single soul drop despite repeated death dispatch, and host-departure menu
+cleanup. No shader-leak errors were suppressed. This unblocks that specific gate,
+not six-player full-match parity, Steam or export acceptance.
+
+Rollback of this cosmetic substitution is limited to the two visual resource
+references and impact playback integration. The diagnostic receipt describes the
+original unchanged vendor effect, not the replacement or a fix to its root cause.
 
 ## Scope and safeguards
 

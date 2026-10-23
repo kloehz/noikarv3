@@ -61,12 +61,16 @@ func _ready() -> void:
 			"authored_max_players_per_team": authored_rules.max_players_per_team}))
 	if match_state == null:
 		match_state = get_parent().get_node_or_null("MatchState") as MatchState
-	if not multiplayer.is_server():
+	EventBus.server_started.connect(_start_authority)
+	_start_authority()
+
+func _start_authority() -> void:
+	if not multiplayer.has_multiplayer_peer() or not multiplayer.is_server():
 		# Clients observe replicated MatchState only; no transition logic.
 		return
-	NetworkTime.after_tick.connect(_on_after_tick)
-	EventBus.client_connected.connect(_on_roster_changed.unbind(1))
-	EventBus.client_disconnected.connect(_on_roster_changed.unbind(1))
+	if not NetworkTime.after_tick.is_connected(_on_after_tick): NetworkTime.after_tick.connect(_on_after_tick)
+	if not EventBus.client_connected.is_connected(_on_roster_changed.unbind(1)): EventBus.client_connected.connect(_on_roster_changed.unbind(1))
+	if not EventBus.client_disconnected.is_connected(_on_roster_changed.unbind(1)): EventBus.client_disconnected.connect(_on_roster_changed.unbind(1))
 	# Initial LOBBY assignment (host-only roster until peers join).
 	_recompute_teams()
 
@@ -165,7 +169,7 @@ func _get_match_manager() -> Node:
 	return get_tree().get_first_node_in_group(&"match_manager")
 
 func _on_after_tick(_delta: float, tick: int) -> void:
-	tick_update(tick)
+	if multiplayer.has_multiplayer_peer() and multiplayer.is_server(): tick_update(tick)
 
 func _on_roster_changed() -> void:
 	# Roster freezes once the match leaves LOBBY.

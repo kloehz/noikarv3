@@ -1,0 +1,22 @@
+{
+	"architecture": "arm64",
+	"engine": "4.8-beta1 (official)",
+	"engine_hash": "4d10419cacd6d3009976e8f9fd3abd970fd58018",
+	"host_socket": true,
+	"invitations_sent": 0,
+	"mode_channel_setters": [
+		true,
+		true,
+		true
+	],
+	"netfox_over_steam_verified": false,
+	"p2p_verified": false,
+	"peer_class": true,
+	"peer_methods": [
+		"create_host",
+		"create_client",
+		"get_steam_id_for_peer_id"
+	],
+	"sdk_initialized": true,
+	"singleton": true
+}

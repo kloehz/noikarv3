@@ -14,6 +14,8 @@ const GAME_CONNECTION_TIMEOUT_SEC := 12.0
 @onready var login_status: Label = $LoginPanel/Card/VBox/LoginStatus
 @onready var room_id_edit: LineEdit = $RoomPanel/Card/VBox/JoinBox/RoomIDEdit
 @onready var noray_address_edit: LineEdit = $RoomPanel/Card/VBox/SettingsBox/AddressEdit
+@onready var port_edit: SpinBox = $RoomPanel/Card/VBox/SettingsBox/PortEdit
+@onready var leave_button: Button = $HUD/LeaveRoom
 @onready var status_label: Label = $ConnectingPanel/VBox/StatusLabel
 @onready var room_info: Label = $HUD/RoomInfo
 @onready var room_status: Label = $RoomPanel/Card/VBox/RoomStatus
@@ -77,7 +79,20 @@ func _ready() -> void:
 	Noray.on_connect_relay.connect(_on_noray_connect_relay)
 	account_edit.text_submitted.connect(_on_login_field_submitted)
 	password_edit.text_submitted.connect(_on_login_field_submitted)
-	_switch_state(State.LOGIN)
+	_switch_state(State.LOGIN if AuthService.access_token.is_empty() else State.ROOM)
+	if GameManager.session != null: room_status.text = GameManager.session.end_reason
+	var steam := GameManager.ensure_steam()
+	$SteamFriendPicker.configure(steam)
+	steam.status_changed.connect(_on_steam_status)
+	steam.invitation_received.connect(_on_steam_invitation)
+	if steam.pending_invitation > 0: _on_steam_invitation(steam.pending_invitation)
+	if GameManager.editor_playtest != null:
+		$RoomPanel/Card/VBox/Title.text = "VPS PLAYTEST"
+		$RoomPanel/Card/VBox/HostBox/HostButton.text = "CREATE VPS TEST ROOM"
+		for path in ["SteamBox", "JoinBox", "SettingsBox", "Divider", "Divider2"]:
+			$RoomPanel/Card/VBox.get_node(path).hide()
+		GameManager.editor_playtest.status_changed.connect(_on_editor_vps_status)
+		_on_editor_vps_status(GameManager.editor_playtest.last_error if not GameManager.editor_playtest.last_error.is_empty() else "Connecting securely to the isolated VPS...")
 	var tween := create_tween().set_loops()
 	tween.tween_property(bg_rect, "color", Color("1a1a2e"), 4.0)
 	tween.tween_property(bg_rect, "color", Color("16213e"), 4.0)
@@ -116,6 +131,7 @@ func _switch_state(new_state: State) -> void:
 		State.CHARACTER_SELECT: aatrox_button.grab_focus()
 
 func _on_enter_lobby_pressed() -> void:
+	if not _editor_login_allowed(): return
 	var result: Dictionary = await AuthService.login(account_edit.text, password_edit.text)
 	_finish_auth(result)
 
@@ -123,8 +139,18 @@ func _on_login_field_submitted(_text: String) -> void:
 	_on_enter_lobby_pressed()
 
 func _on_register_pressed() -> void:
+	if not _editor_login_allowed(): return
 	var result: Dictionary = await AuthService.register(account_edit.text, password_edit.text)
 	_finish_auth(result)
+
+func _editor_login_allowed() -> bool:
+	if GameManager.editor_playtest == null or GameManager.editor_playtest.ready_for_login(): return true
+	login_status.text = GameManager.editor_playtest.last_error if not GameManager.editor_playtest.last_error.is_empty() else "Wait for the secure VPS connection before signing in."
+	return false
+
+func _on_editor_vps_status(message: String) -> void:
+	login_status.text = message
+	room_status.text = message
 
 func _finish_auth(result: Dictionary) -> void:
 	if not result.get("accepted", false):
@@ -135,11 +161,78 @@ func _finish_auth(result: Dictionary) -> void:
 	_switch_state(State.ROOM)
 
 func _on_host_pressed() -> void:
-	_start_noray_flow(true)
+	if GameManager.editor_playtest != null:
+		_switch_state(State.CONNECTING)
+		status_label.text = "Starting an isolated room on the VPS..."
+		var result: Dictionary = await GameManager.host_editor_vps()
+		if not result.get("accepted", false):
+			room_status.text = str(result.get("reason", "Could not create VPS room"))
+			_switch_state(State.ROOM)
+		return
+	if _uses_legacy_provisioning():
+		_start_noray_flow(true)
+		return
+	_switch_state(State.CONNECTING)
+	status_label.text = "Creating a player-hosted LAN room..."
+	var result: Dictionary = await GameManager.host_player_lan(int(port_edit.value))
+	if not result.get("accepted", false):
+		room_status.text = str(result.get("reason", "Could not host room"))
+		_switch_state(State.ROOM)
+		return
+	_current_oid = str(result.room_id)
+	room_info.text = "Room: %s · LAN port %d" % [_current_oid, int(port_edit.value)]
 
 func _on_join_pressed() -> void:
 	_current_oid = room_id_edit.text.strip_edges()
-	if not _current_oid.is_empty(): _start_noray_flow(false)
+	if _current_oid.is_empty(): return
+	if _uses_legacy_provisioning():
+		_start_noray_flow(false)
+		return
+	_switch_state(State.CONNECTING)
+	status_label.text = "Requesting room admission..."
+	var result: Dictionary = await GameManager.join_player_lan(noray_address_edit.text.strip_edges(), int(port_edit.value), _current_oid)
+	if not result.get("accepted", false):
+		room_status.text = str(result.get("reason", "Could not join room"))
+		_switch_state(State.ROOM)
+		return
+	_pending_admission_ticket = str(result.ticket)
+
+func _on_leave_room_pressed() -> void:
+	_pending_admission_ticket = ""
+	GameManager.session.close("Left room")
+
+func _on_host_steam_pressed() -> void:
+	_switch_state(State.CONNECTING)
+	status_label.text = "Creating a private Steam room..."
+	await GameManager.ensure_steam().create_private_lobby()
+	if GameManager.session.phase == "menu": _switch_state(State.ROOM)
+
+func _on_join_steam_pressed() -> void:
+	var id := room_id_edit.text.strip_edges()
+	if not id.is_valid_int() or id.to_int() <= 0:
+		room_status.text = "Enter a valid Steam lobby ID or accept a Steam invitation."
+		return
+	_switch_state(State.CONNECTING)
+	GameManager.ensure_steam().join_lobby(id.to_int())
+	if GameManager.session.phase == "menu": _switch_state(State.ROOM)
+
+func _on_invite_steam_pressed() -> void:
+	$SteamFriendPicker.open()
+
+func _on_steam_status(message: String) -> void:
+	room_status.text = message
+	if current_state == State.CONNECTING: status_label.text = message
+	if current_state == State.TEAM_LOBBY: lobby_status.text = message
+
+func _on_steam_invitation(id: int) -> void:
+	room_id_edit.text = str(id)
+	room_status.text = "Steam invitation received. Sign in, then select JOIN STEAM ROOM."
+	if current_state == State.LOGIN: login_status.text = "Steam invitation saved. Sign in to join."
+
+func _on_copy_room_pressed() -> void:
+	if GameManager.session.transport == "steam" and GameManager.steam != null:
+		DisplayServer.clipboard_set(str(GameManager.steam.lobby_id))
+	elif not GameManager.session.room_id.is_empty(): DisplayServer.clipboard_set(GameManager.session.room_id)
 
 func _start_noray_flow(as_host: bool) -> void:
 	if not _uses_legacy_provisioning():
@@ -232,6 +325,7 @@ func _await_host_provisioning() -> String:
 	return result[0]
 
 func _connect_to_peer(address: String, port: int) -> void:
+	if not _uses_legacy_provisioning(): return
 	_game_connection_attempt += 1
 	var attempt := _game_connection_attempt
 	status_label.text = "Connecting to game server..."
@@ -265,7 +359,7 @@ func _on_connected_to_server() -> void:
 	EventBus.player_auth_token_submitted.emit(AuthService.access_token)
 
 func _on_game_server_authenticated(_username: String) -> void:
-	room_info.text = "SALA: " + _current_oid
+	room_info.text = "Room: " + (GameManager.session.room_id if not _uses_legacy_provisioning() else _current_oid)
 
 func _on_room_admission_rejected(reason: String) -> void:
 	room_status.text = reason
@@ -414,6 +508,11 @@ func _next_in_game_mouse_mode(mouse_mode: int) -> int:
 	return Input.MOUSE_MODE_VISIBLE if mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 
 func _process(_delta: float) -> void:
+	if leave_button != null and GameManager.session != null:
+		leave_button.visible = GameManager.session.phase != "menu"
+		$HUD/CopyRoom.visible = not GameManager.session.room_id.is_empty()
+	if GameManager.steam != null:
+		$TeamLobbyPanel/Card/VBox/InviteSteam.visible = current_state == State.TEAM_LOBBY and GameManager.steam.can_invite_friends()
 	# The final refresh at expiry is what re-enables READY. Restrict this to
 	# the lobby so other menu states do not overwrite the control's state.
 	if current_state == State.TEAM_LOBBY:
@@ -421,14 +520,24 @@ func _process(_delta: float) -> void:
 	_refresh_boss_health_bar()
 
 func _on_lobby_ready_toggled(ready: bool) -> void:
-	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_lobby_ready.rpc_id(1, ready)
+	if not multiplayer.has_multiplayer_peer(): return
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null: return
+	if _is_local_host(): manager._set_lobby_ready_from_peer(1, ready)
+	else: manager.request_lobby_ready.rpc_id(1, ready)
+
+func _is_local_host() -> bool:
+	return GameManager.session != null and GameManager.session.role == "LISTEN_HOST" and multiplayer.is_server() and multiplayer.get_unique_id() == 1
 
 func _on_team_choice_pressed(team: int) -> void:
 	if team != TeamId.RED and team != TeamId.BLUE: return
 	if _local_team == team: return
 	if Time.get_ticks_msec() < _team_change_cooldown_until_ms: return
 	if multiplayer.has_multiplayer_peer():
-		get_tree().get_first_node_in_group(&"match_manager").request_team_choice.rpc_id(1, team)
+		var manager := get_tree().get_first_node_in_group(&"match_manager")
+		if manager == null: return
+		if _is_local_host(): manager.submit_team_choice(1, team)
+		else: manager.request_team_choice.rpc_id(1, team)
 	else:
 		_local_team = team
 		_team_change_cooldown_until_ms = Time.get_ticks_msec() + _TEAM_CHANGE_COOLDOWN_MS
@@ -436,20 +545,31 @@ func _on_team_choice_pressed(team: int) -> void:
 		_apply_ready_cooldown()
 
 func _on_start_selection_pressed() -> void:
-	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_select_start.rpc_id(1)
+	if not multiplayer.has_multiplayer_peer(): return
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null: return
+	if _is_local_host(): manager.submit_character_select_start(1)
+	else: manager.request_character_select_start.rpc_id(1)
 
 func _on_character_pressed(character_id: String) -> void:
 	_selected_character = character_id
 	_set_character_selection(character_id)
 	selection_status.text = "Selected " + character_id
-	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, character_id, false)
+	_submit_character_choice(character_id, false)
+
+func _submit_character_choice(character_id: String, ready: bool) -> void:
+	if not multiplayer.has_multiplayer_peer(): return
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null: return
+	if _is_local_host(): manager.submit_character_selection(1, character_id, ready)
+	else: manager.request_character_selection.rpc_id(1, character_id, ready)
 
 func _set_character_selection(character_id: String) -> void:
 	aatrox_button.set_pressed_no_signal(character_id == "warrior")
 	ivern_button.set_pressed_no_signal(character_id == "ivern_ranger")
 
 func _on_selection_ready_toggled(ready: bool) -> void:
-	if multiplayer.has_multiplayer_peer(): get_tree().get_first_node_in_group(&"match_manager").request_character_selection.rpc_id(1, _selected_character, ready)
+	_submit_character_choice(_selected_character, ready)
 
 func _on_match_phase_changed(phase: int) -> void:
 	_trace_profile_phase("phase_event", phase, current_state)
@@ -473,6 +593,7 @@ func _on_connection_failed() -> void:
 ## Switches an in-flight direct (NAT) connection to noray's relay. Returns
 ## false when the relay was already tried or there is no room to dial.
 func _try_relay_fallback() -> bool:
+	if not _uses_legacy_provisioning(): return false
 	if _used_relay or _current_oid.is_empty():
 		return false
 	_used_relay = true
@@ -486,6 +607,8 @@ func _try_relay_fallback() -> bool:
 func _on_server_disconnected() -> void: _fail_connection("Disconnected from game server")
 func _fail_connection(message: String) -> void:
 	_game_connection_attempt += 1
+	if not _uses_legacy_provisioning() and GameManager.session.phase not in ["menu", "closing"]:
+		GameManager.session.close(message)
 	if _active_peer:
 		_active_peer.close()
 		if multiplayer.multiplayer_peer == _active_peer:

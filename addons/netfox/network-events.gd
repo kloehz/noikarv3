@@ -49,6 +49,7 @@ var enabled: bool:
 	set(v): _set_enabled(v)
 
 var _is_server: bool = false
+var _is_client: bool = false
 var _multiplayer: MultiplayerAPI
 var _enabled: bool = false
 
@@ -125,10 +126,24 @@ func _disconnect_handlers(mp: MultiplayerAPI) -> void:
 	mp.peer_disconnected.disconnect(_handle_peer_disconnected)
 
 func _handle_connected_to_server() -> void:
+	_is_client = true
 	on_client_start.emit(multiplayer.get_unique_id())
 
 func _handle_server_disconnected() -> void:
-	on_client_stop.emit()
+	if _is_client:
+		_is_client = false
+		on_client_stop.emit()
+
+## Route a local detach through the same clock owner before the peer disappears.
+## The time autoload processes before this observer; waiting a frame to notice
+## a missing server peer can otherwise run one live tick without networking.
+func notify_local_disconnect() -> void:
+	if _is_server:
+		_is_server = false
+		on_server_stop.emit()
+	if _is_client:
+		_is_client = false
+		on_client_stop.emit()
 
 func _handle_peer_connected(id: int) -> void:
 	on_peer_join.emit(id)

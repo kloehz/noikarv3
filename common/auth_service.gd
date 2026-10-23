@@ -85,7 +85,9 @@ static func listen_api_url_allowed(url: String, debug_build: bool, isolated: boo
 	return loopback.search(url) != null
 
 func _listen_api_allowed() -> bool:
-	return listen_api_url_allowed(str(ProjectSettings.get_setting(API_URL_SETTING, DEFAULT_API_URL)), OS.is_debug_build(), OS.get_environment("NOIKAR_ISOLATED_AUTH_API") == "1")
+	var url := str(ProjectSettings.get_setting(API_URL_SETTING, DEFAULT_API_URL))
+	if GameManager.editor_playtest != null and GameManager.editor_playtest.allows_account_api(url): return true
+	return listen_api_url_allowed(url, OS.is_debug_build(), OS.get_environment("NOIKAR_ISOLATED_AUTH_API") == "1")
 
 func _listen_request(path: String, body: Dictionary, bearer := "", room_credential := "") -> Dictionary:
 	if not _listen_api_allowed(): return {"status": 0, "data": {"error": "HTTPS account API required"}}
@@ -100,7 +102,9 @@ func create_listen_room(session_id: String) -> Dictionary:
 	var identity = data.get("host_identity", {})
 	if response.status != 201 or not identity is Dictionary or identity.get("account_id") != account_id or str(identity.get("username", "")).is_empty() or str(data.get("room_id", "")).is_empty() or str(data.get("room_credential", "")).is_empty():
 		return {"accepted": false, "reason": str(data.get("error", "Room creation failed"))}
-	return {"accepted": true, "room_id": str(data.room_id), "room_credential": str(data.room_credential), "host_identity": {"account_id": str(identity.account_id), "username": str(identity.username)}}
+	var result := {"accepted": true, "room_id": str(data.room_id), "room_credential": str(data.room_credential), "host_identity": {"account_id": str(identity.account_id), "username": str(identity.username)}}
+	if (data.get("game_port") is int or data.get("game_port") is float) and data.game_port == 24580: result.game_port = 24580
+	return result
 
 func issue_listen_ticket(room_id: String) -> Dictionary:
 	if access_token.is_empty() or room_id.is_empty(): return {"accepted": false, "ticket": ""}

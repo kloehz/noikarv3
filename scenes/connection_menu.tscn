@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://by5ula3buvj6x" path="res://client/connection_manager.gd" id="1"]
 [ext_resource type="Script" uid="uid://coi2o6qvsjtdq" path="res://client/ui/BossHealthBar.gd" id="5_boss_bar"]
+[ext_resource type="Script" path="res://client/ui/steam_friend_picker.gd" id="6_steam_picker"]
 
 [sub_resource type="StyleBoxFlat" id="panel_card"]
 content_margin_left = 28.0
@@ -392,7 +393,33 @@ theme_override_styles/pressed = SubResource("button_pressed")
 theme_override_styles/hover = SubResource("button_hover")
 theme_override_styles/disabled = SubResource("button_disabled")
 theme_override_styles/focus = SubResource("button_hover")
-text = "CREATE ROOM"
+text = "CREATE LAN ROOM"
+
+[node name="SteamBox" type="HBoxContainer" parent="RoomPanel/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HostSteam" type="Button" parent="RoomPanel/Card/VBox/SteamBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+text = "CREATE STEAM ROOM"
+
+[node name="JoinSteam" type="Button" parent="RoomPanel/Card/VBox/SteamBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 14
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+text = "JOIN STEAM ROOM"
 
 [node name="Divider" type="HSeparator" parent="RoomPanel/Card/VBox" unique_id=48130741]
 layout_mode = 2
@@ -405,7 +432,7 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_styles/normal = SubResource("input_normal")
 theme_override_styles/focus = SubResource("input_focus")
-placeholder_text = "Room code"
+placeholder_text = "Room code / Steam lobby ID"
 alignment = 1
 
 [node name="JoinButton" type="Button" parent="RoomPanel/Card/VBox/JoinBox" unique_id=126529790]
@@ -416,7 +443,7 @@ theme_override_styles/pressed = SubResource("button_pressed")
 theme_override_styles/hover = SubResource("button_hover")
 theme_override_styles/disabled = SubResource("button_disabled")
 theme_override_styles/focus = SubResource("button_hover")
-text = "JOIN ROOM"
+text = "JOIN LAN ROOM"
 
 [node name="Divider2" type="HSeparator" parent="RoomPanel/Card/VBox" unique_id=34508463]
 layout_mode = 2
@@ -429,15 +456,26 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_colors/font_color = Color(0.6, 0.72, 0.95, 0.85)
 theme_override_font_sizes/font_size = 11
-text = "Server address"
+text = "LAN host address (for joining)"
 horizontal_alignment = 1
 
 [node name="AddressEdit" type="LineEdit" parent="RoomPanel/Card/VBox/SettingsBox" unique_id=937159846]
 layout_mode = 2
 theme_override_styles/normal = SubResource("input_normal")
 theme_override_styles/focus = SubResource("input_focus")
-text = "72.60.58.24"
+text = "127.0.0.1"
 alignment = 1
+
+[node name="PortLabel" type="Label" parent="RoomPanel/Card/VBox/SettingsBox"]
+layout_mode = 2
+text = "LAN port"
+horizontal_alignment = 1
+
+[node name="PortEdit" type="SpinBox" parent="RoomPanel/Card/VBox/SettingsBox"]
+layout_mode = 2
+min_value = 1.0
+max_value = 65535.0
+value = 7777.0
 
 [node name="RoomStatus" type="Label" parent="RoomPanel/Card/VBox" unique_id=1216613424]
 layout_mode = 2
@@ -486,6 +524,17 @@ theme_override_constants/outline_size = 5
 theme_override_font_sizes/font_size = 28
 text = "TEAM LOBBY"
 horizontal_alignment = 1
+
+[node name="InviteSteam" type="Button" parent="TeamLobbyPanel/Card/VBox"]
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+text = "INVITE STEAM FRIENDS"
 
 [node name="TeamChoices" type="HBoxContainer" parent="TeamLobbyPanel/Card/VBox" unique_id=55812649]
 layout_mode = 2
@@ -728,10 +777,143 @@ offset_bottom = 72.0
 mouse_filter = 2
 script = ExtResource("5_boss_bar")
 
+[node name="LeaveRoom" type="Button" parent="HUD"]
+visible = false
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -60.0
+offset_right = -20.0
+offset_bottom = -20.0
+text = "Leave room"
+tooltip_text = "Cancel a connection or leave the active room. Host departure ends the session."
+
+[node name="CopyRoom" type="Button" parent="HUD"]
+visible = false
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -110.0
+offset_right = -20.0
+offset_bottom = -70.0
+text = "Copy room code"
+
+[node name="SteamFriendPicker" type="Control" parent="."]
+visible = false
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_steam_picker")
+
+[node name="Dim" type="ColorRect" parent="SteamFriendPicker"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.015, 0.02, 0.05, 0.8)
+mouse_filter = 2
+
+[node name="Center" type="MarginContainer" parent="SteamFriendPicker"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="Card" type="PanelContainer" parent="SteamFriendPicker/Center"]
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("panel_card")
+
+[node name="VBox" type="VBoxContainer" parent="SteamFriendPicker/Center/Card"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Title" type="Label" parent="SteamFriendPicker/Center/Card/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.92, 0.96, 1, 1)
+theme_override_colors/font_outline_color = Color(0.05, 0.1, 0.25, 0.95)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 28
+text = "INVITE STEAM FRIENDS"
+horizontal_alignment = 1
+
+[node name="Scroll" type="ScrollContainer" parent="SteamFriendPicker/Center/Card/VBox"]
+custom_minimum_size = Vector2(360, 220)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Rows" type="VBoxContainer" parent="SteamFriendPicker/Center/Card/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="RowTemplate" type="Button" parent="SteamFriendPicker/Center/Card/VBox/Scroll/Rows"]
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/disabled = SubResource("button_disabled")
+theme_override_styles/focus = SubResource("button_hover")
+text = "Steam friend · Online · Invite"
+text_overrun_behavior = 3
+
+[node name="Status" type="Label" parent="SteamFriendPicker/Center/Card/VBox"]
+custom_minimum_size = Vector2(360, 44)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.55, 0.95)
+theme_override_font_sizes/font_size = 14
+text = "Select a friend to request an invitation."
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="Actions" type="HBoxContainer" parent="SteamFriendPicker/Center/Card/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Refresh" type="Button" parent="SteamFriendPicker/Center/Card/VBox/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/focus = SubResource("button_hover")
+text = "REFRESH"
+
+[node name="Close" type="Button" parent="SteamFriendPicker/Center/Card/VBox/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/normal = SubResource("button_normal")
+theme_override_styles/pressed = SubResource("button_pressed")
+theme_override_styles/hover = SubResource("button_hover")
+theme_override_styles/focus = SubResource("button_hover")
+text = "BACK"
+
+[connection signal="pressed" from="SteamFriendPicker/Center/Card/VBox/Actions/Refresh" to="SteamFriendPicker" method="refresh"]
+[connection signal="pressed" from="SteamFriendPicker/Center/Card/VBox/Actions/Close" to="SteamFriendPicker" method="close"]
+[connection signal="pressed" from="RoomPanel/Card/VBox/SteamBox/HostSteam" to="." method="_on_host_steam_pressed"]
+[connection signal="pressed" from="RoomPanel/Card/VBox/SteamBox/JoinSteam" to="." method="_on_join_steam_pressed"]
+[connection signal="pressed" from="TeamLobbyPanel/Card/VBox/InviteSteam" to="." method="_on_invite_steam_pressed"]
 [connection signal="pressed" from="LoginPanel/Card/VBox/EnterButton" to="." method="_on_enter_lobby_pressed"]
 [connection signal="pressed" from="LoginPanel/Card/VBox/RegisterButton" to="." method="_on_register_pressed"]
 [connection signal="pressed" from="RoomPanel/Card/VBox/HostBox/HostButton" to="." method="_on_host_pressed"]
 [connection signal="pressed" from="RoomPanel/Card/VBox/JoinBox/JoinButton" to="." method="_on_join_pressed"]
+[connection signal="pressed" from="HUD/LeaveRoom" to="." method="_on_leave_room_pressed"]
+[connection signal="pressed" from="HUD/CopyRoom" to="." method="_on_copy_room_pressed"]
 [connection signal="pressed" from="TeamLobbyPanel/Card/VBox/TeamChoices/JoinRedButton" to="." method="_on_team_choice_pressed" binds= [1]]
 [connection signal="pressed" from="TeamLobbyPanel/Card/VBox/TeamChoices/JoinBlueButton" to="." method="_on_team_choice_pressed" binds= [2]]
 [connection signal="toggled" from="TeamLobbyPanel/Card/VBox/Ready" to="." method="_on_lobby_ready_toggled"]

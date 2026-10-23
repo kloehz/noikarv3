@@ -10,6 +10,8 @@ const SERVER_MAX_FPS = 60
 const SERVER_MAX_FPS_ENV = "NOIKAR_SERVER_MAX_FPS"
 var validated_room_creator_account_id := ""
 var session: Node
+var steam: Node
+var editor_playtest: Node
 var _runtime_role := "MENU"
 enum BootstrapMode { NORMAL, TEST, REJECTED }
 
@@ -28,6 +30,30 @@ func _ensure_session() -> void:
 	add_child(session)
 	EventBus.player_admission_ticket_submitted.connect(session.submit_admission_ticket)
 
+func ensure_steam() -> Node:
+	if steam != null: return steam
+	steam = load("res://common/net/steam_transport.gd").new()
+	steam.name = "SteamTransport"
+	steam.configure(session, AuthService)
+	steam.host_ready.connect(_admit_steam_host)
+	add_child(steam)
+	# Tests and dedicated servers never initialize the user's Steam client.
+	if should_auto_initialize_steam(OS.get_environment("NOIKAR_TEST_MODE") == "1" or OS.get_environment("NOIKAR_ISOLATED_AUTH_API") == "1", is_dedicated_runtime(), editor_playtest != null, Engine.has_singleton("Steam")):
+		steam.initialize()
+	steam.accept_launch_invite(OS.get_cmdline_args() + OS.get_cmdline_user_args())
+	return steam
+
+static func should_auto_initialize_steam(test_bootstrap: bool, dedicated: bool, vps_test: bool, available: bool) -> bool:
+	return available and not test_bootstrap and not dedicated and not vps_test
+
+func _admit_steam_host(identity: Dictionary) -> void:
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null or not manager.admit_local_host(identity):
+		session.close("Could not admit the local host")
+		return
+	session.peer_admitted.emit(1, identity)
+	EventBus.game_server_authenticated.emit(str(identity.username))
+
 func _reset_session_world() -> void:
 	var tree := get_tree()
 	var world := tree.current_scene
@@ -44,6 +70,67 @@ func is_dedicated_runtime() -> bool:
 
 func should_present_world() -> bool:
 	return not is_dedicated_runtime()
+
+func host_player_lan(port: int) -> Dictionary:
+	var attempt: int = session.begin_attempt()
+	if attempt < 0: return {"accepted": false, "reason": "A session is already active"}
+	var created: Dictionary = await AuthService.create_listen_room(session.session_id)
+	if not session.is_attempt_current(attempt):
+		if created.get("accepted", false): AuthService.close_listen_room(created.room_id, created.room_credential)
+		return {"accepted": false, "reason": "Room creation cancelled"}
+	if not created.get("accepted", false):
+		session.close(str(created.get("reason", "Could not create a room")))
+		return {"accepted": false, "reason": str(created.get("reason", "Could not create a room"))}
+	session.configure_room(created.room_id, created.room_credential)
+	var error: int = session.host_lan(port, created.host_identity)
+	if error != OK:
+		session.close("Could not listen on the selected port")
+		return {"accepted": false, "reason": "Could not listen on the selected port"}
+	var manager := get_tree().get_first_node_in_group(&"match_manager")
+	if manager == null or not manager.admit_local_host(created.host_identity):
+		session.close("Could not admit the local host")
+		return {"accepted": false, "reason": "Could not admit the local host"}
+	session.peer_admitted.emit(1, created.host_identity)
+	EventBus.game_server_authenticated.emit(str(created.host_identity.username))
+	return {"accepted": true, "room_id": str(created.room_id)}
+
+func join_player_lan(address: String, port: int, room_id: String) -> Dictionary:
+	var attempt: int = session.begin_attempt()
+	if attempt < 0: return {"accepted": false, "reason": "A session is already active"}
+	var proof: Dictionary = await AuthService.issue_listen_ticket(room_id)
+	if not session.is_attempt_current(attempt): return {"accepted": false, "reason": "Room join cancelled"}
+	if not proof.get("accepted", false):
+		session.close("Could not obtain room admission")
+		return {"accepted": false, "reason": "Could not obtain room admission"}
+	session.configure_room(room_id)
+	if session.join_lan(address, port) != OK:
+		session.close("Could not start the LAN connection")
+		return {"accepted": false, "reason": "Could not start the LAN connection"}
+	return {"accepted": true, "ticket": str(proof.ticket)}
+
+func host_editor_vps() -> Dictionary:
+	if editor_playtest == null or not editor_playtest.ready_for_login(): return {"accepted": false, "reason": "The secure VPS test connection is not ready"}
+	var attempt: int = session.begin_attempt()
+	if attempt < 0: return {"accepted": false, "reason": "A session is already active"}
+	var created: Dictionary = await AuthService.create_listen_room(session.session_id)
+	if not session.is_attempt_current(attempt):
+		if created.get("accepted", false): AuthService.close_listen_room(created.room_id, created.room_credential)
+		return {"accepted": false, "reason": "VPS room creation cancelled"}
+	if not created.get("accepted", false) or int(created.get("game_port", 0)) != 24580:
+		if created.get("accepted", false): AuthService.close_listen_room(created.room_id, created.room_credential)
+		session.close(str(created.get("reason", "The isolated VPS room did not become ready")))
+		return {"accepted": false, "reason": str(created.get("reason", "The isolated VPS room did not become ready"))}
+	session.configure_room(created.room_id, created.room_credential)
+	var proof: Dictionary = await AuthService.issue_listen_ticket(created.room_id)
+	if not session.is_attempt_current(attempt): return {"accepted": false, "reason": "VPS room join cancelled"}
+	if not proof.get("accepted", false):
+		session.close("Could not obtain VPS admission")
+		return {"accepted": false, "reason": "Could not obtain VPS admission"}
+	session.pending_admission_ticket = str(proof.ticket)
+	if session.join_lan(editor_playtest.game_host, 24580) != OK:
+		session.close("Could not connect to the isolated VPS world")
+		return {"accepted": false, "reason": "Could not connect to the isolated VPS world"}
+	return {"accepted": true, "room_id": str(created.room_id)}
 
 static func bootstrap_mode_for(args: Array, debug_build: bool) -> int:
 	if not args.has("--noikar-test-mode"):
@@ -135,6 +222,9 @@ static func raw_headless_benchmark_scenario_from_args(args: Array, is_headless_r
 	return ""
 
 func _start_as_server() -> void:
+	if OS.get_cmdline_user_args().has("--vps-playtest-server"):
+		_start_vps_playtest_server()
+		return
 	var raw_benchmark_scenario := raw_headless_benchmark_scenario_from_args(OS.get_cmdline_user_args(), _is_headless_environment())
 	if not raw_benchmark_scenario.is_empty():
 		_start_raw_headless_benchmark_server(raw_benchmark_scenario)
@@ -256,6 +346,28 @@ func _start_raw_headless_benchmark_server(scenario: String) -> void:
 	print("[GameManager] RAW HEADLESS BENCHMARK SERVER STARTED")
 	EventBus.call_deferred("emit_signal", "server_started")
 
+func _start_vps_playtest_server() -> void:
+	# Isolated debug deployment only. Normal dedicated/prod startup is unchanged.
+	var raw := OS.get_environment("NOIKAR_VPS_PLAYTEST_BOOTSTRAP")
+	OS.set_environment("NOIKAR_VPS_PLAYTEST_BOOTSTRAP", "")
+	var data = JSON.parse_string(raw) if raw.length() <= 2048 else null
+	if not OS.is_debug_build() or not is_dedicated_runtime() or not data is Dictionary or data.size() != 4 or not data.get("host_identity") is Dictionary or not session._valid_identity(data.host_identity) or not data.get("room_id") is String or data.room_id.is_empty() or not data.get("room_credential") is String or len(data.room_credential) < 32 or not (data.get("port") is int or data.get("port") is float) or int(data.port) != 24580:
+		printerr("Invalid isolated VPS room bootstrap")
+		get_tree().quit(64)
+		return
+	validated_room_creator_account_id = str(data.host_identity.account_id)
+	session.configure_room(str(data.room_id), str(data.room_credential))
+	session.peer_admitted.connect(func(_id, _identity): print("VPS_PLAYTEST_ADMITTED"))
+	# Let the existing main scene install its roster/spawners before authority starts.
+	await get_tree().process_frame
+	var endpoint := ENetMultiplayerPeer.new()
+	if endpoint.create_server(int(data.port), 6) != OK or session.attach_dedicated(endpoint) != OK:
+		endpoint.close()
+		printerr("Could not start isolated VPS room transport")
+		get_tree().quit(1)
+		return
+	print("VPS_PLAYTEST_READY")
+
 func _on_noray_connect_nat(address: String, port: int) -> void:
 	if multiplayer.is_server():
 		print("[GameManager] Handshaking client at ", address, ":", port)
@@ -269,6 +381,10 @@ func _on_noray_connect_relay(address: String, port: int) -> void:
 			PacketHandshake.over_enet_peer(multiplayer.multiplayer_peer as ENetMultiplayerPeer, address, port)
 
 func _start_as_client() -> void:
+	var profile = load("res://common/net/editor_vps_playtest.gd").new()
+	add_child(profile)
+	if profile.load_profile(): editor_playtest = profile
+	else: profile.queue_free()
 	# Client shows connection UI
 	# The actual connection is handled by ConnectionManager
 	EventBus.client_ready.emit()
