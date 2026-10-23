@@ -1,0 +1,44 @@
+{
+  "checked_on": "2026-10-22",
+  "purpose": "Isolated diagnosis of the host-player native VFX shutdown blocker",
+  "official_archive": "https://godotengine.org/download/archive/",
+  "alternate_build": {
+    "version": "4.8.dev7.official.c971f93e7",
+    "source_url": "https://downloads.godotengine.org/?version=4.8&flavor=dev7&slug=macos.universal.zip&platform=macos.universal",
+    "resolved_url": "https://godot-releases.nbg1.your-objectstorage.com/4.8-dev7/Godot_v4.8-dev7_macos.universal.zip",
+    "archive_sha256": "83b93feed8117880adf6865011a8fa8a43e2234623d5d48cdb49a48fc210cc4a",
+    "archive_checksum_independently_verified": false,
+    "adopted_for_project": false
+  },
+  "installed_editor": {
+    "version": "4.8.beta1.official.4d10419ca",
+    "binary_sha256_before_and_after": "2066098d7e3b1ff8a06a636f24e7c51e520715be2d47a9807069b0e5dfd9078c",
+    "unchanged": true
+  },
+  "fixture": {
+    "asset": "assets/BinbunVFX/loot_effects/effects/floating/loot_vfx_rare.tscn",
+    "asset_sha256": "b290b98bbf44440f7f0cd554437f6d551d62cdd1ac95bb801cfd61d060d13a07",
+    "asset_modified": false,
+    "separate_minimal_project_per_build": true,
+    "autoloads": false,
+    "gameplay": false,
+    "networking": false,
+    "procedure": "Instantiate unchanged asset, wait ten process frames, free its parent, wait ten process frames, exit. Control constructs GPUParticles3D with ParticleProcessMaterial instead of loading the asset."
+  },
+  "results": [
+    {"version": "4.8.beta1.official.4d10419ca", "case": "headless-control", "exit_code": 0, "errors": []},
+    {"version": "4.8.dev7.official.c971f93e7", "case": "headless-control", "exit_code": 0, "errors": []},
+    {"version": "4.8.beta1.official.4d10419ca", "case": "headless-asset", "exit_code": 0, "errors": ["One DummyShader RID leaked at exit"]},
+    {"version": "4.8.dev7.official.c971f93e7", "case": "headless-asset", "exit_code": 0, "errors": ["One DummyShader RID leaked at exit"]},
+    {"version": "4.8.beta1.official.4d10419ca", "case": "native-rendered-asset", "exit_code": 0, "errors": ["One Shader RID leaked at exit", "One ParticlesShaderRD shader was never freed"]},
+    {"version": "4.8.dev7.official.c971f93e7", "case": "native-rendered-asset", "exit_code": 0, "errors": ["One Shader RID leaked at exit", "One ParticlesShaderRD shader was never freed"]}
+  ],
+  "import_diagnostics": {
+    "beta1": [],
+    "dev7": ["ERROR: Parameter singleton is null."]
+  },
+  "conclusion": "Changing to dev7 does not resolve the isolated asset shutdown leak. This is not evidence of an exact engine-versus-asset root cause.",
+  "native_host_vfx_acceptance_passed": false,
+  "export_templates_changed": false,
+  "production_configuration_changed": false
+}

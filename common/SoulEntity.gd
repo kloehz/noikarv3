@@ -11,7 +11,8 @@ signal expired
 @export var respawn_probability: float = 0.4
 @export var original_mob_scene_path: String = "res://scenes/TrainingDummy.tscn"
 
-const SOUL_VFX_PATH := "res://assets/BinbunVFX/loot_effects/effects/floating/loot_vfx_rare.tscn"
+# Temporary cosmetic replacement; preserve the original vendor asset for later.
+const SOUL_VFX_PATH := "res://scenes/vfx/temporary_soul.tscn"
 
 var _timer: float = 0.0
 var _is_collected: bool = false

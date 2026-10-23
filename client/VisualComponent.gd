@@ -36,7 +36,7 @@ const REMOTE_MOVEMENT_ANIMATION_HOLD_SECONDS := 0.18
 const REMOTE_MOVEMENT_ANIMATION_MAX_SAMPLE_GAP_SECONDS := 0.20
 
 ## Path constants retain packaging dependencies without eager server loads.
-const VFX_HIT_02_PATH := "res://assets/BinbunVFX_Vol2/StylizedHitFX/effects/hit/vfx_hit_02.tscn"
+const VFX_HIT_02_PATH := "res://scenes/vfx/temporary_impact.tscn"
 const HIT_FLASH_OVERLAY_PATH := "res://client/vfx/hit_flash_overlay.gdshader"
 static var _client_resource_cache: Dictionary = {}
 
@@ -649,7 +649,7 @@ func _play_hit_flash() -> void:
 			0.1
 		)
 
-## Spawn the VFXHit_02 impact scene at the entity's current position.
+## Spawn temporary particle-free impact feedback at the entity's position.
 ## Spawned under the current scene root (not as a child of the entity) so
 ## the effect keeps playing if the entity dies or despawns mid-animation.
 ## Replicated implicitly: every peer calls this locally when its
@@ -673,22 +673,7 @@ func _spawn_hit_vfx() -> void:
 	vfx.global_position.y += 1.0
 
 	if vfx.has_method("play"):
-		# Stop the VFX after a single playback and free it once the
-		# animation reports finished. The asset's default `one_shot` is
-		# false; setting it here keeps this helper self-contained.
-		vfx.set("one_shot", true)
-		# 2x playback speed → impact resolves in ~0.8s instead of 1.6s.
-		# VFXControllerBB.speed_scale drives both the AnimationPlayer and
-		# the GPU particle systems, so the whole burst stays in sync.
-		vfx.set("speed_scale", 2.0)
 		vfx.play()
-		if vfx.has_signal("finished"):
-			vfx.finished.connect(vfx.queue_free, CONNECT_ONE_SHOT)
-		else:
-			# Fallback: the impact animation is 1.6s; clean up after 2s
-			# even if the script API drifts.
-			var t := get_tree().create_timer(2.0)
-			t.timeout.connect(vfx.queue_free)
 
 func _apply_hitstop(duration: float) -> void:
 	if _actor and _actor.animation_player:
